@@ -1,0 +1,28 @@
+# Dataset sources + prompt format. Identifiers are configurable so they can be swapped
+# for mirrors or Kaggle-Dataset-local paths (HF_HUB_OFFLINE) without touching code.
+
+train:
+  # Two trace styles (proposal §5.2). Same schema: question / cot / answer.
+  eq_only:
+    hf_id: zen-E/GSM8k-Aug        # <<a op b=c>> equation-only CoT (386k)
+    split: train
+  natural_language:
+    hf_id: zen-E/GSM8k-Aug-NL     # natural-language CoT, same examples
+    split: train
+  fields:                         # column names in the source dataset
+    question: question
+    cot: cot
+    answer: answer
+
+eval:
+  gsm8k:      { hf_id: openai/gsm8k,                config: main, split: test,  kind: gsm8k_main }   # in-domain
+  svamp:      { hf_id: ChilleD/SVAMP,                             split: test,  kind: svamp }        # OOD: structure
+  multiarith: { hf_id: ChilleD/MultiArith,                        split: test,  kind: multiarith }   # OOD: multi-step
+  gsm_hard:   { hf_id: reasoning-machines/gsm-hard,               split: train, kind: gsm_hard }     # OOD: number shift
+
+# Prompt template. CODI uses an answer cue of "The answer is:"; the ":" token is the
+# CODI distillation position (Phase 2), so keep the answer_prefix ending in ":".
+prompt:
+  question_prefix: "Question: "
+  cot_prefix: ""
+  answer_prefix: "The answer is:"

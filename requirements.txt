@@ -1,0 +1,14 @@
+# Core deep learning stack
+torch>=2.1
+transformers>=4.44
+datasets>=2.20
+peft>=0.12
+accelerate>=0.33
+
+# Config / utils
+pyyaml>=6.0
+numpy>=1.24
+tqdm>=4.66
+
+# Testing
+pytest>=8.0

@@ -1,0 +1,21 @@
+# Phase 0 smoke config: exercises the session-safe trainer with a tiny synthetic task.
+# No real model/data yet — this proves checkpoint/resume + determinism only.
+run_name: phase0_smoke
+seed: 0
+
+# When true, sets HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE so Kaggle runs never hit the network.
+offline: true
+
+output_dir: outputs/phase0
+
+train:
+  total_steps: 50
+  batch_size: 16
+  lr: 0.01
+  ckpt_every: 10        # checkpoint cadence (steps)
+  keep_last: 3          # rolling window of checkpoints to retain
+  max_seconds: 32400    # wall-clock guard (~9h Kaggle cap); save+exit before this
+
+dummy:
+  in_dim: 8
+  noise_std: 0.1

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Training artifacts
+outputs/
+checkpoints/
+*.ckpt
+*.pt
+wandb/
+
+# Data / model caches (pre-staged as Kaggle Datasets instead)
+data/cache/
+.cache/
+hf_cache/
+
+# OS
+.DS_Store
