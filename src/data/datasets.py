@@ -1,15 +1,17 @@
 """Load + normalize training and eval datasets into a common shape.
 
 Every eval set has a different schema; adapters normalize each into
-`{"question": str, "gold": float}` so the eval harness (Phase 1b) is dataset-agnostic.
+`{"question": str, "gold": Decimal}` so the eval harness (Phase 1b) is dataset-agnostic.
 Training sets normalize into `{"question", "cot", "answer"}`.
 
-Actual `load_dataset` calls hit HuggingFace (or a local Kaggle mirror under
-HF_HUB_OFFLINE); they are never invoked by the CPU unit tests.
+Online runs use pinned Hugging Face revisions. Offline runs load normalized datasets from
+`CODIKAVA_DATA_ROOT`, produced by `scripts/dataset_prep.py`.
 """
 from __future__ import annotations
 
-from typing import Callable, Iterable
+import os
+from pathlib import Path
+from typing import Callable
 
 from src.data.answer_extract import normalize_gold
 
@@ -32,7 +34,7 @@ def _adapt_gsm8k_main(d: dict) -> tuple[str, object]:
 
 def _adapt_svamp(d: dict) -> tuple[str, object]:
     # ChilleD/SVAMP: Body + Question form the prompt; Answer is numeric.
-    body = str(_row(d, "Body", "body", ""))
+    body = str(d.get("Body", d.get("body", "")) or "")
     q = str(_row(d, "Question", "question"))
     question = (body + " " + q).strip() if body else q
     return question, _row(d, "Answer", "answer")
@@ -54,27 +56,55 @@ ADAPTERS: dict[str, Callable[[dict], tuple[str, object]]] = {
 }
 
 
+def _prepared_path(category: str, name: str) -> Path | None:
+    root = os.environ.get("CODIKAVA_DATA_ROOT")
+    if not root:
+        return None
+    path = Path(root) / category / name
+    if not path.is_dir():
+        raise FileNotFoundError(
+            f"prepared dataset is missing: {path}; rerun scripts/dataset_prep.py"
+        )
+    return path
+
+
 def load_eval_set(name: str, spec: dict) -> list[dict]:
-    """Return [{'question': str, 'gold': float}] for one eval set.
+    """Return [{'question': str, 'gold': Decimal}] for one eval set.
 
     spec is a configs/data.yaml `eval[name]` entry: {hf_id, split, kind, config?}.
     """
-    from datasets import load_dataset
+    from datasets import load_dataset, load_from_disk
 
     kind = spec["kind"]
     adapt = ADAPTERS[kind]
-    kwargs = {"split": spec.get("split", "test")}
-    if "config" in spec:
-        kwargs["name"] = spec["config"]
-    ds = load_dataset(spec["hf_id"], **kwargs)
+    prepared = _prepared_path("eval", name)
+    if prepared:
+        ds = load_from_disk(str(prepared))
+    else:
+        kwargs = {"split": spec.get("split", "test")}
+        if "config" in spec:
+            kwargs["name"] = spec["config"]
+        if spec.get("revision"):
+            kwargs["revision"] = spec["revision"]
+        ds = load_dataset(spec["hf_id"], **kwargs)
 
     out = []
-    for row in ds:
-        question, gold_raw = adapt(row)
+    for index, row in enumerate(ds):
+        if prepared:
+            question, gold_raw = str(_row(row, "question")), _row(row, "gold")
+        else:
+            try:
+                question, gold_raw = adapt(row)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"{name}[{index}] does not match the configured schema") from exc
+        if not question.strip():
+            raise ValueError(f"{name}[{index}] has an empty question")
         gold = normalize_gold(gold_raw, kind)
         if gold is None:
-            continue  # skip unparseable gold rather than silently miscount
+            raise ValueError(f"{name}[{index}] has unparseable gold answer {gold_raw!r}")
         out.append({"question": question, "gold": gold})
+    if not out:
+        raise ValueError(f"evaluation dataset {name!r} is empty")
     return out
 
 
@@ -91,15 +121,32 @@ def load_train_set(data_cfg: dict, trace_style: str = "eq_only"):
     trace_style: 'eq_only' (GSM8k-Aug) or 'natural_language' (GSM8k-Aug-NL).
     Returns a HuggingFace Dataset with columns question / cot / answer.
     """
-    from datasets import load_dataset
+    from datasets import load_dataset, load_from_disk
 
     spec = data_cfg["train"][trace_style]
     fields = data_cfg["train"]["fields"]
-    ds = load_dataset(spec["hf_id"], split=spec.get("split", "train"))
+    prepared = _prepared_path("train", trace_style)
+    if prepared:
+        ds = load_from_disk(str(prepared))
+    else:
+        kwargs = {"split": spec.get("split", "train")}
+        if spec.get("data_file"):
+            kwargs["data_files"] = {spec.get("split", "train"): spec["data_file"]}
+        if spec.get("revision"):
+            kwargs["revision"] = spec["revision"]
+        ds = load_dataset(spec["hf_id"], **kwargs)
 
     rename = {v: k for k, v in fields.items() if v in ds.column_names and v != k}
     if rename:
         ds = ds.rename_columns(rename)
     keep = ["question", "cot", "answer"]
+    missing = [column for column in keep if column not in ds.column_names]
+    if missing:
+        raise ValueError(
+            f"training dataset {spec['hf_id']!r} is missing canonical columns {missing}; "
+            f"available columns: {list(ds.column_names)}"
+        )
+    if len(ds) == 0:
+        raise ValueError(f"training dataset {spec['hf_id']!r} is empty")
     drop = [c for c in ds.column_names if c not in keep]
     return ds.remove_columns(drop) if drop else ds

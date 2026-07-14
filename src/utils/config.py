@@ -40,6 +40,10 @@ class Config(dict):
 
 def _coerce(value: str) -> Any:
     """Turn a CLI string into a bool/int/float/None/list where possible."""
+    keywords = {"true": True, "false": False, "null": None, "none": None}
+    lowered = value.casefold()
+    if lowered in keywords:
+        return keywords[lowered]
     try:
         return ast.literal_eval(value)
     except (ValueError, SyntaxError):

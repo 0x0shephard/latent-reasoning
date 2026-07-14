@@ -17,6 +17,8 @@ from src.data.answer_extract import (
         ("1,234", 1234.0),
         ("$50", 50.0),
         ("3.0", 3.0),
+        (".5", 0.5),
+        ("1.2e6", 1_200_000.0),
         ("12%", 12.0),
         ("-7", -7.0),
         ("360.", 360.0),
@@ -38,6 +40,7 @@ def test_normalize_number(token, expected):
         ("The answer is 1,024 apples.", 1024.0),
         ("no numbers here", None),
         ("The answer is: -3.5", -3.5),
+        ("The answer is: 1.2e6", 1_200_000.0),
     ],
 )
 def test_extract_final_number(text, expected):
@@ -47,6 +50,10 @@ def test_extract_final_number(text, expected):
 def test_answer_cue_beats_trailing_number():
     # Cue-following number wins even when another number appears later.
     assert extract_final_number("The answer is: 42 (see step 99)") == 42.0
+
+
+def test_last_answer_cue_wins_after_self_correction():
+    assert extract_final_number("The answer is: 7. Wait, the answer is: 8") == 8.0
 
 
 def test_normalize_gold_gsm8k_main():
@@ -63,11 +70,17 @@ def test_normalize_gold_bare_number():
     "pred,gold,ok",
     [
         ("The answer is: 360", 360.0, True),
-        ("The answer is: 360.00004", 360.0, True),   # within tolerance
+        ("The answer is: 360.00004", 360.0, False),
         ("The answer is: 361", 360.0, False),
         ("I don't know", 360.0, False),
         ("The answer is: 1,000", 1000.0, True),
+        ("The answer is: 1,000,100", 1_000_000.0, False),
+        ("The answer is: 999,900,000", 1_000_000_000.0, False),
     ],
 )
 def test_answers_match(pred, gold, ok):
     assert answers_match(pred, gold) is ok
+
+
+def test_explicit_absolute_tolerance_is_available_for_diagnostics():
+    assert answers_match("The answer is: 360.00004", 360, tol="0.0001")

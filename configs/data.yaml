@@ -1,24 +1,29 @@
 # Dataset sources + prompt format. Identifiers are configurable so they can be swapped
-# for mirrors or Kaggle-Dataset-local paths (HF_HUB_OFFLINE) without touching code.
+# for mirrors without touching code. Offline prepared copies are selected with
+# CODIKAVA_DATA_ROOT (see scripts/dataset_prep.py).
 
 train:
   # Two trace styles (proposal §5.2). Same schema: question / cot / answer.
   eq_only:
     hf_id: zen-E/GSM8k-Aug        # <<a op b=c>> equation-only CoT (386k)
     split: train
+    data_file: gsm8k_aug_train.json
+    revision: c4972fba71a612e2089d8fb10f78caa01c740083
   natural_language:
     hf_id: zen-E/GSM8k-Aug-NL     # natural-language CoT, same examples
     split: train
+    data_file: gsm8k_aug_nl.json
+    revision: e20551f801620cc7dd968edc941126e493fa8202
   fields:                         # column names in the source dataset
     question: question
     cot: cot
     answer: answer
 
 eval:
-  gsm8k:      { hf_id: openai/gsm8k,                config: main, split: test,  kind: gsm8k_main }   # in-domain
-  svamp:      { hf_id: ChilleD/SVAMP,                             split: test,  kind: svamp }        # OOD: structure
-  multiarith: { hf_id: ChilleD/MultiArith,                        split: test,  kind: multiarith }   # OOD: multi-step
-  gsm_hard:   { hf_id: reasoning-machines/gsm-hard,               split: train, kind: gsm_hard }     # OOD: number shift
+  gsm8k:      { hf_id: openai/gsm8k, config: main, split: test, kind: gsm8k_main, revision: 740312add88f781978c0658806c59bc2815b9866 }   # in-domain
+  svamp:      { hf_id: ChilleD/SVAMP, split: test, kind: svamp, revision: 5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef }        # OOD: structure
+  multiarith: { hf_id: ChilleD/MultiArith, split: test, kind: multiarith, revision: 144d44c3fb87c0b9097ac9593c789e716a282e3e }   # OOD: multi-step
+  gsm_hard:   { hf_id: reasoning-machines/gsm-hard, split: train, kind: gsm_hard, revision: 960448f73503112d4226baeb8eb41d3fb5ae2506 }     # OOD: number shift
 
 # Prompt template. CODI uses an answer cue of "The answer is:"; the ":" token is the
 # CODI distillation position (Phase 2), so keep the answer_prefix ending in ":".

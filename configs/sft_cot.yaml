@@ -1,0 +1,34 @@
+# CoT-SFT baseline: GPT-2 fine-tuned to generate an explicit CoT then the answer.
+# This is the Phase 1 reproduction gate — sane GSM8k accuracy here proves the pipeline.
+run_name: gpt2_cot_sft
+seed: 0
+offline: false            # Kaggle first run downloads from HF; flip true with staged data
+
+output_dir: outputs/sft_cot
+data_config: configs/data.yaml
+
+task:
+  type: sft
+  method: cot_sft         # supervise CoT + answer; answer cue is in the completion
+  backbone: gpt2
+  backbone_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  trace_style: eq_only    # eq_only (GSM8k-Aug) | natural_language (GSM8k-Aug-NL)
+  max_length: 256
+  mask_prompt: true       # loss on completion only (question tokens masked)
+
+train:
+  epochs: 1.0             # total_steps is derived from the resolved dataset size
+  batch_size: 16
+  lr: 0.0001
+  weight_decay: 0.0
+  warmup_steps: 200
+  grad_clip: 1.0
+  log_every: 50
+  ckpt_every: 500
+  keep_last: 3
+  max_seconds: 32400      # ~9h Kaggle guard
+
+eval:
+  max_new_tokens: 128     # reduce answer truncation for longer equation traces
+  batch_size: 32
+  limit: null             # set e.g. 200 for a fast sanity check

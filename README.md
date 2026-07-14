@@ -3,7 +3,7 @@
 A single shared harness in which two latent-reasoning supervision methods differ *only*
 in their distillation loss, so the study isolates the effect of **supervision
 granularity**. See [`docs/PLAN.md`](docs/PLAN.md) for the full research plan and
-[`KAVA_vs_CODI_SProj_Research_Proposal.pdf`](KAVA_vs_CODI_SProj_Research_Proposal.pdf) for
+[`KAVA_vs_CODI_SProj_Research_Proposal.pdf`](docs/KAVA_vs_CODI_SProj_Research_Proposal.pdf) for
 the proposal.
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
@@ -44,14 +44,30 @@ Kill it mid-run and re-run the same command — it resumes from the latest check
 no metric discontinuity. Exit codes: `0` = complete, `42` = hit the wall-clock budget
 (state saved, re-run to resume).
 
-## Tests (Phase 0 gate)
+## Tests
 
 ```bash
 pytest -q
 ```
 
-Covers determinism (same seed → identical losses) and resume continuity (interrupt +
-resume matches an uninterrupted run bit-for-bit). CPU-only, no downloads.
+Covers deterministic resume, exact numeric scoring, prompt/data adapters, answer-preserving
+SFT collation, provenance guards, and a tiny causal-LM forward/backward integration. CPU-only,
+no downloads.
+
+## Validate and run the Phase 1 baseline
+
+Before using a GPU, validate the real model/dataset contract (requires the Hugging Face
+artifacts online or in the configured offline cache):
+
+```bash
+python scripts/validate_phase1.py --config configs/sft_cot.yaml
+python -m src.train.kaggle_run --config configs/sft_cot.yaml
+python -m src.eval.run_eval --config configs/sft_cot.yaml --limit 200
+```
+
+Each training run records `run_manifest.json` with its immutable config, resolved artifact
+identities, source hash, and package versions. Evaluation writes per-example predictions
+and a summary under the run's `eval/step_XXXXXXXX/` directory.
 
 ## Layout
 
@@ -61,7 +77,7 @@ src/data    datasets, teacher caching, answer extraction   (Phase 1+)
 src/models  latent-LM wrapper (<bot>/<eot> continuous thoughts)  (Phase 2+)
 src/losses  configurable TrajectoryMatch + R-KV compression  (Phase 2+)
 src/train   session-safe entrypoint + shared training loop
-src/eval    exact-match / OOD / efficiency / calibration     (Phase 1+)
+src/eval    numeric exact-match + OOD (efficiency/calibration planned)
 src/mech    probes, CKA/SVCCA, ablation, patching            (Phase 3+)
 tests/      Phase gates
 ```

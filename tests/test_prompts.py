@@ -41,6 +41,12 @@ def test_svamp_adapter_concats_body_and_question():
     assert normalize_gold(gold_raw, "svamp") == 5.0
 
 
+def test_svamp_adapter_allows_missing_optional_body():
+    q, gold_raw = ADAPTERS["svamp"]({"Question": "How many?", "Answer": 5})
+    assert q == "How many?"
+    assert normalize_gold(gold_raw, "svamp") == 5.0
+
+
 def test_gsm_hard_adapter_uses_input_target():
     q, gold_raw = ADAPTERS["gsm_hard"]({"input": "big problem", "target": 123456.0, "code": "..."})
     assert q == "big problem"

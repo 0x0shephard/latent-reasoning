@@ -12,14 +12,16 @@ where it sits in the overall research plan ([`docs/PLAN.md`](PLAN.md)). Read thi
 |-------|-------|--------|
 | **Phase 0** | Scaffolding + session-safe trainer (checkpoint / resume / determinism) | ✅ **Complete** — 3/3 tests green |
 | **Phase 1a** | Data + answer-extraction + prompt layer (the "measuring instrument") | ✅ **Complete** — CPU unit-tested |
-| **Phase 1b** | Generalize trainer for real HF SFT; No-CoT / CoT-SFT baselines; `run_eval.py`; Kaggle notebook | ⏳ **Next** |
-| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | ◻ Not started |
+| **Phase 1b** | Generic trainer + real HF SFT baselines (No-CoT / CoT) + `run_eval.py` + Kaggle notebook | ✅ **Local + real-data preflight passed** — awaiting Kaggle GPU gate |
+| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | ⏳ **Next** |
 | **Phase 3** | Mechanistic analysis (probes, CKA/SVCCA, ablation, patching) | ◻ Not started |
 | **Phase 4** | Supervision-granularity continuum + writing | ◻ Not started |
 
-**Current milestone:** the local, CPU-only foundation is done and trustworthy. The next
-step (1b) is the first code that requires a GPU and is therefore the first thing to run on
-Kaggle. Nothing before Phase 1b needs Kaggle.
+**Current milestone:** the full local foundation (harness + measuring instrument) is done.
+The pinned GPT-2/GSM8k-Aug preflight resolves 385,620 training rows, validates 2,048 sampled
+examples with no parse/length/truncation failures, loads all four evaluation schemas, and
+finds no exact train/eval question overlap. **The remaining Phase 1b gate is the actual
+Kaggle GPU CoT-SFT run and reproducible GSM8k score.** Once that passes, start Phase 2.
 
 **Run everything so far:**
 ```bash
@@ -142,7 +144,8 @@ Single source of truth for data:
 
 ### `src/data/answer_extract.py`
 The scoring core, dependency-free and heavily unit-tested.
-- **`normalize_number(token)`** — turns `"1,234"`, `"$50"`, `"3.0"`, `"12%"` into floats;
+- **`normalize_number(token)`** — turns `"1,234"`, `"$50"`, `"3.0"`, `"12%"` into exact
+  `Decimal` values;
   returns `None` for junk.
 - **`extract_final_number(text)`** — parses a model generation into its answer. Strategy:
   **prefer the number right after an answer cue** (`"answer is: N"`), else **fall back to
@@ -150,8 +153,9 @@ The scoring core, dependency-free and heavily unit-tested.
   comma-grouped/`$`-prefixed numbers.
 - **`normalize_gold(raw, kind)`** — normalizes heterogeneous gold answers: for `gsm8k_main`
   it strips everything before `####`; for the others it parses a bare number.
-- **`answers_match(pred_text, gold, tol)`** — extracts the prediction and compares to gold
-  within a relative tolerance (robust to `360` vs `360.00004`).
+- **`answers_match(pred_text, gold, tol)`** — performs exact numeric comparison with
+  `Decimal`, so large GSM-Hard answers cannot receive a magnitude-scaled tolerance. An
+  optional absolute tolerance exists only for explicit diagnostics.
 
 ### `src/data/prompts.py`
 Shared formatting so inputs are **byte-identical across methods** (a §5.3 fairness control).
@@ -172,10 +176,9 @@ Normalizes every dataset into a common shape so the eval harness is dataset-agno
   — each maps a raw HF row to `(question_text, gold_raw)`. SVAMP concatenates `Body` +
   `Question`; GSM-Hard reads `input`/`target`; etc. `ADAPTERS` is the `kind → adapter`
   registry.
-- **`load_eval_set(name, spec)`** — loads a split, adapts each row, normalizes gold, and
-  **skips rows whose gold can't be parsed** (rather than silently miscounting). Returns
-  `[{question, gold}]`. `load_dataset` is imported lazily so importing this module needs no
-  network — that's why the unit tests can exercise the adapters offline.
+- **`load_eval_set(name, spec)`** — loads a split, adapts each row, and normalizes gold.
+  Empty questions, schema mismatches, and unparseable gold answers fail loudly rather than
+  silently changing the evaluation denominator. Returns `[{question, gold}]`.
 - **`load_train_set(data_cfg, trace_style)`** — loads a training split and renames columns
   to the canonical `question`/`cot`/`answer` schema.
 
@@ -186,21 +189,98 @@ formatting, `answer_span` round-tripping, and each dataset adapter — all witho
 
 ---
 
-## What Phase 1b will add (next)
+## Phase 1b — Generic trainer + real SFT baselines + eval
 
-- **`src/train/trainer.py`** — extract the generic loop out of `kaggle_run.py` into a
-  reusable `Trainer`, with `kaggle_run` dispatching on `cfg.task` (`dummy` → `sft` → later
-  `codi`/`kava`). The Phase 0 dummy path stays numerically identical so its tests keep
-  passing.
-- **`build_task` for SFT** — real GPT-2 + tokenizer (via `transformers`), a
-  step-deterministic dataloader over `load_train_set`, and a next-token CE `step_fn`.
-  Implements the **No-CoT-SFT** and **CoT-SFT** baselines (§5.4).
-- **`src/eval/run_eval.py`** — batched generation → `answers_match`, reporting exact-match
-  overall and broken down by step-count / trace-style, across in-domain + OOD sets (§6).
-- **`scripts/dataset_prep.py`** — flesh out offline staging of GPT-2 + datasets as a Kaggle
-  Dataset.
-- **Kaggle notebook** — runs the **CoT-SFT reproduction gate**: sane GSM8k accuracy proves
-  the data/tokenizer/prompt/eval pipeline is trustworthy before any latent method.
+Goal: turn the Phase 0 harness into a real GPT-2 fine-tuner, implement the two non-latent
+baselines, and build the eval that scores them — the reproduction gate before any latent
+method. All code is CPU-verified; the actual training runs on Kaggle GPU.
+
+### `src/train/trainer.py`
+The generic loop, extracted from `kaggle_run.py` so every method reuses it.
+- **`Trainer(cfg, model, optimizer, step_fn)`** — owns resume, checkpoint cadence, the
+  wall-clock guard, logging, and the exit-code contract. It infers the device from the
+  model, so the same loop drives the CPU dummy task and a GPU GPT-2 unchanged.
+- **`fit()`** — resume from latest checkpoint (loading model/optimizer/RNG state), then step
+  `start_step → total_steps`, checkpointing every `ckpt_every` and on completion, or saving
+  + returning `EXIT_RESUME_NEEDED` (42) if the budget is hit. `EXIT_COMPLETE`/
+  `EXIT_RESUME_NEEDED` now live here and are re-exported from `kaggle_run` (tests unchanged).
+- **Run provenance** — `run_manifest.json` records the effective and resume-critical config,
+  data config, executable-source hash, git state, and dependency versions. Checkpoints carry
+  the manifest fingerprint; changed science settings or source code require a new output
+  directory, while runtime controls such as a larger `total_steps` may be extended safely.
+
+### `src/train/kaggle_run.py` (refactored)
+Now a thin **dispatcher**: `build_task(cfg)` reads `cfg.task` (`dummy` → `sft` → later
+`codi`/`kava`) and returns `(model, optimizer, step_fn)`; `run(cfg)` wires it into a
+`Trainer`. The Phase 0 `DummyTask` path is byte-for-byte unchanged, so its determinism /
+resume tests still pass.
+
+### `src/train/batching.py`
+The step-deterministic data machinery, dependency-free (stdlib `random` only) so it is
+unit-testable anywhere.
+- **`StepBatcher(num_examples, batch_size, seed)`** — `batch_indices(step)` maps a step to
+  example indices via a per-epoch permutation. It is a **pure function of the step**, so a
+  resumed run draws exactly the batches it would have without interruption — no duplicated
+  or skipped data. This extends the Phase 0 resume guarantee to real data.
+- **`build_labels(input_ids, prompt_len)`** — masks the first `prompt_len` tokens with
+  `-100` so cross-entropy is computed on the completion only.
+
+### `src/train/sft.py`
+The SFT task builder for both baselines (§5.4). Same backbone, tokenizer, prompt format, and
+batcher for both — they differ **only** in the target:
+- **`texts_for(row, method, style)`** — for `cot_sft` the prompt is `Question: …\n` and the
+  completion is `<cot> The answer is: <ans>` (the model learns to produce the cue + CoT);
+  for `nocot_sft` the prompt is `Question: …\nThe answer is:` and the completion is just the
+  answer.
+- **`build_sft_task(cfg)`** — loads GPT-2 + tokenizer (pad = eos), the normalized training
+  set, an `AdamW` optimizer, and a `StepBatcher`. Returns a `step_fn` that: sets a warmup/
+  constant LR (a **pure function of step**, so no scheduler state to checkpoint), gathers the
+  step's rows, collates with prompt-masked labels + attention mask + left-padding-free
+  packing, and runs a next-token CE step (HuggingFace computes the shifted loss and ignores
+  `-100`). Runs single-GPU by default to keep resume exact and deterministic.
+- **Sequence safety** — the prompt, full answer span, and EOS are always retained. If a CoT
+  exceeds `max_length`, only its reasoning portion is shortened and the truncation rate is
+  logged. An example that cannot retain prompt + answer fails rather than training on a
+  partial target.
+
+### `src/eval/run_eval.py`
+The scoring harness (§6), dataset-agnostic thanks to the Phase 1a adapters.
+- **`load_eval_model(cfg)`** — rebuilds the backbone, loads the latest checkpoint, sets
+  `padding_side="left"` (correct batched decoder-only generation).
+- **`generate_answers(...)`** — greedy decode (reproducible), returning only the newly
+  generated tokens.
+- **`evaluate(cfg, limit)`** — validates the evaluation config against the training manifest,
+  picks the prompt by method, generates per eval set, and reports numeric exact-match. It
+  writes every question/gold/generation/correctness record plus a JSON summary under
+  `eval/step_XXXXXXXX/`. `--limit` caps examples for a fast sanity pass.
+
+### `scripts/validate_phase1.py`
+Preflight for the real Hugging Face artifacts: validates model/tokenizer resolution and
+dataset schemas, samples answer parseability and sequence construction, measures reasoning
+truncation, reports the effective epoch count, and rejects exact train/eval question overlap.
+
+### `configs/sft_cot.yaml`, `configs/sft_nocot.yaml`
+The two baseline runs: `task.method` (`cot_sft`/`nocot_sft`), `backbone: gpt2`,
+`trace_style`, `max_length`, training budget (`epochs` or an explicit `total_steps`,
+`batch_size`, `lr`, warmup,
+`ckpt_every`, `max_seconds`), and an `eval` block. `offline: false` for the first Kaggle run
+(direct HF download); flip to `true` with staged data. `data_config` points at
+`configs/data.yaml`.
+
+### `scripts/dataset_prep.py`
+Populates a local HF cache (`hf_cache/`) with the pinned GPT-2 artifacts and also writes
+normalized `save_to_disk` datasets beneath `hf_cache/prepared/`. Upload it as a Kaggle
+Dataset and set `HF_HOME`, `HF_HUB_OFFLINE=1`, and `CODIKAVA_DATA_ROOT=<HF_HOME>/prepared`.
+The explicit prepared paths avoid relying on Hugging Face's private cache-key derivation.
+
+### `notebooks/kaggle_phase1_sft.ipynb`
+Clone/pull → install → (optional offline data) → **train CoT-SFT** (re-runnable, resumes) →
+**evaluate** → optional No-CoT-SFT, with an explicit resume-past-the-session-cap recipe.
+
+### `tests/test_batching.py`
+CPU gate for the new machinery: batcher determinism, seed sensitivity, epoch-is-a-
+permutation (full coverage, no repeats), resume-independence (indices are pure in `step`),
+and label masking incl. clamping.
 
 **Gate to exit Phase 1:** CoT-SFT on GPT-2 reaches sane GSM8k exact-match, and the eval
-harness reproduces the same number across two runs on a fixed checkpoint.
+harness reproduces the same number across two runs on a fixed checkpoint. Then → Phase 2.
