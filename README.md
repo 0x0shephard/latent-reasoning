@@ -65,6 +65,10 @@ python -m src.train.kaggle_run --config configs/sft_cot.yaml
 python -m src.eval.run_eval --config configs/sft_cot.yaml --limit 200
 ```
 
+On Kaggle, add a read-only Hugging Face token as a notebook secret named `HF_TOKEN`.
+The Phase-1 notebook loads it without printing the value; public downloads still work
+without it, but authenticated requests avoid anonymous rate limits and CDN signing errors.
+
 Each training run records `run_manifest.json` with its immutable config, resolved artifact
 identities, source hash, and package versions. Evaluation writes per-example predictions
 and a summary under the run's `eval/step_XXXXXXXX/` directory.

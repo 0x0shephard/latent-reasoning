@@ -84,6 +84,17 @@ def load_eval_set(name: str, spec: dict) -> list[dict]:
         kwargs = {"split": spec.get("split", "test")}
         if "config" in spec:
             kwargs["name"] = spec["config"]
+        if spec.get("data_file"):
+            # Some Hub dataset configs enumerate every split before returning the one
+            # requested by `split`. Supplying the pinned file explicitly prevents an
+            # evaluation-only run from downloading unrelated training artifacts.
+            kwargs["data_files"] = {
+                spec.get("split", "test"): spec["data_file"]
+            }
+            # Dataset-card metadata can list additional splits that we intentionally
+            # did not request. Skip that library-level completeness check; the strict
+            # canonical schema, non-empty, and gold checks below still apply.
+            kwargs["verification_mode"] = "no_checks"
         if spec.get("revision"):
             kwargs["revision"] = spec["revision"]
         ds = load_dataset(spec["hf_id"], **kwargs)

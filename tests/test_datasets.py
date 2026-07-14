@@ -31,3 +31,39 @@ def test_prepared_train_and_eval_load_without_hub(monkeypatch, tmp_path):
     assert len(train) == 1
     assert train[0]["cot"] == "2+2=4"
     assert evaluation == [{"question": "What is 3+3?", "gold": 6}]
+
+
+def test_eval_data_file_limits_remote_download_to_requested_split(monkeypatch):
+    import datasets
+
+    observed = {}
+
+    def fake_load_dataset(hf_id, **kwargs):
+        observed["hf_id"] = hf_id
+        observed.update(kwargs)
+        return Dataset.from_dict({"question": ["What is 4+4?"], "answer": ["#### 8"]})
+
+    monkeypatch.delenv("CODIKAVA_DATA_ROOT", raising=False)
+    monkeypatch.setattr(datasets, "load_dataset", fake_load_dataset)
+
+    rows = load_eval_set(
+        "gsm8k",
+        {
+            "hf_id": "openai/gsm8k",
+            "config": "main",
+            "split": "test",
+            "data_file": "main/test-00000-of-00001.parquet",
+            "kind": "gsm8k_main",
+            "revision": "pinned-revision",
+        },
+    )
+
+    assert rows == [{"question": "What is 4+4?", "gold": 8}]
+    assert observed == {
+        "hf_id": "openai/gsm8k",
+        "split": "test",
+        "name": "main",
+        "data_files": {"test": "main/test-00000-of-00001.parquet"},
+        "verification_mode": "no_checks",
+        "revision": "pinned-revision",
+    }
