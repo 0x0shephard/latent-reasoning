@@ -67,7 +67,9 @@ python -m src.eval.run_eval --config configs/sft_cot.yaml --limit 200
 
 On Kaggle, add a read-only Hugging Face token as a notebook secret named `HF_TOKEN`.
 The Phase-1 notebook loads it without printing the value; public downloads still work
-without it, but authenticated requests avoid anonymous rate limits and CDN signing errors.
+without it, but authenticated requests avoid anonymous rate limits. The GSM8K evaluation
+split uses OpenAI's canonical JSONL at a pinned GitHub revision to avoid HF CDN signing
+failures without changing the benchmark examples.
 
 Each training run records `run_manifest.json` with its immutable config, resolved artifact
 identities, source hash, and package versions. Evaluation writes per-example predictions

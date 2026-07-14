@@ -20,7 +20,15 @@ train:
     answer: answer
 
 eval:
-  gsm8k:      { hf_id: openai/gsm8k, config: main, split: test, data_file: main/test-00000-of-00001.parquet, kind: gsm8k_main, revision: 740312add88f781978c0658806c59bc2815b9866 }   # in-domain
+  # Canonical OpenAI JSONL pinned to the archived source repository. Loading it through
+  # the generic JSON builder avoids intermittent Xet/CDN signing failures on the HF mirror.
+  gsm8k:
+    hf_id: json
+    split: test
+    data_file: https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl
+    kind: gsm8k_main
+    source_repo: openai/grade-school-math
+    source_revision: 3101c7d5072418e28b9008a6636bde82a006892c
   svamp:      { hf_id: ChilleD/SVAMP, split: test, kind: svamp, revision: 5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef }        # OOD: structure
   multiarith: { hf_id: ChilleD/MultiArith, split: test, kind: multiarith, revision: 144d44c3fb87c0b9097ac9593c789e716a282e3e }   # OOD: multi-step
   gsm_hard:   { hf_id: reasoning-machines/gsm-hard, split: train, kind: gsm_hard, revision: 960448f73503112d4226baeb8eb41d3fb5ae2506 }     # OOD: number shift
