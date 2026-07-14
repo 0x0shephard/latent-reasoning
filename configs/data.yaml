@@ -29,9 +29,29 @@ eval:
     kind: gsm8k_main
     source_repo: openai/grade-school-math
     source_revision: 3101c7d5072418e28b9008a6636bde82a006892c
-  svamp:      { hf_id: ChilleD/SVAMP, split: test, kind: svamp, revision: 5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef }        # OOD: structure
-  multiarith: { hf_id: ChilleD/MultiArith, split: test, kind: multiarith, revision: 144d44c3fb87c0b9097ac9593c789e716a282e3e }   # OOD: multi-step
-  gsm_hard:   { hf_id: reasoning-machines/gsm-hard, split: train, kind: gsm_hard, revision: 960448f73503112d4226baeb8eb41d3fb5ae2506 }     # OOD: number shift
+  # These mirrors keep their source JSON files as ordinary Git blobs. Addressing those
+  # pinned files directly prevents `datasets` from selecting auto-converted Xet Parquet.
+  svamp:
+    hf_id: json
+    split: test
+    data_file: https://huggingface.co/datasets/ChilleD/SVAMP/raw/5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef/test.json
+    kind: svamp
+    source_repo: ChilleD/SVAMP
+    source_revision: 5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef
+  multiarith:
+    hf_id: json
+    split: test
+    data_file: https://huggingface.co/datasets/ChilleD/MultiArith/raw/144d44c3fb87c0b9097ac9593c789e716a282e3e/test.json
+    kind: multiarith
+    source_repo: ChilleD/MultiArith
+    source_revision: 144d44c3fb87c0b9097ac9593c789e716a282e3e
+  gsm_hard:
+    hf_id: json
+    split: train
+    data_file: https://huggingface.co/datasets/reasoning-machines/gsm-hard/raw/960448f73503112d4226baeb8eb41d3fb5ae2506/gsmhardv2.jsonl
+    kind: gsm_hard
+    source_repo: reasoning-machines/gsm-hard
+    source_revision: 960448f73503112d4226baeb8eb41d3fb5ae2506
 
 # Prompt template. CODI uses an answer cue of "The answer is:"; the ":" token is the
 # CODI distillation position (Phase 2), so keep the answer_prefix ending in ":".
