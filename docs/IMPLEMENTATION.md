@@ -344,8 +344,17 @@ colon token identities, trace-length/truncation statistics, context limits, meth
 settings, and controlled equality against the peer config. The current 512-example
 preflight passes for both methods with no truncation or construction failures.
 
-The complete CPU suite has 77 passing tests. Phase 2 coverage includes boundary/masking
+The complete CPU suite has 78 passing tests. Phase 2 coverage includes boundary/masking
 checks, explicit teacher extraction from a real tiny causal LM, R-KV shape/order/masks,
 deterministic random compression, stop-gradient and layer selection, autoregressive and
 Jacobi forward contracts, latent determinism, projection backpropagation, and one-batch
 overfitting.
+
+### GPU checkpoint RNG compatibility
+
+`scripts/resume_training.py` is the Phase-2 GPU entrypoint. It handles checkpoints created
+by the original trainer, whose `map_location='cuda'` also moved the saved CPU RNG byte tensor
+to CUDA. The wrapper converts only RNG state tensors back to CPU before restoration; model,
+optimizer, loss history, batch index, and experiment fingerprint remain unchanged. It lives
+outside the provenance-hashed `src/` tree specifically so already-running experiments can
+adopt the resume fix without invalidating their manifests.

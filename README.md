@@ -85,11 +85,11 @@ compressed to six slots with R-KV.
 
 ```bash
 python scripts/validate_phase2.py --config configs/codi.yaml --peer-config configs/kava.yaml
-python -m src.train.kaggle_run --config configs/codi.yaml
+python -u scripts/resume_training.py --config configs/codi.yaml
 python -m src.eval.run_eval --config configs/codi.yaml --limit 200
 
 python scripts/validate_phase2.py --config configs/kava.yaml --peer-config configs/codi.yaml
-python -m src.train.kaggle_run --config configs/kava.yaml
+python -u scripts/resume_training.py --config configs/kava.yaml
 python -m src.eval.run_eval --config configs/kava.yaml --limit 200
 ```
 
