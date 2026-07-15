@@ -1,0 +1,43 @@
+# Phase-2 ablation: identical latent student and CE objectives, no trajectory distillation.
+run_name: gpt2_latent_nodistill_m6_ar
+seed: 0
+offline: false
+output_dir: outputs/latent_nodistill
+data_config: configs/data.yaml
+
+task:
+  type: latent
+  method: latent_nodistill
+  backbone: gpt2
+  backbone_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  trace_style: eq_only
+  max_length: 256
+  latent_steps: 6
+  mechanism: autoregressive
+  jacobi_iterations: 3
+  projection_dim: 768
+  projection_dropout: 0.0
+  student_ce_weight: 1.0
+  teacher_ce_weight: 1.0
+  distillation:
+    hidden_weight: 0.0
+    kv_weight: 0.0
+
+train:
+  epochs: 1.0
+  batch_size: 4
+  lr: 0.0001
+  lr_schedule: cosine
+  min_lr_ratio: 0.0
+  weight_decay: 0.1
+  warmup_steps: 500
+  grad_clip: 2.0
+  log_every: 50
+  ckpt_every: 1000
+  keep_last: 2
+  max_seconds: 32400
+
+eval:
+  max_new_tokens: 64
+  batch_size: 16
+  limit: null

@@ -19,6 +19,7 @@ import torch
 from src.data.answer_extract import answers_match
 from src.data.datasets import load_all_eval_sets
 from src.data.prompts import PromptStyle, cot_eval_prompt, eval_prompt
+from src.models.latent_lm import LatentCausalLM, add_latent_tokens
 from src.utils.checkpoint import Checkpointer
 from src.utils.config import load_config
 
@@ -50,9 +51,27 @@ def load_eval_model(cfg):
     tok = AutoTokenizer.from_pretrained(tcfg.backbone, **pretrained_kwargs)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    tok.padding_side = "left"  # correct batched generation for a decoder-only LM
-
-    model = AutoModelForCausalLM.from_pretrained(tcfg.backbone, **pretrained_kwargs)
+    task_type = trained_task.get("type", "sft")
+    is_latent = task_type in {"latent", "codi", "kava"}
+    if is_latent:
+        if trained_task.get("distillation", {}).get("kv_weight", 0):
+            pretrained_kwargs["attn_implementation"] = "eager"
+        backbone = AutoModelForCausalLM.from_pretrained(tcfg.backbone, **pretrained_kwargs)
+        bot_token_id, eot_token_id = add_latent_tokens(tok, backbone)
+        model = LatentCausalLM(
+            backbone,
+            bot_token_id=bot_token_id,
+            eot_token_id=eot_token_id,
+            latent_steps=int(trained_task.get("latent_steps", 6)),
+            mechanism=trained_task.get("mechanism", "autoregressive"),
+            jacobi_iterations=int(trained_task.get("jacobi_iterations", 3)),
+            projection_dim=trained_task.get("projection_dim"),
+            projection_dropout=float(trained_task.get("projection_dropout", 0.0)),
+        )
+        tok.padding_side = "right"  # latent context handles variable lengths explicitly
+    else:
+        tok.padding_side = "left"  # correct batched generation for a decoder-only LM
+        model = AutoModelForCausalLM.from_pretrained(tcfg.backbone, **pretrained_kwargs)
     state = Checkpointer(cfg.output_dir).load_latest(map_location="cpu")
     if state is None:
         raise FileNotFoundError(f"no checkpoint under {cfg.output_dir}/checkpoints")
@@ -89,6 +108,63 @@ def generate_answers(model, tok, prompts, max_new_tokens, batch_size, device) ->
     return outs
 
 
+@torch.no_grad()
+def generate_latent_answers(
+    model: LatentCausalLM,
+    tok,
+    questions: list[str],
+    style: PromptStyle,
+    max_new_tokens: int,
+    batch_size: int,
+    device,
+) -> list[str]:
+    """Greedy decode through the actual continuous-thought path."""
+    outputs: list[str] = []
+    cue_ids = list(tok(f" {style.answer_prefix}", add_special_tokens=False)["input_ids"])
+    prefix = [model.eot_token_id] + cue_ids
+    max_positions = getattr(model.config, "max_position_embeddings", None)
+    for start in range(0, len(questions), batch_size):
+        chunk = questions[start : start + batch_size]
+        sequences = [
+            list(
+                tok(
+                    f"{style.question_prefix}{question.strip()}\n",
+                    add_special_tokens=False,
+                )["input_ids"]
+            )
+            + [model.bot_token_id]
+            for question in chunk
+        ]
+        required = max(len(ids) for ids in sequences) + model.latent_steps + len(prefix)
+        if max_positions and required + max_new_tokens > max_positions:
+            raise ValueError(
+                "latent evaluation exceeds the model context window; reduce max_new_tokens"
+            )
+        width = max(len(ids) for ids in sequences)
+        question_ids = torch.tensor(
+            [ids + [tok.pad_token_id] * (width - len(ids)) for ids in sequences],
+            dtype=torch.long,
+            device=device,
+        )
+        question_mask = torch.tensor(
+            [[1] * len(ids) + [0] * (width - len(ids)) for ids in sequences],
+            dtype=torch.long,
+            device=device,
+        )
+        prefix_ids = torch.tensor(
+            [prefix for _ in sequences], dtype=torch.long, device=device
+        )
+        generated = model.generate_from_prefix(
+            question_ids,
+            question_mask,
+            prefix_ids,
+            max_new_tokens=max_new_tokens,
+            eos_token_id=tok.eos_token_id,
+        )
+        outputs.extend(tok.decode(ids, skip_special_tokens=True) for ids in generated)
+    return outputs
+
+
 def score_generations(generations: list[str], examples: list[dict]) -> tuple[int, float]:
     if len(generations) != len(examples):
         raise ValueError("generation/example count mismatch")
@@ -111,9 +187,9 @@ def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
     data_cfg = load_config(cfg.data_config)
     style = PromptStyle.from_config(data_cfg["prompt"])
     method = cfg.task.get("method", "cot_sft")
-    prompt_fn = cot_eval_prompt if method == "cot_sft" else eval_prompt
-
     model, tok, device, checkpoint_step = load_eval_model(cfg)
+    is_latent = isinstance(model, LatentCausalLM)
+    prompt_fn = cot_eval_prompt if method == "cot_sft" else eval_prompt
     eval_sets = load_all_eval_sets(data_cfg)
 
     ecfg = cfg.get("eval", {})
@@ -127,8 +203,19 @@ def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
     for name, examples in eval_sets.items():
         if cap:
             examples = examples[:cap]
-        prompts = [prompt_fn(e["question"], style) for e in examples]
-        gens = generate_answers(model, tok, prompts, max_new, bs, device)
+        if is_latent:
+            gens = generate_latent_answers(
+                model,
+                tok,
+                [e["question"] for e in examples],
+                style,
+                max_new,
+                bs,
+                device,
+            )
+        else:
+            prompts = [prompt_fn(e["question"], style) for e in examples]
+            gens = generate_answers(model, tok, prompts, max_new, bs, device)
         correct, acc = score_generations(gens, examples)
         results[name] = acc
         print(f"  {name:12s} acc={acc:.4f}  ({correct}/{len(examples)})")

@@ -4,7 +4,7 @@ Dispatches on `cfg.task` to a task builder, then hands the model + step function
 generic `Trainer` (checkpoint / resume / wall-clock guard). The loop is identical across:
   - dummy  (Phase 0): synthetic task that validates the harness on CPU.
   - sft    (Phase 1b): real GPT-2 SFT baselines (No-CoT / CoT).
-  - codi / kava (Phase 2): latent methods (added later).
+  - latent (Phase 2): shared continuous-thought model with CODI / KaVa losses.
 
 Exit codes:
     0   reached total_steps (complete)
@@ -95,6 +95,14 @@ def build_task(cfg: Config):
         from src.train.sft import build_sft_task
 
         return build_sft_task(cfg)
+    if ttype in {"latent", "codi", "kava"}:
+        from src.train.latent import build_latent_task
+
+        # Accept the concise legacy task.type names while keeping `type: latent` as the
+        # canonical schema used by the checked-in configs.
+        if ttype in {"codi", "kava"} and "method" not in cfg.task:
+            cfg["task"]["method"] = ttype
+        return build_latent_task(cfg)
     raise ValueError(f"unknown task type: {ttype!r}")
 
 

@@ -68,6 +68,37 @@ def _prepared_path(category: str, name: str) -> Path | None:
     return path
 
 
+def _legacy_train_cache(spec: dict):
+    """Load a pinned Arrow cache produced by an older ``datasets`` config hash.
+
+    Hugging Face occasionally changes the generated hash for the same pinned JSON file.
+    In offline environments the public loader then reports an available cache under a
+    different ``default-*`` directory but refuses to use it.  The revision directory and
+    schema checks below make that existing immutable artifact safe to reuse.
+    """
+    from datasets import Dataset, config as datasets_config
+
+    cache_root = Path(os.environ.get("HF_DATASETS_CACHE", datasets_config.HF_DATASETS_CACHE))
+    expected_dir = spec["hf_id"].replace("/", "___").casefold()
+    revision = spec.get("revision")
+    if not cache_root.is_dir() or not revision:
+        return None
+    repo_dirs = [
+        path for path in cache_root.iterdir() if path.is_dir() and path.name.casefold() == expected_dir
+    ]
+    candidates = []
+    for repo_dir in repo_dirs:
+        candidates.extend(repo_dir.glob(f"default-*/**/{revision}/*-train.arrow"))
+    if len(candidates) != 1:
+        return None
+    dataset = Dataset.from_file(str(candidates[0]))
+    required = {"question", "cot", "answer"}
+    if not required.issubset(dataset.column_names):
+        return None
+    print(f"[data] using pinned legacy Arrow cache: {candidates[0]}")
+    return dataset
+
+
 def load_eval_set(name: str, spec: dict) -> list[dict]:
     """Return [{'question': str, 'gold': Decimal}] for one eval set.
 
@@ -145,7 +176,12 @@ def load_train_set(data_cfg: dict, trace_style: str = "eq_only"):
             kwargs["data_files"] = {spec.get("split", "train"): spec["data_file"]}
         if spec.get("revision"):
             kwargs["revision"] = spec["revision"]
-        ds = load_dataset(spec["hf_id"], **kwargs)
+        try:
+            ds = load_dataset(spec["hf_id"], **kwargs)
+        except ValueError as exc:
+            ds = _legacy_train_cache(spec)
+            if ds is None:
+                raise exc
 
     rename = {v: k for k, v in fields.items() if v in ds.column_names and v != k}
     if rename:

@@ -11,10 +11,11 @@ the proposal.
 
 ## Status
 
-**Phase 0 — scaffolding & session-safe trainer.** A tiny synthetic task exercises the
-harness (deterministic, checkpoint/resume, wall-clock guard) before any real modeling.
-Phases 1–4 add data/eval, the latent-LM + CODI/KaVa losses, mechanistic analysis, and the
-supervision-granularity continuum.
+**Phases 0–2 implementation complete.** Phase 1's CoT-SFT checkpoint passed the real-data
+gate and scores 26.0% GSM8k / 33.86% macro exact-match on the saved 200-example evaluation.
+Phase 2 now provides one shared continuous-thought GPT-2 wrapper, CODI endpoint matching,
+KaVa KV-trajectory matching, R-KV compression, matched configs, latent-aware evaluation,
+and a Kaggle preflight. Long CODI/KaVa GPU runs remain to be executed.
 
 ## Setup
 
@@ -51,8 +52,8 @@ pytest -q
 ```
 
 Covers deterministic resume, exact numeric scoring, prompt/data adapters, answer-preserving
-SFT collation, provenance guards, and a tiny causal-LM forward/backward integration. CPU-only,
-no downloads.
+SFT/latent collation, provenance guards, R-KV selection, stop-gradient trajectory losses,
+both latent mechanisms, determinism, and tiny-model overfitting. CPU-only, no downloads.
 
 ## Validate and run the Phase 1 baseline
 
@@ -74,6 +75,27 @@ signing failures without changing the configured benchmark splits.
 Each training run records `run_manifest.json` with its immutable config, resolved artifact
 identities, source hash, and package versions. Evaluation writes per-example predictions
 and a summary under the run's `eval/step_XXXXXXXX/` directory.
+
+## Validate and run Phase 2
+
+CODI and KaVa use the same GPT-2 backbone, tokenizer, `M=6` autoregressive latent block,
+optimizer, data, and decoding. The controlled difference is `distillation.kv_weight`:
+CODI uses the all-layer hidden endpoint; KaVa adds all-layer/head key/value trajectories
+compressed to six slots with R-KV.
+
+```bash
+python scripts/validate_phase2.py --config configs/codi.yaml --peer-config configs/kava.yaml
+python -m src.train.kaggle_run --config configs/codi.yaml
+python -m src.eval.run_eval --config configs/codi.yaml --limit 200
+
+python scripts/validate_phase2.py --config configs/kava.yaml --peer-config configs/codi.yaml
+python -m src.train.kaggle_run --config configs/kava.yaml
+python -m src.eval.run_eval --config configs/kava.yaml --limit 200
+```
+
+Use [`notebooks/kaggle_phase2_latent.ipynb`](notebooks/kaggle_phase2_latent.ipynb) on a
+Kaggle P100 or T4. Keep each method in its own output directory and re-run the same training
+command after a wall-clock exit (code 42); the latest checkpoint resumes automatically.
 
 ## Layout
 

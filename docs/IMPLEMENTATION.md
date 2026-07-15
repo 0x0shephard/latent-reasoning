@@ -12,16 +12,15 @@ where it sits in the overall research plan ([`docs/PLAN.md`](PLAN.md)). Read thi
 |-------|-------|--------|
 | **Phase 0** | Scaffolding + session-safe trainer (checkpoint / resume / determinism) | ✅ **Complete** — 3/3 tests green |
 | **Phase 1a** | Data + answer-extraction + prompt layer (the "measuring instrument") | ✅ **Complete** — CPU unit-tested |
-| **Phase 1b** | Generic trainer + real HF SFT baselines (No-CoT / CoT) + `run_eval.py` + Kaggle notebook | ✅ **Local + real-data preflight passed** — awaiting Kaggle GPU gate |
-| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | ⏳ **Next** |
+| **Phase 1b** | Generic trainer + real HF SFT baselines (No-CoT / CoT) + `run_eval.py` + Kaggle notebook | ✅ **Complete** — CoT-SFT checkpoint evaluated on all four sets |
+| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | ✅ **Implemented and CPU-validated** — Kaggle GPU runs next |
 | **Phase 3** | Mechanistic analysis (probes, CKA/SVCCA, ablation, patching) | ◻ Not started |
 | **Phase 4** | Supervision-granularity continuum + writing | ◻ Not started |
 
-**Current milestone:** the full local foundation (harness + measuring instrument) is done.
-The pinned GPT-2/GSM8k-Aug preflight resolves 385,620 training rows, validates 2,048 sampled
-examples with no parse/length/truncation failures, loads all four evaluation schemas, and
-finds no exact train/eval question overlap. **The remaining Phase 1b gate is the actual
-Kaggle GPU CoT-SFT run and reproducible GSM8k score.** Once that passes, start Phase 2.
+**Current milestone:** Phase 1 produced a step-24,102 CoT-SFT checkpoint and a reproducible
+200-example evaluation (GSM8k 26.0%, SVAMP 30.0%, MultiArith 74.44%, GSM-Hard 5.0%). Phase
+2's implementation and real-data contract pass locally; the remaining work is running the
+matched CODI and KaVa configs on Kaggle and evaluating their checkpoints.
 
 **Run everything so far:**
 ```bash
@@ -210,8 +209,8 @@ The generic loop, extracted from `kaggle_run.py` so every method reuses it.
   directory, while runtime controls such as a larger `total_steps` may be extended safely.
 
 ### `src/train/kaggle_run.py` (refactored)
-Now a thin **dispatcher**: `build_task(cfg)` reads `cfg.task` (`dummy` → `sft` → later
-`codi`/`kava`) and returns `(model, optimizer, step_fn)`; `run(cfg)` wires it into a
+Now a thin **dispatcher**: `build_task(cfg)` reads `cfg.task` (`dummy` → `sft` → `latent`)
+and returns `(model, optimizer, step_fn)`; `run(cfg)` wires it into a
 `Trainer`. The Phase 0 `DummyTask` path is byte-for-byte unchanged, so its determinism /
 resume tests still pass.
 
@@ -282,5 +281,71 @@ CPU gate for the new machinery: batcher determinism, seed sensitivity, epoch-is-
 permutation (full coverage, no repeats), resume-independence (indices are pure in `step`),
 and label masking incl. clamping.
 
-**Gate to exit Phase 1:** CoT-SFT on GPT-2 reaches sane GSM8k exact-match, and the eval
-harness reproduces the same number across two runs on a fixed checkpoint. Then → Phase 2.
+**Phase 1 gate result:** the saved CoT-SFT checkpoint completed 24,102 steps and was
+evaluated with the shared exact-match harness; Phase 2 implementation then proceeded.
+
+---
+
+## Phase 2 — Shared latent model, CODI, and KaVa
+
+The primary comparison fixes GPT-2, tokenizer, data, `M=6`, autoregressive latent updates,
+optimizer, steps, and greedy decoding. `configs/codi.yaml` and `configs/kava.yaml` pass an
+automated peer-config equality check over those controlled fields. They use separate output
+directories and differ scientifically only by the additional KaVa KV trajectory target.
+
+### `src/data/teacher_cache.py`
+
+- Adds the matched teacher/student sequence contract and records every token boundary.
+- Removes the final explicit reasoning step before tokenization, then truncates only the
+  remaining trace if required; question, answer, and EOS are never discarded.
+- Extracts detached all-block hidden states at the answer-cue colon plus explicit-CoT keys,
+  values, masks, and answer-to-trace attention importance.
+- Supports both Transformers v4 tuple caches and v5 `DynamicCache` objects.
+
+### `src/models/latent_lm.py`
+
+- Registers `<bot>` and `<eot>`, resizes the backbone, and adds CODI's two-layer GELU +
+  LayerNorm projection.
+- Autoregressive mode repeatedly feeds the projected final activation as the next
+  continuous token. A Jacobi fixed-point mode is available only as an explicitly configured
+  ablation.
+- Returns answer CE, all-layer endpoint states, every latent hidden state, and the exact
+  all-layer/head latent K/V trajectory. Evaluation uses this same path before greedy answer
+  decoding; it cannot silently use ordinary text generation.
+
+### `src/losses/trajectory_match.py`
+
+- CODI: L1 hidden matching at the answer-cue endpoint over all blocks, teacher detached,
+  normalized by each teacher layer's current-batch standard deviation.
+- KaVa: CODI plus masked key/value trajectory matching over all layers, heads, and latent
+  positions. Layer subsets and L1/MSE/SmoothL1 metrics are configurable for later continuum
+  experiments.
+
+### `src/losses/kv_compress.py`
+
+Implements R-KV (`0.1 × importance + 0.9 × non-redundancy`) independently per layer/head.
+Top-scoring tokens are returned to chronological order before matching student steps.
+Short or empty traces are padded and masked, never treated as real zero-valued targets.
+Uniform and seeded-random selectors provide the compression-quality ablations.
+
+### `src/train/latent.py` and evaluation integration
+
+The generic trainer now dispatches `task.type: latent`. Each step performs a detached
+explicit-teacher target pass, a teacher CoT+answer CE pass, and the continuous student pass;
+the shared model receives both CE gradients plus the configured trajectory terms. LR is a
+step-derived warmup/cosine schedule, preserving resume determinism. `run_eval.py` rebuilds
+the wrapper from the run manifest, loads its checkpoint, executes latent inference, and
+writes the same exact-match artifacts as the SFT baselines.
+
+### Phase 2 validation and tests
+
+`scripts/validate_phase2.py` checks real tokenizer/data sequence construction, special and
+colon token identities, trace-length/truncation statistics, context limits, method/loss
+settings, and controlled equality against the peer config. The current 512-example
+preflight passes for both methods with no truncation or construction failures.
+
+The complete CPU suite has 77 passing tests. Phase 2 coverage includes boundary/masking
+checks, explicit teacher extraction from a real tiny causal LM, R-KV shape/order/masks,
+deterministic random compression, stop-gradient and layer selection, autoregressive and
+Jacobi forward contracts, latent determinism, projection backpropagation, and one-batch
+overfitting.
