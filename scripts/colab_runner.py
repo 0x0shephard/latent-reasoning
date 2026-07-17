@@ -132,7 +132,11 @@ def pack_extracted_checkpoint(source_dir: Path, target: Path) -> Path:
     ]
     print(f"[bootstrap] rebuilding {target.name} from {len(files)} uploaded files")
     with zipfile.ZipFile(
-        tmp, "w", compression=zipfile.ZIP_STORED, allowZip64=True
+        tmp,
+        "w",
+        compression=zipfile.ZIP_STORED,
+        allowZip64=True,
+        strict_timestamps=False,
     ) as archive:
         for path in files:
             archive.write(path, (Path(target.name) / path.relative_to(root)).as_posix())
@@ -243,6 +247,8 @@ class DriveMirror:
         self.keep_last = keep_last
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
+        self.sync_lock = threading.Lock()
+        self.status_lock = threading.Lock()
         self.last_synced: str | None = None
         self.state: dict[str, Any] = {
             "method": method,
@@ -254,10 +260,11 @@ class DriveMirror:
         }
 
     def update_status(self, state: str, **extra: Any) -> None:
-        self.state.update(extra)
-        self.state["state"] = state
-        self.state["updated_at_utc"] = _utc_now()
-        _atomic_json(self.status_path, self.state)
+        with self.status_lock:
+            self.state.update(extra)
+            self.state["state"] = state
+            self.state["updated_at_utc"] = _utc_now()
+            _atomic_json(self.status_path, self.state)
 
     def restore(self) -> Path:
         self.local_output.mkdir(parents=True, exist_ok=True)
@@ -288,13 +295,27 @@ class DriveMirror:
                 _atomic_copy(source, target_root / source.relative_to(source_root))
 
     def sync(self, force: bool = False) -> Path | None:
+        with self.sync_lock:
+            return self._sync_once(force=force)
+
+    def _sync_once(self, force: bool = False) -> Path | None:
         checkpoint = _latest_checkpoint(self.local_output / "checkpoints")
         if checkpoint is None:
             return None
         if force or checkpoint.name != self.last_synced:
             validate_torch_checkpoint_archive(checkpoint)
             target = self.drive_output / "checkpoints" / checkpoint.name
-            if not target.is_file() or target.stat().st_size != checkpoint.stat().st_size:
+            target_valid = False
+            if target.is_file() and target.stat().st_size == checkpoint.stat().st_size:
+                try:
+                    validate_torch_checkpoint_archive(target)
+                    target_valid = True
+                except Exception as exc:
+                    print(
+                        f"[drive-sync] replacing invalid {target.name}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+            if not target_valid:
                 print(f"[drive-sync] copying atomic checkpoint {checkpoint.name}")
                 _atomic_copy(checkpoint, target)
                 validate_torch_checkpoint_archive(target)
@@ -331,8 +352,10 @@ class DriveMirror:
 
     def close(self) -> None:
         self.stop_event.set()
-        if self.thread is not None:
-            self.thread.join(timeout=max(5.0, self.poll_seconds + 5.0))
+        if self.thread is not None and self.thread.is_alive():
+            # A checkpoint copy must finish before the final forced sync begins. Timing
+            # out here can start two writers against the same Drive `.uploading` path.
+            self.thread.join()
 
 
 def bootstrap_drive(method: str, drive_root: Path, scratch_root: Path) -> Path:
@@ -340,8 +363,28 @@ def bootstrap_drive(method: str, drive_root: Path, scratch_root: Path) -> Path:
     spec = METHODS[method]
     step = int(spec["bootstrap_step"])
     output = drive_root / "outputs" / method
-    target = output / "checkpoints" / f"step_{step:08d}.pt"
-    if not target.is_file():
+    checkpoint_dir = output / "checkpoints"
+    durable_checkpoint = None
+    for candidate in reversed(sorted(checkpoint_dir.glob("step_*.pt"))):
+        try:
+            validate_torch_checkpoint_archive(candidate)
+            validate_checkpoint_payload(candidate, _checkpoint_step(candidate))
+            durable_checkpoint = candidate
+            print(f"[bootstrap] using newest durable checkpoint {candidate.name}")
+            break
+        except Exception as exc:
+            quarantine = output / "quarantine"
+            quarantine.mkdir(parents=True, exist_ok=True)
+            stamp = _utc_now().replace(":", "-").replace("+", "_")
+            quarantined = quarantine / f"{candidate.name}.{stamp}.invalid"
+            os.replace(candidate, quarantined)
+            print(
+                f"[bootstrap] quarantined invalid {candidate.name}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    if durable_checkpoint is None:
+        target = checkpoint_dir / f"step_{step:08d}.pt"
         uploads = drive_root / "uploads"
         file_candidates = [
             uploads / f"step_{step:08d}.pt",
@@ -375,7 +418,9 @@ def bootstrap_drive(method: str, drive_root: Path, scratch_root: Path) -> Path:
             print(f"[bootstrap] persisting rebuilt {target.name} to Drive")
             _atomic_copy(packed, target)
             packed.unlink(missing_ok=True)
-    validate_torch_checkpoint_archive(target)
+        validate_torch_checkpoint_archive(target)
+        validate_checkpoint_payload(target, step)
+        durable_checkpoint = target
 
     manifest_target = output / "run_manifest.json"
     if not manifest_target.is_file():
@@ -387,16 +432,9 @@ def bootstrap_drive(method: str, drive_root: Path, scratch_root: Path) -> Path:
 
 
 def _restore_rng_portably(state: dict) -> None:
-    import random
+    from scripts.resume_training import restore_rng_state_portably
 
-    import numpy as np
-    import torch
-
-    random.setstate(state["python"])
-    np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"].detach().cpu())
-    if "torch_cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all([value.detach().cpu() for value in state["torch_cuda"]])
+    restore_rng_state_portably(state)
 
 
 def run_session(args) -> int:
@@ -453,6 +491,7 @@ def run_session(args) -> int:
             mirror.update_status("evaluating", training_exit_code=code)
             limit = None if args.eval_limit == 0 else args.eval_limit
             evaluate(cfg, limit=limit)
+        mirror.close()
         mirror.update_status(
             "complete" if code == EXIT_COMPLETE else "resume_needed",
             training_exit_code=code,
@@ -460,6 +499,7 @@ def run_session(args) -> int:
         mirror.sync(force=True)
         return code
     except Exception as exc:
+        mirror.close()
         mirror.update_status(
             "failed",
             error_type=type(exc).__name__,

@@ -1,10 +1,16 @@
 import json
+import os
+import threading
+import time
 import zipfile
 from copy import deepcopy
 
 import pytest
 
+import scripts.colab_runner as colab_runner
 from scripts.colab_runner import (
+    DriveMirror,
+    bootstrap_drive,
     pack_extracted_checkpoint,
     portable_manifest_mismatches,
     validate_torch_checkpoint_archive,
@@ -79,12 +85,69 @@ def test_pack_extracted_checkpoint_folder(tmp_path):
     (extracted / "byteorder").write_text("little")
     (extracted / "version").write_text("3")
     (extracted / "data" / "0").write_bytes(b"storage")
+    # PyTorch archives commonly preserve the ZIP epoch as a timestamp. Drive folder
+    # uploads can surface it as pre-1980 filesystem metadata, which ZipInfo rejects unless
+    # the writer explicitly clamps legacy timestamps.
+    os.utime(extracted / "data.pkl", (0, 0))
     target = tmp_path / "rebuilt" / "step_00000001.pt"
     pack_extracted_checkpoint(extracted, target)
     validate_torch_checkpoint_archive(target)
     with zipfile.ZipFile(target) as archive:
         assert "step_00000001.pt/data.pkl" in archive.namelist()
         assert "step_00000001.pt/data/0" in archive.namelist()
+
+
+def test_drive_mirror_serializes_concurrent_syncs(tmp_path):
+    mirror = DriveMirror(
+        tmp_path / "local",
+        tmp_path / "drive",
+        tmp_path / "status.json",
+        "codi",
+        poll_seconds=0.01,
+    )
+    counters = {"active": 0, "maximum": 0}
+    counter_lock = threading.Lock()
+
+    def fake_sync_once(force=False):
+        with counter_lock:
+            counters["active"] += 1
+            counters["maximum"] = max(counters["maximum"], counters["active"])
+        time.sleep(0.03)
+        with counter_lock:
+            counters["active"] -= 1
+
+    mirror._sync_once = fake_sync_once
+    workers = [threading.Thread(target=mirror.sync, kwargs={"force": True}) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+
+    assert counters["maximum"] == 1
+
+
+def test_bootstrap_uses_newest_durable_checkpoint_without_original_upload(
+    tmp_path, monkeypatch
+):
+    drive_root = tmp_path / "drive"
+    checkpoint = drive_root / "outputs" / "codi" / "checkpoints" / "step_00096000.pt"
+    checkpoint.parent.mkdir(parents=True)
+    with zipfile.ZipFile(checkpoint, "w") as archive:
+        archive.writestr("step_00096000.pt/data.pkl", b"payload")
+        archive.writestr("step_00096000.pt/byteorder", b"little")
+        archive.writestr("step_00096000.pt/version", b"3")
+    verified = []
+    monkeypatch.setattr(
+        colab_runner,
+        "validate_checkpoint_payload",
+        lambda path, expected_step: verified.append((path.name, expected_step)),
+    )
+
+    output = bootstrap_drive("codi", drive_root, tmp_path / "scratch")
+
+    assert output == drive_root / "outputs" / "codi"
+    assert verified == [("step_00096000.pt", 96000)]
+    assert not (drive_root / "uploads").exists()
 
 
 def test_archived_resume_manifests_are_valid_json():

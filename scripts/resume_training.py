@@ -33,9 +33,19 @@ def restore_rng_state_portably(state: dict) -> None:
     np.random.set_state(state["numpy"])
     torch.set_rng_state(state["torch"].detach().cpu())
     if "torch_cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(
-            [cuda_state.detach().cpu() for cuda_state in state["torch_cuda"]]
-        )
+        saved_states = state["torch_cuda"]
+        active_devices = torch.cuda.device_count()
+        restore_count = min(len(saved_states), active_devices)
+        for device_index in range(restore_count):
+            torch.cuda.set_rng_state(
+                saved_states[device_index].detach().cpu(), device=device_index
+            )
+        if len(saved_states) != active_devices:
+            print(
+                "[resume] CUDA RNG topology changed: "
+                f"saved={len(saved_states)} active={active_devices}; "
+                f"restored devices 0..{restore_count - 1}"
+            )
 
 
 def main() -> int:
