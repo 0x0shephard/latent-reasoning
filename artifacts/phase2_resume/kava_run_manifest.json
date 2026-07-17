@@ -1,0 +1,191 @@
+{
+  "created_at_utc": "2026-07-16T02:59:32.214102+00:00",
+  "data_config": {
+    "eval": {
+      "gsm8k": {
+        "data_file": "https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl",
+        "hf_id": "json",
+        "kind": "gsm8k_main",
+        "source_repo": "openai/grade-school-math",
+        "source_revision": "3101c7d5072418e28b9008a6636bde82a006892c",
+        "split": "test"
+      },
+      "gsm_hard": {
+        "data_file": "https://huggingface.co/datasets/reasoning-machines/gsm-hard/raw/960448f73503112d4226baeb8eb41d3fb5ae2506/gsmhardv2.jsonl",
+        "hf_id": "json",
+        "kind": "gsm_hard",
+        "source_repo": "reasoning-machines/gsm-hard",
+        "source_revision": "960448f73503112d4226baeb8eb41d3fb5ae2506",
+        "split": "train"
+      },
+      "multiarith": {
+        "data_file": "https://huggingface.co/datasets/ChilleD/MultiArith/raw/144d44c3fb87c0b9097ac9593c789e716a282e3e/test.json",
+        "hf_id": "json",
+        "kind": "multiarith",
+        "source_repo": "ChilleD/MultiArith",
+        "source_revision": "144d44c3fb87c0b9097ac9593c789e716a282e3e",
+        "split": "test"
+      },
+      "svamp": {
+        "data_file": "https://huggingface.co/datasets/ChilleD/SVAMP/raw/5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef/test.json",
+        "hf_id": "json",
+        "kind": "svamp",
+        "source_repo": "ChilleD/SVAMP",
+        "source_revision": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef",
+        "split": "test"
+      }
+    },
+    "prompt": {
+      "answer_prefix": "The answer is:",
+      "cot_prefix": "",
+      "question_prefix": "Question: "
+    },
+    "train": {
+      "eq_only": {
+        "data_file": "gsm8k_aug_train.json",
+        "hf_id": "zen-E/GSM8k-Aug",
+        "revision": "c4972fba71a612e2089d8fb10f78caa01c740083",
+        "split": "train"
+      },
+      "fields": {
+        "answer": "answer",
+        "cot": "cot",
+        "question": "question"
+      },
+      "natural_language": {
+        "data_file": "gsm8k_aug_nl.json",
+        "hf_id": "zen-E/GSM8k-Aug-NL",
+        "revision": "e20551f801620cc7dd968edc941126e493fa8202",
+        "split": "train"
+      }
+    }
+  },
+  "effective_config": {
+    "data_config": "configs/data.yaml",
+    "eval": {
+      "batch_size": 8,
+      "limit": null,
+      "max_new_tokens": 64
+    },
+    "offline": false,
+    "output_dir": "outputs/kava",
+    "run_name": "gpt2_kava_m6_ar",
+    "seed": 0,
+    "task": {
+      "backbone": "gpt2",
+      "backbone_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "bot_token_id": 50257,
+      "distillation": {
+        "compression": "rkv",
+        "hidden_layer_reduction": "sum",
+        "hidden_layers": "all",
+        "hidden_metric": "l1",
+        "hidden_weight": 1.0,
+        "importance_weight": 0.1,
+        "kv_layers": "all",
+        "kv_metric": "l1",
+        "kv_weight": 1.0,
+        "normalize_teacher_std": true
+      },
+      "eot_token_id": 50258,
+      "jacobi_iterations": 3,
+      "latent_steps": 6,
+      "max_length": 256,
+      "mechanism": "autoregressive",
+      "method": "kava",
+      "projection_dim": 768,
+      "projection_dropout": 0.0,
+      "resolved_backbone_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "student_ce_weight": 1.0,
+      "teacher_ce_weight": 1.0,
+      "trace_style": "eq_only",
+      "train_dataset_fingerprint": "a960dcd3f3d83cae",
+      "train_examples": 385620,
+      "type": "latent"
+    },
+    "train": {
+      "batch_size": 4,
+      "ckpt_every": 1000,
+      "epochs": 1.0,
+      "grad_clip": 2.0,
+      "keep_last": 2,
+      "log_every": 50,
+      "lr": 0.0001,
+      "lr_schedule": "cosine",
+      "max_seconds": 32400,
+      "min_lr_ratio": 0.0,
+      "total_steps": 96405,
+      "warmup_steps": 500,
+      "weight_decay": 0.1
+    }
+  },
+  "environment": {
+    "packages": {
+      "PyYAML": "6.0.3",
+      "accelerate": "1.13.0",
+      "datasets": "5.0.0",
+      "peft": "0.19.1",
+      "torch": "2.10.0+cu128",
+      "transformers": "5.0.0"
+    },
+    "python": "3.12.13"
+  },
+  "fingerprint": "132e2e9370c480c8aa6e9878abd383a1f062ad91d194c7c5ef7148bd6d579df5",
+  "git": {
+    "branch": "main",
+    "commit": "657325f6ad141ece135a4b03c3db122145b5c2f7",
+    "dirty": false
+  },
+  "resume_config": {
+    "data_config": "configs/data.yaml",
+    "eval": {
+      "batch_size": 8,
+      "limit": null,
+      "max_new_tokens": 64
+    },
+    "run_name": "gpt2_kava_m6_ar",
+    "seed": 0,
+    "task": {
+      "backbone": "gpt2",
+      "backbone_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "bot_token_id": 50257,
+      "distillation": {
+        "compression": "rkv",
+        "hidden_layer_reduction": "sum",
+        "hidden_layers": "all",
+        "hidden_metric": "l1",
+        "hidden_weight": 1.0,
+        "importance_weight": 0.1,
+        "kv_layers": "all",
+        "kv_metric": "l1",
+        "kv_weight": 1.0,
+        "normalize_teacher_std": true
+      },
+      "eot_token_id": 50258,
+      "jacobi_iterations": 3,
+      "latent_steps": 6,
+      "max_length": 256,
+      "mechanism": "autoregressive",
+      "method": "kava",
+      "projection_dim": 768,
+      "projection_dropout": 0.0,
+      "resolved_backbone_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "student_ce_weight": 1.0,
+      "teacher_ce_weight": 1.0,
+      "trace_style": "eq_only",
+      "train_dataset_fingerprint": "a960dcd3f3d83cae",
+      "train_examples": 385620,
+      "type": "latent"
+    },
+    "train": {
+      "batch_size": 4,
+      "grad_clip": 2.0,
+      "lr": 0.0001,
+      "lr_schedule": "cosine",
+      "min_lr_ratio": 0.0,
+      "warmup_steps": 500,
+      "weight_decay": 0.1
+    }
+  },
+  "source_sha256": "584cf945ed48fee6cd06b69b9e25b82825e34dd33acbd8a930a2bb402477eb6e"
+}

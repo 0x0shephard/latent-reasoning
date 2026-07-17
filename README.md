@@ -97,6 +97,28 @@ Use [`notebooks/kaggle_phase2_latent.ipynb`](notebooks/kaggle_phase2_latent.ipyn
 Kaggle P100 or T4. Keep each method in its own output directory and re-run the same training
 command after a wall-clock exit (code 42); the latest checkpoint resumes automatically.
 
+### Resume Phase 2 on Colab with Google Drive
+
+Use the fixed-purpose [`CODI Colab notebook`](notebooks/colab_phase2_codi.ipynb) and
+[`KaVa Colab notebook`](notebooks/colab_phase2_kava.ipynb). Each notebook is locked to one
+method and Drive output directory. They train from fast VM-local storage and mirror every
+completed atomic checkpoint to `MyDrive/CODI_KAVA/outputs/`. Before the first session,
+upload the complete extracted checkpoint folders:
+
+```text
+MyDrive/CODI_KAVA/uploads/step_00080000.pt/   # CODI
+MyDrive/CODI_KAVA/uploads/step_00024000.pt/   # KaVa
+```
+
+Upload the entire folders, including `data.pkl`, `data/`, `byteorder`, `version`, and hidden
+metadata files. The notebook restores the matching archived manifest, reconstructs and
+PyTorch-verifies a real `.pt` archive, and uses `scripts/colab_runner.py` to audit a
+Kaggle-to-Colab dependency change
+while still requiring identical executable source, pinned data config, and scientific
+settings. Training stays in an active cell; after the resume message appears, the browser
+may be closed while Colab continues server-side. Drive persistence protects completed
+checkpoints, but managed Colab runtimes can still terminate and must then be restarted.
+
 ## Layout
 
 ```
