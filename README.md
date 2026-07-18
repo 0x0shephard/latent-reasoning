@@ -241,6 +241,26 @@ control report and a matched three-seed CODI-vs-KaVa report. The seed report lis
 individual values and sample standard deviations; three seeds are not presented as a
 high-confidence asymptotic method-level interval.
 
+### Run Kaggle and Colab in parallel
+
+Use [`kaggle_controls_and_seeds.ipynb`](notebooks/kaggle_controls_and_seeds.ipynb) as a
+second worker while the Colab notebook runs. Never assign the same experiment to both.
+Keep each matched method pair on one platform to avoid confounding the paired seed delta
+with GPU/software environment:
+
+```text
+Kaggle: kava_random_seed0 -> codi_seed1 -> kava_seed1
+Colab:  latent_nodistill_seed0 -> kava_uniform_seed0 -> codi_seed2 -> kava_seed2
+```
+
+On Kaggle, enable GPU and Internet, pin the same Git commit as Colab, and use **Save
+Version → Save & Run All** with outputs enabled. Exit 42 requires another version with the
+previous experiment directory attached and `RESUME_INPUT` set; exit 0 includes the capped
+evaluation. The Colab notebook's opt-in Kaggle import cell downloads the saved notebook
+output, verifies method/seed/manifest/checkpoint identity, and atomically installs it into
+the standard Drive tree. The importer refuses non-empty targets, preventing accidental
+merges of independently trained copies.
+
 ## Layout
 
 ```
