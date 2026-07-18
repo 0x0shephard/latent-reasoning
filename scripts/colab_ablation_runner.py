@@ -20,6 +20,16 @@ from scripts.colab_runner import METHODS, DriveMirror, bootstrap_drive
 from src.utils.config import load_config
 
 
+def ablation_eval_tag(
+    mode: str, position_tag: str, batch_size: int | None = None
+) -> str | None:
+    """Build a non-overwriting result tag for a scientific evaluation condition."""
+    if mode == "baseline":
+        return None if batch_size is None else f"baseline_bs{batch_size}"
+    batch_tag = "" if batch_size is None else f"_bs{batch_size}"
+    return f"{mode}_{position_tag}{batch_tag}"
+
+
 def run_session(args) -> int:
     import torch
 
@@ -45,9 +55,10 @@ def run_session(args) -> int:
     )
     mirror.restore()
 
-    cfg = load_config(
-        REPO_ROOT / str(spec["config"]), overrides=[f"output_dir={local_output}"]
-    )
+    overrides = [f"output_dir={local_output}"]
+    if args.batch_size is not None:
+        overrides.append(f"eval.batch_size={args.batch_size}")
+    cfg = load_config(REPO_ROOT / str(spec["config"]), overrides=overrides)
     positions = parse_positions(args.positions, int(cfg.task.latent_steps))
     position_tag = "all" if positions is None else "p" + "-".join(map(str, sorted(positions)))
     modes = args.mode or list(ABLATION_MODES)
@@ -59,12 +70,16 @@ def run_session(args) -> int:
         ablation_modes=modes,
         ablation_positions=args.positions,
         eval_limit=args.limit,
+        eval_batch_size=int(cfg.eval.batch_size),
     )
     mirror.start()
     try:
         for mode in modes:
-            tag = None if mode == "baseline" else f"{mode}_{position_tag}"
-            print(f"[ablation] method={args.method} mode={mode} positions={args.positions}")
+            tag = ablation_eval_tag(mode, position_tag, args.batch_size)
+            print(
+                f"[ablation] method={args.method} mode={mode} "
+                f"positions={args.positions} batch_size={cfg.eval.batch_size}"
+            )
             evaluate(
                 cfg,
                 limit=None if args.limit == 0 else args.limit,
@@ -120,10 +135,18 @@ def main() -> int:
         "--limit", type=int, default=200, help="Examples per set; 0 means full evaluation."
     )
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Override eval batch size and include it in the intervention output tag.",
+    )
     parser.add_argument("--keep-last", type=int, default=2)
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be non-negative")
+    if args.batch_size is not None and args.batch_size <= 0:
+        parser.error("--batch-size must be positive")
     return run_session(args)
 
 

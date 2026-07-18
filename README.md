@@ -170,6 +170,26 @@ python scripts/analyze_phase2.py \
   --output /content/drive/MyDrive/CODI_KAVA/reports/kava_latent_ablation.json
 ```
 
+For the next mechanistic gate, use the Phase-3 notebook's opt-in settings:
+
+```python
+RUN_KAVA_ABLATIONS = False
+RUN_CODI_ABLATIONS = False
+RUN_KAVA_POSITION_SWEEP = True
+RUN_MATCHED_BATCH_DID = True
+RUN_FULL_BASELINES = False
+```
+
+The position cell runs six single-position KaVa shuffle interventions, holds the realized
+cross-example permutation fixed across positions, and writes
+`kava_shuffle_position_sweep_limit200.{json,md}`. The DID cell first compares the existing
+batch-independent zero interventions, then reruns a tagged baseline, mean, and shuffle for
+both methods with matched evaluation batch size 8. Matched outputs receive `_bs8` tags, so the original
+ablations are not overwritten. `analyze_intervention_effects.py` estimates
+`KaVa_effect - CODI_effect` with a question-paired bootstrap; negative values mean KaVa is
+more sensitive. This uncertainty is conditional on the two checkpoints and does not replace
+additional training seeds.
+
 After the capped ablation report is saved, optionally run a full baseline evaluation from
 each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
 the capped ablation directories and report remain preserved:

@@ -85,7 +85,7 @@ def _record_key(record: EvalRecord) -> tuple[str, tuple[str, str]]:
     return record.question, _gold_key(record.gold)
 
 
-def _align_records(
+def align_records(
     left: Sequence[EvalRecord], right: Sequence[EvalRecord], dataset: str
 ) -> tuple[tuple[EvalRecord, ...], tuple[EvalRecord, ...]]:
     if len(left) != len(right):
@@ -117,7 +117,7 @@ def validate_alignment(left: EvalRun, right: EvalRun) -> None:
             f"right_only={sorted(right_names - left_names)}"
         )
     for dataset in sorted(left_names):
-        _align_records(left.datasets[dataset], right.datasets[dataset], dataset)
+        align_records(left.datasets[dataset], right.datasets[dataset], dataset)
 
 
 def _percentile(values: Sequence[float], quantile: float) -> float:
@@ -211,7 +211,7 @@ def _macro_bootstrap_ci(
     for _ in range(samples):
         dataset_deltas = []
         for name in names:
-            left_rows, right_rows = _align_records(
+            left_rows, right_rows = align_records(
                 left.datasets[name], right.datasets[name], name
             )
             paired = list(zip(left_rows, right_rows))
@@ -255,7 +255,7 @@ def compare_runs(
         validate_alignment(left, right)
         datasets = {}
         for dataset in sorted(left.datasets):
-            left_rows, right_rows = _align_records(
+            left_rows, right_rows = align_records(
                 left.datasets[dataset], right.datasets[dataset], dataset
             )
             datasets[dataset] = _paired_dataset_summary(

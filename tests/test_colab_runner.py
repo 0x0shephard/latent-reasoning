@@ -15,6 +15,7 @@ from scripts.colab_runner import (
     portable_manifest_mismatches,
     validate_torch_checkpoint_archive,
 )
+from scripts.colab_ablation_runner import ablation_eval_tag
 
 
 def _manifest():
@@ -189,10 +190,21 @@ def test_phase3_notebook_is_post_training_only_and_compiles():
     )
     assert "RUN_KAVA_ABLATIONS = True" in settings
     assert "RUN_CODI_ABLATIONS = False" in settings
+    assert "RUN_KAVA_POSITION_SWEEP = False" in settings
+    assert "RUN_MATCHED_BATCH_DID = False" in settings
     assert "RUN_FULL_BASELINES = False" in settings
     assert "scripts/analyze_phase2.py" in all_code
+    assert "scripts/analyze_position_sweep.py" in all_code
+    assert "scripts/analyze_intervention_effects.py" in all_code
     assert "scripts/colab_ablation_runner.py" in all_code
     assert '"scripts/colab_runner.py"' not in all_code
     for index, cell in enumerate(notebook["cells"]):
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")
+
+
+def test_ablation_tags_preserve_matched_batch_conditions():
+    assert ablation_eval_tag("baseline", "all") is None
+    assert ablation_eval_tag("baseline", "all", 8) == "baseline_bs8"
+    assert ablation_eval_tag("batch_shuffle", "p3") == "batch_shuffle_p3"
+    assert ablation_eval_tag("batch_shuffle", "p3", 8) == "batch_shuffle_p3_bs8"
