@@ -22,6 +22,12 @@ task:
   distillation:
     hidden_weight: 0.0
     kv_weight: 0.0
+    # Keep the inactive hidden-target settings explicit and matched to CODI so that
+    # hidden_weight is the only scientific change in this control.
+    hidden_layers: all
+    hidden_metric: l1
+    hidden_layer_reduction: sum
+    normalize_teacher_std: true
 
 train:
   epochs: 1.0

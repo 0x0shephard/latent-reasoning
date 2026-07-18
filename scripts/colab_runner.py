@@ -266,15 +266,23 @@ class DriveMirror:
             self.state["updated_at_utc"] = _utc_now()
             _atomic_json(self.status_path, self.state)
 
-    def restore(self) -> Path:
+    def restore(self, *, require_checkpoint: bool = True) -> Path | None:
         self.local_output.mkdir(parents=True, exist_ok=True)
-        for name in ("run_manifest.json", "phase2_validation.json", "portable_resume_audit.json"):
+        for name in (
+            "run_manifest.json",
+            "phase2_validation.json",
+            "control_validation.json",
+            "portable_resume_audit.json",
+        ):
             source = self.drive_output / name
             if source.is_file():
                 _atomic_copy(source, self.local_output / name)
 
         drive_checkpoint = _latest_checkpoint(self.drive_output / "checkpoints")
         if drive_checkpoint is None:
+            if not require_checkpoint:
+                print(f"[restore] no durable checkpoint; starting fresh at {self.local_output}")
+                return None
             raise FileNotFoundError(
                 f"no durable checkpoint under {self.drive_output / 'checkpoints'}"
             )
@@ -300,9 +308,7 @@ class DriveMirror:
 
     def _sync_once(self, force: bool = False) -> Path | None:
         checkpoint = _latest_checkpoint(self.local_output / "checkpoints")
-        if checkpoint is None:
-            return None
-        if force or checkpoint.name != self.last_synced:
+        if checkpoint is not None and (force or checkpoint.name != self.last_synced):
             validate_torch_checkpoint_archive(checkpoint)
             target = self.drive_output / "checkpoints" / checkpoint.name
             target_valid = False
@@ -325,17 +331,24 @@ class DriveMirror:
             for old in durable[: -self.keep_last] if self.keep_last > 0 else []:
                 old.unlink(missing_ok=True)
 
-        for name in ("run_manifest.json", "phase2_validation.json", "portable_resume_audit.json"):
+        for name in (
+            "run_manifest.json",
+            "phase2_validation.json",
+            "control_validation.json",
+            "portable_resume_audit.json",
+        ):
             source = self.local_output / name
             if source.is_file():
                 _atomic_copy(source, self.drive_output / name)
         self._sync_tree(self.local_output / "eval", self.drive_output / "eval")
-        self.update_status(
-            self.state.get("state", "training"),
-            latest_local_checkpoint=checkpoint.name,
-            latest_drive_checkpoint=self.last_synced,
-            checkpoint_step=_checkpoint_step(checkpoint),
-        )
+        status_fields = {}
+        if checkpoint is not None:
+            status_fields = {
+                "latest_local_checkpoint": checkpoint.name,
+                "latest_drive_checkpoint": self.last_synced,
+                "checkpoint_step": _checkpoint_step(checkpoint),
+            }
+        self.update_status(self.state.get("state", "training"), **status_fields)
         return checkpoint
 
     def _loop(self) -> None:

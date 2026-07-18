@@ -16,6 +16,12 @@ from scripts.colab_runner import (
     validate_torch_checkpoint_archive,
 )
 from scripts.colab_ablation_runner import ablation_eval_tag
+from scripts.colab_control_runner import (
+    EXPERIMENTS,
+    build_experiment_config,
+    experiment_output,
+)
+from scripts.validate_controls import validate_matrix
 
 
 def _manifest():
@@ -127,6 +133,17 @@ def test_drive_mirror_serializes_concurrent_syncs(tmp_path):
     assert counters["maximum"] == 1
 
 
+def test_drive_mirror_supports_fresh_experiment_and_syncs_manifest(tmp_path):
+    local = tmp_path / "local"
+    drive = tmp_path / "drive"
+    mirror = DriveMirror(local, drive, tmp_path / "status.json", "control")
+    assert mirror.restore(require_checkpoint=False) is None
+    (local / "run_manifest.json").write_text('{"fingerprint": "fresh"}\n')
+
+    assert mirror.sync() is None
+    assert (drive / "run_manifest.json").read_text() == '{"fingerprint": "fresh"}\n'
+
+
 def test_bootstrap_uses_newest_durable_checkpoint_without_original_upload(
     tmp_path, monkeypatch
 ):
@@ -198,6 +215,45 @@ def test_phase3_notebook_is_post_training_only_and_compiles():
     assert "scripts/analyze_intervention_effects.py" in all_code
     assert "scripts/colab_ablation_runner.py" in all_code
     assert '"scripts/colab_runner.py"' not in all_code
+    for index, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] == "code":
+            compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")
+
+
+def test_control_notebook_and_experiment_matrix_are_isolated_and_compile(tmp_path):
+    assert validate_matrix()["status"] == "ok"
+    assert set(EXPERIMENTS) == {
+        "latent_nodistill_seed0",
+        "kava_random_seed0",
+        "kava_uniform_seed0",
+        "codi_seed1",
+        "kava_seed1",
+        "codi_seed2",
+        "kava_seed2",
+    }
+    assert experiment_output(tmp_path, "codi_seed1") == (
+        tmp_path / "outputs" / "controls_and_seeds" / "codi_seed1"
+    )
+    cfg = build_experiment_config(
+        "codi_seed1", output_dir=tmp_path / "local", max_seconds=123, keep_last=2
+    )
+    assert cfg.seed == 1
+    assert cfg.task.method == "codi"
+    assert cfg.output_dir == str(tmp_path / "local")
+    assert cfg.train.max_seconds == 123
+    assert cfg.eval.batch_size == 8
+
+    path = "notebooks/colab_controls_and_seeds.ipynb"
+    with open(path, encoding="utf-8") as handle:
+        notebook = json.load(handle)
+    all_code = "\n".join(
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+    assert 'EXPERIMENT = "latent_nodistill_seed0"' in all_code
+    assert "scripts/colab_control_runner.py" in all_code
+    assert "scripts/analyze_seed_sweep.py" in all_code
     for index, cell in enumerate(notebook["cells"]):
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")

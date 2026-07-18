@@ -11,7 +11,7 @@ the proposal.
 
 ## Status
 
-**The primary seed for Phases 0–2 is trained; Phase 3 causal ablation is implemented.**
+**The primary seed for Phases 0–2 is trained and the capped Phase-3 causal gate is complete.**
 The completed checkpoints are CoT-SFT step 24,102 and matched CODI/KaVa step 96,405. Their
 saved capped evaluations (200 examples per set, all 180 MultiArith examples) are:
 
@@ -25,6 +25,11 @@ KaVa is +2.17 macro percentage points over CODI in this seed, but both latent me
 below CoT-SFT. These are provisional quick-gate results, not the final research table:
 full-set evaluation on one pinned dataset snapshot, the three Phase-2 control baselines,
 and at least three seeds remain.
+
+The matched Phase-3 interventions support continuing: KaVa is more sensitive than CODI
+to batch-mean replacement (DID -2.31 points, 95% paired bootstrap CI -4.14 to -0.54)
+and cross-example shuffling (DID -4.60 points, CI -6.85 to -2.42). Zeroing has the same
+direction but is inconclusive at this gate (DID -2.03 points, CI -4.31 to +0.21).
 
 ## Setup
 
@@ -176,7 +181,7 @@ For the next mechanistic gate, use the Phase-3 notebook's opt-in settings:
 RUN_KAVA_ABLATIONS = False
 RUN_CODI_ABLATIONS = False
 RUN_KAVA_POSITION_SWEEP = True
-RUN_MATCHED_BATCH_DID = True
+RUN_MATCHED_BATCH_DID = False
 RUN_FULL_BASELINES = False
 ```
 
@@ -190,6 +195,10 @@ ablations are not overwritten. `analyze_intervention_effects.py` estimates
 more sensitive. This uncertainty is conditional on the two checkpoints and does not replace
 additional training seeds.
 
+Run the position cell first, then switch to `RUN_KAVA_POSITION_SWEEP = False` and
+`RUN_MATCHED_BATCH_DID = True` for the direct comparison. Do not enable both expensive
+cells in one pass.
+
 After the capped ablation report is saved, optionally run a full baseline evaluation from
 each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
 the capped ablation directories and report remain preserved:
@@ -198,6 +207,39 @@ the capped ablation directories and report remain preserved:
 python -u scripts/colab_ablation_runner.py --method codi --mode baseline --limit 0
 python -u scripts/colab_ablation_runner.py --method kava --mode baseline --limit 0
 ```
+
+## Close the remaining controls and seed variance
+
+Before the Phase-4 supervision continuum, use
+[`colab_controls_and_seeds.ipynb`](notebooks/colab_controls_and_seeds.ipynb) to run the
+three missing seed-zero controls and two additional matched CODI/KaVa seeds:
+
+```text
+latent_nodistill_seed0
+kava_random_seed0
+kava_uniform_seed0
+codi_seed1
+kava_seed1
+codi_seed2
+kava_seed2
+```
+
+Each experiment starts from the pinned GPT-2 backbone, trains in an active Colab cell,
+and mirrors atomic checkpoints to
+`MyDrive/CODI_KAVA/outputs/controls_and_seeds/<experiment>/`. No checkpoint upload is
+needed. Re-running the same experiment resumes it; changing the selector starts or resumes
+only the newly selected isolated directory. All new capped evaluations use batch size 8;
+the final report uses the saved `baseline_bs8` Phase-3 runs for seed zero, keeping the
+decoding condition matched. Run the download-free contract check before GPU work:
+
+```bash
+python scripts/validate_controls.py
+```
+
+After all seven statuses are `complete`, the notebook creates a paired five-way seed-zero
+control report and a matched three-seed CODI-vs-KaVa report. The seed report lists all
+individual values and sample standard deviations; three seeds are not presented as a
+high-confidence asymptotic method-level interval.
 
 ## Layout
 
