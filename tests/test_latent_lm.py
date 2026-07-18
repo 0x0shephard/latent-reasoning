@@ -6,6 +6,7 @@ from transformers import GPT2Config, GPT2LMHeadModel
 
 from src.data.teacher_cache import LatentBatch
 from src.models.latent_lm import LatentCausalLM
+from src.mech.ablation import LatentAblation
 
 
 def _batch() -> LatentBatch:
@@ -69,6 +70,20 @@ def test_jacobi_ablation_uses_the_same_output_contract():
     output = model.forward_student(_batch())
     assert torch.isfinite(output.answer_loss)
     assert output.latent_keys.shape[-2] == 3
+
+
+def test_intervention_changes_the_causal_latent_cache():
+    torch.manual_seed(5)
+    model = _model().eval()
+    batch = _batch()
+    baseline = model.latent_context(batch.question_ids, batch.question_mask)
+    intervened = model.latent_context(
+        batch.question_ids,
+        batch.question_mask,
+        intervention=LatentAblation("zero"),
+    )
+    assert not torch.equal(baseline[3], intervened[3])
+    assert not torch.equal(baseline[4], intervened[4])
 
 
 def test_latent_forward_is_seed_deterministic():

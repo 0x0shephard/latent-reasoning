@@ -8,6 +8,7 @@ ablation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -17,6 +18,7 @@ from src.data.teacher_cache import LatentBatch, cache_to_tensors
 
 BOT_TOKEN = "<bot>"
 EOT_TOKEN = "<eot>"
+LatentIntervention = Callable[[torch.Tensor, int], torch.Tensor]
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,10 @@ class LatentCausalLM(nn.Module):
         return self.backbone.config
 
     def _autoregressive_latents(
-        self, question_ids: torch.Tensor, question_mask: torch.Tensor
+        self,
+        question_ids: torch.Tensor,
+        question_mask: torch.Tensor,
+        intervention: LatentIntervention | None = None,
     ):
         initial = self.backbone(
             input_ids=question_ids,
@@ -108,6 +113,18 @@ class LatentCausalLM(nn.Module):
         all_hidden = []
         full_mask = question_mask
         for step in range(self.latent_steps):
+            if intervention is not None:
+                original = latent_embedding.squeeze(1)
+                intervened = intervention(original, step)
+                if (
+                    intervened.shape != original.shape
+                    or intervened.device != original.device
+                    or intervened.dtype != original.dtype
+                ):
+                    raise ValueError(
+                        "latent intervention must preserve state shape, device, and dtype"
+                    )
+                latent_embedding = intervened.unsqueeze(1)
             full_mask = torch.cat(
                 [full_mask, torch.ones_like(full_mask[:, :1])], dim=-1
             )
@@ -135,7 +152,12 @@ class LatentCausalLM(nn.Module):
             values[:, :, :, start : start + self.latent_steps],
         )
 
-    def _jacobi_latents(self, question_ids: torch.Tensor, question_mask: torch.Tensor):
+    def _jacobi_latents(
+        self,
+        question_ids: torch.Tensor,
+        question_mask: torch.Tensor,
+        intervention: LatentIntervention | None = None,
+    ):
         # Initialize every parallel slot from the final <bot> activation, then repeatedly
         # update all slots with a causal full-sequence pass.  This is kept as an explicit
         # ablation; autoregressive generation is the controlled primary experiment.
@@ -162,8 +184,24 @@ class LatentCausalLM(nn.Module):
         positions = _position_ids(full_mask)
         final = None
         for _ in range(self.jacobi_iterations):
+            effective_latents = latents
+            if intervention is not None:
+                states = []
+                for step in range(self.latent_steps):
+                    original = latents[:, step]
+                    intervened = intervention(original, step)
+                    if (
+                        intervened.shape != original.shape
+                        or intervened.device != original.device
+                        or intervened.dtype != original.dtype
+                    ):
+                        raise ValueError(
+                            "latent intervention must preserve state shape, device, and dtype"
+                        )
+                    states.append(intervened)
+                effective_latents = torch.stack(states, dim=1)
             final = self.backbone(
-                inputs_embeds=torch.cat([word_embeddings, latents], dim=1),
+                inputs_embeds=torch.cat([word_embeddings, effective_latents], dim=1),
                 attention_mask=full_mask,
                 position_ids=positions,
                 use_cache=True,
@@ -183,10 +221,19 @@ class LatentCausalLM(nn.Module):
             values[:, :, :, start : start + self.latent_steps],
         )
 
-    def latent_context(self, question_ids: torch.Tensor, question_mask: torch.Tensor):
+    def latent_context(
+        self,
+        question_ids: torch.Tensor,
+        question_mask: torch.Tensor,
+        intervention: LatentIntervention | None = None,
+    ):
         if self.mechanism == "autoregressive":
-            return self._autoregressive_latents(question_ids, question_mask)
-        return self._jacobi_latents(question_ids, question_mask)
+            return self._autoregressive_latents(
+                question_ids, question_mask, intervention=intervention
+            )
+        return self._jacobi_latents(
+            question_ids, question_mask, intervention=intervention
+        )
 
     def forward_student(self, batch: LatentBatch) -> StudentOutput:
         cache, latent_mask, latent_hidden, latent_keys, latent_values = self.latent_context(
@@ -227,11 +274,14 @@ class LatentCausalLM(nn.Module):
         *,
         max_new_tokens: int,
         eos_token_id: int,
+        intervention: LatentIntervention | None = None,
     ) -> list[list[int]]:
         """Greedy answer generation after the shared latent block and discrete cue."""
         if max_new_tokens <= 0:
             return [[] for _ in range(question_ids.shape[0])]
-        cache, latent_mask, _, _, _ = self.latent_context(question_ids, question_mask)
+        cache, latent_mask, _, _, _ = self.latent_context(
+            question_ids, question_mask, intervention=intervention
+        )
         prefix_mask = torch.ones_like(prefix_ids)
         lengths = question_mask.sum(dim=-1) + self.latent_steps
         full_mask = torch.cat([latent_mask, prefix_mask], dim=-1)

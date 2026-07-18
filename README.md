@@ -11,11 +11,20 @@ the proposal.
 
 ## Status
 
-**Phases 0–2 implementation complete.** Phase 1's CoT-SFT checkpoint passed the real-data
-gate and scores 26.0% GSM8k / 33.86% macro exact-match on the saved 200-example evaluation.
-Phase 2 now provides one shared continuous-thought GPT-2 wrapper, CODI endpoint matching,
-KaVa KV-trajectory matching, R-KV compression, matched configs, latent-aware evaluation,
-and a Kaggle preflight. Long CODI/KaVa GPU runs remain to be executed.
+**The primary seed for Phases 0–2 is trained; Phase 3 causal ablation is implemented.**
+The completed checkpoints are CoT-SFT step 24,102 and matched CODI/KaVa step 96,405. Their
+saved capped evaluations (200 examples per set, all 180 MultiArith examples) are:
+
+| Method | GSM8K | SVAMP | MultiArith | GSM-Hard | Macro |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CoT-SFT | 26.0% | 30.0% | 74.44% | 5.0% | 33.86% |
+| CODI | 15.5% | 9.5% | 18.89% | 3.0% | 11.72% |
+| KaVa | 16.0% | 11.0% | 25.56% | 3.0% | 13.89% |
+
+KaVa is +2.17 macro percentage points over CODI in this seed, but both latent methods are
+below CoT-SFT. These are provisional quick-gate results, not the final research table:
+full-set evaluation on one pinned dataset snapshot, the three Phase-2 control baselines,
+and at least three seeds remain.
 
 ## Setup
 
@@ -119,6 +128,52 @@ settings. Training stays in an active cell; after the resume message appears, th
 may be closed while Colab continues server-side. Drive persistence protects completed
 checkpoints, but managed Colab runtimes can still terminate and must then be restarted.
 
+## Close Phase 2 and run the Phase 3 causal test
+
+Run a full baseline evaluation from each completed Drive checkpoint without re-entering
+the training loop. The runner restores to Colab's local SSD and atomically syncs predictions
+back to Drive:
+
+```bash
+python -u scripts/colab_ablation_runner.py --method codi --mode baseline --limit 0
+python -u scripts/colab_ablation_runner.py --method kava --mode baseline --limit 0
+```
+
+Then produce a strict paired comparison. The analyzer pairs rows by exact question and
+normalized gold answer, handles different row order, and refuses dataset-version drift:
+
+```bash
+python scripts/analyze_phase2.py \
+  --run codi=/content/drive/MyDrive/CODI_KAVA/outputs/codi/eval/step_00096405 \
+  --run kava=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405 \
+  --output /content/drive/MyDrive/CODI_KAVA/reports/codi_vs_kava.json
+```
+
+The first scoped Phase-3 analysis causally changes each continuous state before it enters
+the latent slot, so the intervention affects the cache, subsequent latent states, and
+answer. Run all-position zeroing, batch-mean replacement, and deterministic cross-example
+shuffling on the 200-example gate first:
+
+```bash
+python -u scripts/colab_ablation_runner.py --method codi --limit 200
+python -u scripts/colab_ablation_runner.py --method kava --limit 200
+```
+
+Results persist below `eval/step_00096405/ablations/`. Use `--positions 0`, `--positions 5`,
+or another comma-separated subset only after the all-position gate shows a meaningful
+effect. A batch of one cannot support cross-example shuffling and is left unchanged.
+
+Compare an ablation to its own unmodified checkpoint with the same paired analyzer:
+
+```bash
+python scripts/analyze_phase2.py \
+  --run baseline=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405 \
+  --run zero=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405/ablations/zero_all \
+  --run mean=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405/ablations/batch_mean_all \
+  --run shuffle=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405/ablations/batch_shuffle_all \
+  --output /content/drive/MyDrive/CODI_KAVA/reports/kava_latent_ablation.json
+```
+
 ## Layout
 
 ```
@@ -127,7 +182,7 @@ src/data    datasets, teacher caching, answer extraction   (Phase 1+)
 src/models  latent-LM wrapper (<bot>/<eot> continuous thoughts)  (Phase 2+)
 src/losses  configurable TrajectoryMatch + R-KV compression  (Phase 2+)
 src/train   session-safe entrypoint + shared training loop
-src/eval    numeric exact-match + OOD (efficiency/calibration planned)
-src/mech    probes, CKA/SVCCA, ablation, patching            (Phase 3+)
+src/eval    numeric exact-match, OOD, paired comparison + uncertainty
+src/mech    causal zero/replace/shuffle ablation (probes/CKA/patching planned)
 tests/      Phase gates
 ```

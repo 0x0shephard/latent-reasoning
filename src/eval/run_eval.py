@@ -25,7 +25,11 @@ from src.utils.config import load_config
 
 
 def _device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def load_eval_model(cfg):
@@ -117,6 +121,7 @@ def generate_latent_answers(
     max_new_tokens: int,
     batch_size: int,
     device,
+    intervention=None,
 ) -> list[str]:
     """Greedy decode through the actual continuous-thought path."""
     outputs: list[str] = []
@@ -160,6 +165,7 @@ def generate_latent_answers(
             prefix_ids,
             max_new_tokens=max_new_tokens,
             eos_token_id=tok.eos_token_id,
+            intervention=intervention,
         )
         outputs.extend(tok.decode(ids, skip_special_tokens=True) for ids in generated)
     return outputs
@@ -183,12 +189,24 @@ def _write_jsonl(path: Path, records) -> None:
     tmp.replace(path)
 
 
-def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
+def evaluate(
+    cfg,
+    limit: int | None = None,
+    *,
+    intervention=None,
+    eval_tag: str | None = None,
+) -> dict[str, float]:
     data_cfg = load_config(cfg.data_config)
     style = PromptStyle.from_config(data_cfg["prompt"])
     method = cfg.task.get("method", "cot_sft")
     model, tok, device, checkpoint_step = load_eval_model(cfg)
     is_latent = isinstance(model, LatentCausalLM)
+    if intervention is not None and not is_latent:
+        raise ValueError("latent interventions require a latent checkpoint")
+    if eval_tag is not None and (
+        not eval_tag or any(not (char.isalnum() or char in "-_") for char in eval_tag)
+    ):
+        raise ValueError("eval_tag may contain only letters, numbers, '-' and '_'")
     prompt_fn = cot_eval_prompt if method == "cot_sft" else eval_prompt
     eval_sets = load_all_eval_sets(data_cfg)
 
@@ -199,6 +217,8 @@ def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
 
     results: dict[str, float] = {}
     eval_dir = Path(cfg.output_dir) / "eval" / f"step_{checkpoint_step:08d}"
+    if eval_tag is not None:
+        eval_dir = eval_dir / "ablations" / eval_tag
     eval_dir.mkdir(parents=True, exist_ok=True)
     for name, examples in eval_sets.items():
         if cap:
@@ -212,6 +232,7 @@ def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
                 max_new,
                 bs,
                 device,
+                intervention=intervention,
             )
         else:
             prompts = [prompt_fn(e["question"], style) for e in examples]
@@ -240,6 +261,12 @@ def evaluate(cfg, limit: int | None = None) -> dict[str, float]:
         "datasets": results,
         "macro_mean": overall,
     }
+    if intervention is not None:
+        summary["intervention"] = (
+            intervention.to_dict()
+            if hasattr(intervention, "to_dict")
+            else {"type": type(intervention).__name__}
+        )
     summary_path = eval_dir / "summary.json"
     tmp = summary_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

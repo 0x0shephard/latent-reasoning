@@ -13,14 +13,16 @@ where it sits in the overall research plan ([`docs/PLAN.md`](PLAN.md)). Read thi
 | **Phase 0** | Scaffolding + session-safe trainer (checkpoint / resume / determinism) | ✅ **Complete** — 3/3 tests green |
 | **Phase 1a** | Data + answer-extraction + prompt layer (the "measuring instrument") | ✅ **Complete** — CPU unit-tested |
 | **Phase 1b** | Generic trainer + real HF SFT baselines (No-CoT / CoT) + `run_eval.py` + Kaggle notebook | ✅ **Complete** — CoT-SFT checkpoint evaluated on all four sets |
-| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | ✅ **Implemented and CPU-validated** — Kaggle GPU runs next |
-| **Phase 3** | Mechanistic analysis (probes, CKA/SVCCA, ablation, patching) | ◻ Not started |
+| **Phase 2** | Latent-LM (`<bot>`/`<eot>` continuous thoughts) + CODI & KaVa losses + R-KV compression | 🟡 **Primary seed trained** — full eval, controls, and seeds remain |
+| **Phase 3** | Mechanistic analysis (probes, CKA/SVCCA, ablation, patching) | 🟡 **Causal ablation harness implemented** |
 | **Phase 4** | Supervision-granularity continuum + writing | ◻ Not started |
 
-**Current milestone:** Phase 1 produced a step-24,102 CoT-SFT checkpoint and a reproducible
-200-example evaluation (GSM8k 26.0%, SVAMP 30.0%, MultiArith 74.44%, GSM-Hard 5.0%). Phase
-2's implementation and real-data contract pass locally; the remaining work is running the
-matched CODI and KaVa configs on Kaggle and evaluating their checkpoints.
+**Current milestone:** Phase 1 produced a step-24,102 CoT-SFT checkpoint. The matched
+seed-zero CODI and KaVa runs both completed step 96,405 after portable, audited
+Kaggle-to-Colab resumes. On the saved capped evaluation, CODI scores 11.72% macro and KaVa
+13.89% (+2.17 points); CoT-SFT scores 33.86%. The result supports a small KaVa-over-CODI
+advantage in this seed but not a latent-over-SFT advantage. Full evaluation, controls, and
+replicate seeds are still required before making a research claim.
 
 **Run everything so far:**
 ```bash
@@ -344,8 +346,8 @@ colon token identities, trace-length/truncation statistics, context limits, meth
 settings, and controlled equality against the peer config. The current 512-example
 preflight passes for both methods with no truncation or construction failures.
 
-The complete CPU suite has 78 passing tests. Phase 2 coverage includes boundary/masking
-checks, explicit teacher extraction from a real tiny causal LM, R-KV shape/order/masks,
+The CPU suite covers boundary/masking checks, explicit teacher extraction from a real tiny
+causal LM, R-KV shape/order/masks,
 deterministic random compression, stop-gradient and layer selection, autoregressive and
 Jacobi forward contracts, latent determinism, projection backpropagation, and one-batch
 overfitting.
@@ -358,3 +360,33 @@ to CUDA. The wrapper converts only RNG state tensors back to CPU before restorat
 optimizer, loss history, batch index, and experiment fingerprint remain unchanged. It lives
 outside the provenance-hashed `src/` tree specifically so already-running experiments can
 adopt the resume fix without invalidating their manifests.
+
+---
+
+## Phase 2 evidence and Phase 3 causal ablation
+
+### `src/eval/compare_runs.py` and `scripts/analyze_phase2.py`
+
+The saved prediction rows are now compared directly rather than only through aggregate
+accuracy. The analyzer verifies identical dataset/question/gold multisets, safely reorders
+rows by identity, reports blank and unparseable generations, and calculates paired
+disagreements, an exact McNemar test, and deterministic paired-bootstrap 95% intervals.
+It intentionally refuses comparisons across different dataset snapshots.
+
+### `src/mech/ablation.py` and latent-model intervention path
+
+`LatentCausalLM.latent_context` accepts an optional causal intervention. In autoregressive
+mode it is applied to the projected vector immediately before each latent-slot forward; in
+Jacobi mode it is applied before each full latent-block update. Shape/device/dtype contracts
+are enforced. The available controls are:
+
+- `zero`: remove the selected latent state entirely;
+- `batch_mean`: replace example-specific content with the batch's mean vector;
+- `batch_shuffle`: deterministically transplant the state from another example.
+
+`run_eval.py` stores intervention results in separate tagged directories and includes the
+intervention specification in each summary. `scripts/colab_ablation_runner.py` restores a
+completed Drive checkpoint to local SSD, runs baseline or intervention evaluation without
+entering training, and mirrors the prediction artifacts back to Drive. This is the scoped
+primary Phase-3 analysis; probes, similarity, and activation patching remain optional later
+work.
