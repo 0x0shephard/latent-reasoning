@@ -60,6 +60,7 @@ def run_session(args) -> int:
         ablation_positions=args.positions,
         eval_limit=args.limit,
     )
+    mirror.start()
     try:
         for mode in modes:
             tag = None if mode == "baseline" else f"{mode}_{position_tag}"
@@ -79,10 +80,12 @@ def run_session(args) -> int:
             mirror.sync(force=True)
             gc.collect()
             torch.cuda.empty_cache()
+        mirror.close()
         mirror.update_status("analysis_complete", completed_ablations=completed)
         mirror.sync(force=True)
         return 0
     except Exception as exc:
+        mirror.close()
         mirror.update_status(
             "analysis_failed",
             completed_ablations=completed,
@@ -95,6 +98,8 @@ def run_session(args) -> int:
         except Exception as sync_exc:
             print(f"[drive-sync] final failure: {type(sync_exc).__name__}: {sync_exc}")
         raise
+    finally:
+        mirror.close()
 
 
 def main() -> int:

@@ -175,3 +175,24 @@ def test_colab_notebooks_are_locked_to_one_method(method, step):
     for index, cell in enumerate(notebook["cells"]):
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")
+
+
+def test_phase3_notebook_is_post_training_only_and_compiles():
+    path = "notebooks/colab_phase3_ablations.ipynb"
+    with open(path, encoding="utf-8") as handle:
+        notebook = json.load(handle)
+    settings = "".join(notebook["cells"][1]["source"])
+    all_code = "\n".join(
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+    assert "RUN_KAVA_ABLATIONS = True" in settings
+    assert "RUN_CODI_ABLATIONS = False" in settings
+    assert "RUN_FULL_BASELINES = False" in settings
+    assert "scripts/analyze_phase2.py" in all_code
+    assert "scripts/colab_ablation_runner.py" in all_code
+    assert '"scripts/colab_runner.py"' not in all_code
+    for index, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] == "code":
+            compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")

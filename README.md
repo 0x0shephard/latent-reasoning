@@ -130,16 +130,12 @@ checkpoints, but managed Colab runtimes can still terminate and must then be res
 
 ## Close Phase 2 and run the Phase 3 causal test
 
-Run a full baseline evaluation from each completed Drive checkpoint without re-entering
-the training loop. The runner restores to Colab's local SSD and atomically syncs predictions
-back to Drive:
+The dedicated [`colab_phase3_ablations.ipynb`](notebooks/colab_phase3_ablations.ipynb)
+contains this complete post-training workflow with safe defaults and Drive-persistent logs.
+It is separate from both training notebooks and never updates model weights.
 
-```bash
-python -u scripts/colab_ablation_runner.py --method codi --mode baseline --limit 0
-python -u scripts/colab_ablation_runner.py --method kava --mode baseline --limit 0
-```
-
-Then produce a strict paired comparison. The analyzer pairs rows by exact question and
+First produce a strict paired comparison of the existing capped results. The analyzer pairs
+rows by exact question and
 normalized gold answer, handles different row order, and refuses dataset-version drift:
 
 ```bash
@@ -172,6 +168,15 @@ python scripts/analyze_phase2.py \
   --run mean=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405/ablations/batch_mean_all \
   --run shuffle=/content/drive/MyDrive/CODI_KAVA/outputs/kava/eval/step_00096405/ablations/batch_shuffle_all \
   --output /content/drive/MyDrive/CODI_KAVA/reports/kava_latent_ablation.json
+```
+
+After the capped ablation report is saved, optionally run a full baseline evaluation from
+each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
+the capped ablation directories and report remain preserved:
+
+```bash
+python -u scripts/colab_ablation_runner.py --method codi --mode baseline --limit 0
+python -u scripts/colab_ablation_runner.py --method kava --mode baseline --limit 0
 ```
 
 ## Layout
