@@ -74,6 +74,18 @@ def test_alignment_accepts_different_row_order(tmp_path):
     assert report["comparisons"][0]["datasets"]["set"]["accuracy_delta"] == 0
 
 
+def test_alignment_accepts_equivalent_numeric_gold_formatting(tmp_path):
+    left_rows = _rows([True, False, False, False])
+    right_rows = _rows([True, False, False, False])
+    for row in right_rows:
+        row["gold"] = f'{row["gold"]}.0'
+    left = _write_run(tmp_path / "left", {"set": left_rows})
+    right = _write_run(tmp_path / "right", {"set": right_rows})
+
+    report = compare_runs({"left": left, "right": right}, bootstrap_samples=10)
+    assert report["comparisons"][0]["datasets"]["set"]["accuracy_delta"] == 0
+
+
 def test_alignment_rejects_question_mismatch(tmp_path):
     left_rows = _rows([True, False, False, False])
     right_rows = _rows([True, False, False, False])

@@ -11,6 +11,7 @@ import math
 import random
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
+from decimal import Decimal
 from itertools import combinations
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -74,14 +75,17 @@ def load_eval_run(path: str | Path) -> EvalRun:
     return EvalRun(path=root, datasets=datasets)
 
 
-def _gold_key(value: str) -> tuple[str, str]:
+def _gold_key(value: str) -> tuple[str, str | Decimal]:
     normalized = normalize_number(value)
     if normalized is None:
         return "text", value.strip()
-    return "number", str(normalized)
+    # Keep the Decimal itself as the key. Decimal equality and hashing are numeric,
+    # so equivalent serialized golds such as "1", "1.0", and "1.00" align while
+    # still preserving exact values without a float conversion.
+    return "number", normalized
 
 
-def _record_key(record: EvalRecord) -> tuple[str, tuple[str, str]]:
+def _record_key(record: EvalRecord) -> tuple[str, tuple[str, str | Decimal]]:
     return record.question, _gold_key(record.gold)
 
 

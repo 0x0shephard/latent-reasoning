@@ -261,6 +261,13 @@ output, verifies method/seed/manifest/checkpoint identity, and atomically instal
 the standard Drive tree. The importer refuses non-empty targets, preventing accidental
 merges of independently trained copies.
 
+If a completed CODI seed-2 checkpoint was preserved without its evaluation artifacts, use
+[`kaggle_codi_seed2_eval_only.ipynb`](notebooks/kaggle_codi_seed2_eval_only.ipynb). Attach
+the `jonraza15/codi-seed-2-resume-dataset` input and run the notebook on a Kaggle GPU. It
+validates step 96,405, evaluates without invoking training, keeps only the final checkpoint,
+records a SHA-256 audit, and uploads `jonraza15/codi-seed2-final-step96405` for the normal
+verified Drive import.
+
 ## Layout
 
 ```

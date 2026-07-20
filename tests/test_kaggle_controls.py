@@ -106,3 +106,26 @@ def test_kaggle_control_notebook_is_locked_to_allocated_experiments_and_compiles
     for index, cell in enumerate(notebook["cells"]):
         if cell["cell_type"] == "code":
             compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")
+
+
+def test_codi_seed2_eval_only_notebook_is_pinned_and_never_trains():
+    path = "notebooks/kaggle_codi_seed2_eval_only.ipynb"
+    with open(path, encoding="utf-8") as handle:
+        notebook = json.load(handle)
+    all_code = "\n".join(
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+    assert 'EXPERIMENT = "codi_seed2"' in all_code
+    assert 'EXPECTED_METHOD = "codi"' in all_code
+    assert "EXPECTED_SEED = 2" in all_code
+    assert "EXPECTED_STEP = 96405" in all_code
+    assert 'RUN_COMMIT = "d917bef2cf396fe3b0453e6f86648f1a3948f528"' in all_code
+    assert 'FINAL_DATASET_HANDLE = "jonraza15/codi-seed2-final-step96405"' in all_code
+    assert "evaluate(cfg, limit=EVAL_LIMIT)" in all_code
+    assert "kaggle_control_runner.py" not in all_code
+    assert "src.train" not in all_code
+    for index, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] == "code":
+            compile("".join(cell["source"]), f"{path}:cell_{index}", "exec")
