@@ -129,7 +129,12 @@ def _fit_reduced_rank_maps(
     *,
     ranks: tuple[int, ...],
     ridge_ratio: float,
-) -> tuple[dict[int, torch.Tensor], torch.Tensor, float]:
+) -> tuple[
+    dict[int, torch.Tensor],
+    dict[int, torch.Tensor],
+    torch.Tensor,
+    float,
+]:
     """Fit ridge reduced-rank maps for ``teacher_hat = student @ W``.
 
     If ``A = (Cov(S) + ridge I)^(1/2) W``, the ridge objective differs from
@@ -152,13 +157,15 @@ def _fit_reduced_rank_maps(
     target = inverse_root @ student_teacher_cov
     left, singular, right_t = torch.linalg.svd(target, full_matrices=False)
     maps = {}
+    teacher_bases = {}
     for rank in ranks:
         approximation = (
             left[:, :rank] * singular[:rank].unsqueeze(0)
         ) @ right_t[:rank]
         maps[rank] = inverse_root @ approximation
+        teacher_bases[rank] = right_t[:rank].T.contiguous()
     full_map = torch.linalg.solve(regularized, student_teacher_cov)
-    return maps, full_map, ridge
+    return maps, teacher_bases, full_map, ridge
 
 
 def _prediction_metrics(
@@ -206,7 +213,7 @@ def _analyze_accumulator(
                 *(tensor[train_index] for tensor in tensors)
             )
             teacher_mean, student_mean, _, student_cov, cross_cov = training
-            maps, full_map, ridge = _fit_reduced_rank_maps(
+            maps, _, full_map, ridge = _fit_reduced_rank_maps(
                 student_cov,
                 cross_cov,
                 ranks=ranks,
@@ -277,6 +284,68 @@ def _analyze_accumulator(
             }
         groups.append(group)
     return groups
+
+
+def fit_position_conditioned_teacher_bases(
+    accumulator: SplitCrossMomentAccumulator,
+    *,
+    rank: int,
+    ridge_ratio: float = 1e-4,
+) -> torch.Tensor:
+    """Fit teacher-space RRR bases from all splits.
+
+    Returns an orthonormal tensor shaped ``[L,H,M,D,R]``. These bases identify
+    teacher key or value directions that are most predictable from the aligned
+    student states under the Stage 1c ridge objective.
+    """
+    if rank <= 0 or rank > accumulator.head_dim:
+        raise ValueError("rank must be positive and no larger than head_dim")
+    tensors = tuple(
+        tensor.sum(dim=0)
+        for tensor in _granularity_tensors(accumulator, "position")
+    )
+    basis = torch.empty(
+        (
+            accumulator.layers,
+            accumulator.heads,
+            accumulator.positions,
+            accumulator.head_dim,
+            rank,
+        ),
+        dtype=torch.float32,
+    )
+    group_shape = tuple(tensors[0].shape)
+    for coordinates in itertools.product(*(range(size) for size in group_shape)):
+        training = _centered_training_moments(
+            *(tensor[coordinates] for tensor in tensors)
+        )
+        _, _, _, student_cov, cross_cov = training
+        _, teacher_bases, _, _ = _fit_reduced_rank_maps(
+            student_cov,
+            cross_cov,
+            ranks=(rank,),
+            ridge_ratio=ridge_ratio,
+        )
+        basis[coordinates] = teacher_bases[rank].to(torch.float32)
+    return basis
+
+
+def random_orthonormal_bases_like(
+    basis: torch.Tensor, *, seed: int
+) -> torch.Tensor:
+    """Generate deterministic group-wise random orthonormal control bases."""
+    if basis.ndim != 5:
+        raise ValueError("basis must have shape [L,H,M,D,R]")
+    if basis.shape[-1] > basis.shape[-2]:
+        raise ValueError("basis rank cannot exceed its feature dimension")
+    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    random = torch.randn(
+        basis.shape,
+        generator=generator,
+        dtype=torch.float64,
+    )
+    orthonormal, _ = torch.linalg.qr(random, mode="reduced")
+    return orthonormal.to(torch.float32)
 
 
 def _group_key(group: dict, granularity: str) -> tuple[int, ...]:

@@ -1,7 +1,9 @@
 """Phase-2 CODI/KaVa task builder for the shared session-safe trainer."""
 from __future__ import annotations
 
+import hashlib
 import math
+from pathlib import Path
 
 import torch
 
@@ -26,6 +28,10 @@ LATENT_METHODS = {
     "latent_nodistill",
     "kava_random",
     "kava_uniform",
+    "codi_key_control",
+    "kava_key_full",
+    "kava_key_rank4",
+    "kava_key_random_rank4",
 }
 
 
@@ -44,6 +50,14 @@ def _method_defaults(method: str) -> tuple[float, float, str]:
         return 1.0, 1.0, "random"
     if method == "kava_uniform":
         return 1.0, 1.0, "uniform"
+    if method == "codi_key_control":
+        return 1.0, 0.0, "rkv"
+    if method in {
+        "kava_key_full",
+        "kava_key_rank4",
+        "kava_key_random_rank4",
+    }:
+        return 1.0, 1.0, "rkv"
     raise ValueError(f"unknown latent method {method!r}")
 
 
@@ -76,6 +90,89 @@ def _teacher_target_forward(model: LatentCausalLM, batch, need_kv: bool):
         return model.backbone(**kwargs)
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_key_projection(distill, method: str) -> tuple[str, torch.Tensor | None]:
+    defaults = {
+        "kava_key_full": "key",
+        "kava_key_rank4": "projected_key",
+        "kava_key_random_rank4": "projected_key",
+    }
+    kv_target = distill.get("kv_target", defaults.get(method, "both"))
+    if kv_target not in {"both", "key", "projected_key"}:
+        raise ValueError("distillation.kv_target must be both, key, or projected_key")
+    if kv_target != "projected_key":
+        return kv_target, None
+    path_value = distill.get("key_projection_path")
+    if not path_value:
+        raise ValueError("projected_key requires distillation.key_projection_path")
+    path = Path(path_value).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"key projection artifact does not exist: {path}")
+    artifact = torch.load(path, map_location="cpu", weights_only=False)
+    if int(artifact.get("schema_version", -1)) != 1:
+        raise ValueError("unsupported key projection artifact schema")
+    if artifact.get("kind") != "key":
+        raise ValueError("projection artifact is not a key target")
+    projection_kind = distill.get("key_projection_kind", "learned")
+    field = {
+        "learned": "learned_basis",
+        "random": "random_basis",
+    }.get(projection_kind)
+    if field is None:
+        raise ValueError("key_projection_kind must be learned or random")
+    basis = artifact.get(field)
+    if not isinstance(basis, torch.Tensor) or basis.ndim != 5:
+        raise ValueError(f"projection artifact has no valid {field}")
+    expected_rank = int(distill.get("key_projection_rank", artifact["rank"]))
+    if int(artifact.get("rank", -1)) != expected_rank:
+        raise ValueError(
+            f"projection rank {artifact.get('rank')} does not match {expected_rank}"
+        )
+    distill["resolved_key_projection_sha256"] = _file_sha256(path)
+    distill["resolved_key_projection_examples"] = int(
+        artifact["processed_examples"]
+    )
+    distill["resolved_key_projection_checkpoint_step"] = int(
+        artifact["checkpoint_step"]
+    )
+    return kv_target, basis
+
+
+def _warm_start_model(model: LatentCausalLM, cfg) -> None:
+    path_value = cfg.task.get("warm_start_checkpoint")
+    if not path_value:
+        return
+    path = Path(path_value).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"warm-start checkpoint does not exist: {path}")
+    state = torch.load(
+        path,
+        map_location="cpu",
+        weights_only=False,
+        mmap=True,
+    )
+    if not isinstance(state.get("model"), dict):
+        raise ValueError("warm-start checkpoint has no model state")
+    model.load_state_dict(state["model"], strict=True)
+    cfg["task"]["resolved_warm_start_step"] = int(state.get("step", -1))
+    cfg["task"]["resolved_warm_start_fingerprint"] = state.get(
+        "experiment_fingerprint"
+    )
+    cfg["task"]["resolved_warm_start_sha256"] = _file_sha256(path)
+    print(
+        f"[warm-start] loaded model weights from step "
+        f"{cfg['task']['resolved_warm_start_step']}; optimizer reset"
+    )
+    del state
+
+
 def build_latent_task(cfg):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -89,9 +186,12 @@ def build_latent_task(cfg):
     distill = tcfg.get("distillation", {})
     hidden_weight = float(distill.get("hidden_weight", default_hidden))
     kv_weight = float(distill.get("kv_weight", default_kv))
+    force_teacher_kv = bool(distill.get("force_teacher_kv", False))
     compression = distill.get("compression", default_compression)
     if compression not in {"rkv", "random", "uniform"}:
         raise ValueError("distillation.compression must be rkv, random, or uniform")
+    kv_target, key_projection = _load_key_projection(distill, method)
+    need_teacher_kv = bool(kv_weight or force_teacher_kv)
 
     data_cfg = load_config(cfg.data_config)
     style = PromptStyle.from_config(data_cfg["prompt"])
@@ -103,10 +203,10 @@ def build_latent_task(cfg):
     tokenizer = AutoTokenizer.from_pretrained(tcfg.backbone, **pretrained_kwargs)
     # KaVa needs answer-to-trace attention weights. Eager attention is the only HF backend
     # guaranteed to expose them across supported Transformers versions.
-    if kv_weight:
+    if need_teacher_kv:
         pretrained_kwargs["attn_implementation"] = "eager"
     backbone = AutoModelForCausalLM.from_pretrained(tcfg.backbone, **pretrained_kwargs)
-    if kv_weight and hasattr(backbone, "set_attn_implementation"):
+    if need_teacher_kv and hasattr(backbone, "set_attn_implementation"):
         backbone.set_attn_implementation("eager")
     bot_token_id, eot_token_id = add_latent_tokens(tokenizer, backbone)
     device = _device()
@@ -120,6 +220,7 @@ def build_latent_task(cfg):
         projection_dim=tcfg.get("projection_dim"),
         projection_dropout=float(tcfg.get("projection_dropout", 0.0)),
     ).to(device)
+    _warm_start_model(model, cfg)
     model.train()
 
     cfg["task"]["resolved_backbone_revision"] = (
@@ -145,9 +246,11 @@ def build_latent_task(cfg):
         kv_layers=distill.get("kv_layers", "all"),
         hidden_metric=distill.get("hidden_metric", "l1"),
         kv_metric=distill.get("kv_metric", "l1"),
+        kv_target=kv_target,
+        key_projection=key_projection,
         normalize_teacher_std=bool(distill.get("normalize_teacher_std", True)),
         hidden_layer_reduction=distill.get("hidden_layer_reduction", "sum"),
-    )
+    ).to(device)
     max_length = int(tcfg.get("max_length", 256))
     student_ce_weight = float(tcfg.get("student_ce_weight", 1.0))
     teacher_ce_weight = float(tcfg.get("teacher_ce_weight", 1.0))
@@ -155,7 +258,8 @@ def build_latent_task(cfg):
     effective_epochs = total_steps * cfg.train.batch_size / len(dataset)
     print(
         f"[data] train_examples={len(dataset)} method={method} M={model.latent_steps} "
-        f"mechanism={model.mechanism} planned_epochs={effective_epochs:.3f}"
+        f"mechanism={model.mechanism} kv_target={kv_target} "
+        f"planned_epochs={effective_epochs:.3f}"
     )
 
     stats = {"seen": 0, "truncated": 0}
@@ -179,9 +283,11 @@ def build_latent_task(cfg):
 
         optimizer.zero_grad(set_to_none=True)
         target_outputs = None
-        if hidden_weight or kv_weight:
-            target_outputs = _teacher_target_forward(model, batch, need_kv=bool(kv_weight))
-        if kv_weight:
+        if hidden_weight or need_teacher_kv:
+            target_outputs = _teacher_target_forward(
+                model, batch, need_kv=need_teacher_kv
+            )
+        if need_teacher_kv:
             assert target_outputs is not None
             teacher_targets = extract_teacher_targets(target_outputs, batch)
             if compression == "rkv":
@@ -215,6 +321,8 @@ def build_latent_task(cfg):
             # Do not retain full teacher attentions/caches through the gradient-bearing
             # teacher and student passes; the compressed tensors are independent gathers.
             del teacher_targets, target_outputs
+            if not kv_weight:
+                compressed = None
         elif hidden_weight:
             assert target_outputs is not None
             teacher_hidden = extract_teacher_hidden(

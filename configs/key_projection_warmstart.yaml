@@ -1,0 +1,58 @@
+# Stage 1d warm-started target-efficiency experiment.
+# The runner overrides method, output identity, warm-start path, and projection mode.
+run_name: key_projection_warmstart
+seed: 1
+offline: false
+
+output_dir: outputs/key_projection/key_projection_warmstart
+data_config: configs/data.yaml
+
+task:
+  type: latent
+  method: codi_key_control
+  backbone: gpt2
+  backbone_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  trace_style: eq_only
+  max_length: 256
+  latent_steps: 6
+  mechanism: autoregressive
+  jacobi_iterations: 3
+  projection_dim: 768
+  projection_dropout: 0.0
+  student_ce_weight: 1.0
+  teacher_ce_weight: 1.0
+  distillation:
+    hidden_weight: 1.0
+    kv_weight: 0.0
+    hidden_layers: all
+    kv_layers: all
+    hidden_metric: l1
+    kv_metric: mse
+    kv_target: key
+    # The zero-KV continuation control still extracts/compresses targets so every
+    # arm has the same teacher-forward and target-selection computation.
+    force_teacher_kv: true
+    hidden_layer_reduction: sum
+    normalize_teacher_std: true
+    compression: rkv
+    importance_weight: 0.1
+
+train:
+  # A 10,000-step adaptation is about 0.104 epoch and is shared by all four arms.
+  total_steps: 10000
+  batch_size: 4
+  lr: 0.0001
+  lr_schedule: cosine
+  min_lr_ratio: 0.0
+  weight_decay: 0.1
+  warmup_steps: 500
+  grad_clip: 2.0
+  log_every: 50
+  ckpt_every: 1000
+  keep_last: 2
+  max_seconds: 32400
+
+eval:
+  max_new_tokens: 64
+  batch_size: 8
+  limit: 200

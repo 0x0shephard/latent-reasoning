@@ -4,7 +4,11 @@ from __future__ import annotations
 import torch
 
 from src.mech.kv_cross_subspace import create_cross_moment_collection
-from src.mech.kv_reduced_rank import analyze_reduced_rank_prediction
+from src.mech.kv_reduced_rank import (
+    analyze_reduced_rank_prediction,
+    fit_position_conditioned_teacher_bases,
+    random_orthonormal_bases_like,
+)
 
 
 def _synthetic_collection(*, paired: bool) -> dict:
@@ -82,3 +86,28 @@ def test_independent_noise_is_rejected():
     assert report["comparisons"]["value"]["position"][
         "median_actual_heldout_r2"
     ] < 0.05
+
+
+def test_exported_teacher_and_random_bases_are_groupwise_orthonormal():
+    collection = _synthetic_collection(paired=True)
+    learned = fit_position_conditioned_teacher_bases(
+        collection["actual"]["key"],
+        rank=2,
+    )
+    random = random_orthonormal_bases_like(learned, seed=81)
+    identity = torch.eye(2)
+    assert learned.shape == (2, 2, 3, 8, 2)
+    assert torch.allclose(
+        learned.transpose(-1, -2) @ learned,
+        identity,
+        atol=1e-5,
+    )
+    assert torch.allclose(
+        random.transpose(-1, -2) @ random,
+        identity,
+        atol=1e-5,
+    )
+    assert torch.equal(
+        random,
+        random_orthonormal_bases_like(learned, seed=81),
+    )

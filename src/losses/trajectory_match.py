@@ -109,6 +109,83 @@ def kv_match_loss(
     return 0.5 * (key_loss + value_loss)
 
 
+def key_match_loss(
+    student_keys: torch.Tensor,
+    teacher_keys: torch.Tensor,
+    *,
+    mask: torch.Tensor | None = None,
+    layers: str | Iterable[int] = "all",
+    metric: str = "mse",
+) -> torch.Tensor:
+    """Match full key targets shaped ``[B,L,H,M,D]``."""
+    if student_keys.ndim != 5 or teacher_keys.shape != student_keys.shape:
+        raise ValueError("key targets must have equal [B,L,H,M,D] shapes")
+    indices = _layer_indices(layers, student_keys.shape[1])
+    student = student_keys[:, indices]
+    teacher = teacher_keys.detach()[:, indices]
+    if mask is None:
+        valid = torch.ones(
+            student.shape[:-1], dtype=torch.bool, device=student.device
+        )
+    else:
+        if mask.ndim == 2:
+            mask = mask[:, None, None, :]
+        if mask.ndim != 4:
+            raise ValueError("KV mask must have shape [B,M] or [B,L,H,M]")
+        valid = torch.broadcast_to(mask, student_keys.shape[:-1])[:, indices]
+    weights = valid.unsqueeze(-1).to(student.dtype)
+    denom = (weights.sum() * student.shape[-1]).clamp_min(1)
+    return (_distance(student, teacher, metric) * weights).sum() / denom
+
+
+def projected_key_match_loss(
+    student_keys: torch.Tensor,
+    teacher_keys: torch.Tensor,
+    projection: torch.Tensor,
+    *,
+    mask: torch.Tensor | None = None,
+    layers: str | Iterable[int] = "all",
+    metric: str = "mse",
+) -> torch.Tensor:
+    """Match key coefficients in frozen bases shaped ``[L,H,M,D,R]``."""
+    if student_keys.ndim != 5 or teacher_keys.shape != student_keys.shape:
+        raise ValueError("key targets must have equal [B,L,H,M,D] shapes")
+    expected = (
+        student_keys.shape[1],
+        student_keys.shape[2],
+        student_keys.shape[3],
+        student_keys.shape[4],
+    )
+    if projection.ndim != 5 or projection.shape[:-1] != expected:
+        raise ValueError(
+            "projection must have shape [L,H,M,D,R] matching the key targets"
+        )
+    indices = _layer_indices(layers, student_keys.shape[1])
+    basis = projection[indices].to(
+        device=student_keys.device,
+        dtype=student_keys.dtype,
+    )
+    student = torch.einsum(
+        "blhmd,lhmdr->blhmr", student_keys[:, indices], basis
+    )
+    teacher = torch.einsum(
+        "blhmd,lhmdr->blhmr", teacher_keys.detach()[:, indices], basis
+    )
+    if mask is None:
+        valid = torch.ones(
+            student.shape[:-1], dtype=torch.bool, device=student.device
+        )
+    else:
+        if mask.ndim == 2:
+            mask = mask[:, None, None, :]
+        if mask.ndim != 4:
+            raise ValueError("KV mask must have shape [B,M] or [B,L,H,M]")
+        valid = torch.broadcast_to(mask, student_keys.shape[:-1])[:, indices]
+    weights = valid.unsqueeze(-1).to(student.dtype)
+    denom = (weights.sum() * student.shape[-1]).clamp_min(1)
+    return (_distance(student, teacher, metric) * weights).sum() / denom
+
+
 class TrajectoryMatchLoss(nn.Module):
     """Composable CODI hidden loss plus optional KaVa KV trajectory loss."""
 
@@ -121,6 +198,8 @@ class TrajectoryMatchLoss(nn.Module):
         kv_layers: str | Iterable[int] = "all",
         hidden_metric: str = "l1",
         kv_metric: str = "l1",
+        kv_target: str = "both",
+        key_projection: torch.Tensor | None = None,
         normalize_teacher_std: bool = True,
         hidden_layer_reduction: str = "sum",
     ) -> None:
@@ -133,6 +212,18 @@ class TrajectoryMatchLoss(nn.Module):
         self.kv_layers = kv_layers
         self.hidden_metric = hidden_metric
         self.kv_metric = kv_metric
+        if kv_target not in {"both", "key", "projected_key"}:
+            raise ValueError("kv_target must be both, key, or projected_key")
+        if kv_target == "projected_key" and key_projection is None:
+            raise ValueError("projected_key requires a key_projection")
+        if kv_target != "projected_key" and key_projection is not None:
+            raise ValueError("key_projection is only valid for projected_key")
+        self.kv_target = kv_target
+        self.register_buffer(
+            "key_projection",
+            key_projection,
+            persistent=False,
+        )
         self.normalize_teacher_std = normalize_teacher_std
         self.hidden_layer_reduction = hidden_layer_reduction
 
@@ -160,19 +251,37 @@ class TrajectoryMatchLoss(nn.Module):
                 layer_reduction=self.hidden_layer_reduction,
             )
         if self.kv_weight:
-            if any(
-                tensor is None
-                for tensor in (student_keys, student_values, teacher_keys, teacher_values)
-            ):
-                raise ValueError("KV tensors are required when kv_weight is non-zero")
-            kv = kv_match_loss(
-                student_keys,
-                student_values,
-                teacher_keys,
-                teacher_values,
-                mask=kv_mask,
-                layers=self.kv_layers,
-                metric=self.kv_metric,
-            )
+            if student_keys is None or teacher_keys is None:
+                raise ValueError("key tensors are required when kv_weight is non-zero")
+            if self.kv_target == "both":
+                if student_values is None or teacher_values is None:
+                    raise ValueError("value tensors are required for kv_target=both")
+                kv = kv_match_loss(
+                    student_keys,
+                    student_values,
+                    teacher_keys,
+                    teacher_values,
+                    mask=kv_mask,
+                    layers=self.kv_layers,
+                    metric=self.kv_metric,
+                )
+            elif self.kv_target == "key":
+                kv = key_match_loss(
+                    student_keys,
+                    teacher_keys,
+                    mask=kv_mask,
+                    layers=self.kv_layers,
+                    metric=self.kv_metric,
+                )
+            else:
+                assert self.key_projection is not None
+                kv = projected_key_match_loss(
+                    student_keys,
+                    teacher_keys,
+                    self.key_projection,
+                    mask=kv_mask,
+                    layers=self.kv_layers,
+                    metric=self.kv_metric,
+                )
         total = self.hidden_weight * hidden + self.kv_weight * kv
         return TrajectoryLossOutput(total=total, hidden=hidden, kv=kv)

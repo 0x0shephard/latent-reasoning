@@ -297,6 +297,14 @@ them on the other, separately for every layer, head, latent position, and KV kin
 predefined rank-four gate and interpretation limits are documented in
 [`STAGE1C_KV_REDUCED_RANK.md`](docs/STAGE1C_KV_REDUCED_RANK.md).
 
+If rank-four keys pass Stage 1c, export the frozen signal and random-control bases and run
+the four-arm warm-started comparison with
+[`colab_stage1d_key_projection.ipynb`](notebooks/colab_stage1d_key_projection.ipynb).
+It starts every arm from the completed CODI seed-one checkpoint and separates continued
+training, full key supervision, learned rank-four key supervision, and random rank-four
+supervision. The complete leakage, compute, loss, and decision contract is in
+[`STAGE1D_KEY_PROJECTION_TRAINING.md`](docs/STAGE1D_KEY_PROJECTION_TRAINING.md).
+
 ## Layout
 
 ```

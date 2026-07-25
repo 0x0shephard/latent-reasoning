@@ -60,6 +60,17 @@ across the 864 layer-head-position groups.
 The pooled analysis remains in the report as a diagnostic negative control, but it does
 not determine this gate.
 
+## Observed 5,000-example result
+
+Keys passed all rank-four conditions. Median held-out R² was 0.263, every group was
+positive and exceeded shuffle, the median actual-minus-shuffle R² was 0.274, and rank
+four retained 82.7 percent of full-rank R².
+
+Values passed the positivity and shuffled-null conditions but retained only 71.8 percent
+of full-rank R². They therefore failed only the predefined 80 percent low-rank
+sufficiency condition. This supports a rank-four key experiment first. It does not show
+that value targets are uninformative.
+
 ## CPU command
 
 No GPU is required.
