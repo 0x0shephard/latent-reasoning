@@ -289,6 +289,14 @@ cross-covariance, and compares canonical correlations and canonical-direction st
 against repeated within-split derangements. Its complete protocol is in
 [`STAGE1B_KV_CROSS_SUBSPACE.md`](docs/STAGE1B_KV_CROSS_SUBSPACE.md).
 
+When Stage 1b finds strong position-resolved signal but its pooled gate fails, run the
+CPU-only held-out prediction test with
+[`colab_stage1c_kv_reduced_rank.ipynb`](notebooks/colab_stage1c_kv_reduced_rank.ipynb).
+Stage 1c learns reduced-rank student-to-teacher maps on one calibration split and tests
+them on the other, separately for every layer, head, latent position, and KV kind. Its
+predefined rank-four gate and interpretation limits are documented in
+[`STAGE1C_KV_REDUCED_RANK.md`](docs/STAGE1C_KV_REDUCED_RANK.md).
+
 ## Layout
 
 ```
