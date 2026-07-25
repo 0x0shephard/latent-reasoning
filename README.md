@@ -282,6 +282,13 @@ the same deterministic sample prefix without repeating completed examples. The c
 experimental contract, gate, output schema, and direct CLI commands are in
 [`STAGE1_KV_SUBSPACE.md`](docs/STAGE1_KV_SUBSPACE.md).
 
+If residual directions remain as stable after shuffling as under correct pairing, continue
+with [`colab_stage1b_kv_cross_subspaces.ipynb`](notebooks/colab_stage1b_kv_cross_subspaces.ipynb).
+Stage 1b whitens the teacher and student marginals, decomposes their centered
+cross-covariance, and compares canonical correlations and canonical-direction stability
+against repeated within-split derangements. Its complete protocol is in
+[`STAGE1B_KV_CROSS_SUBSPACE.md`](docs/STAGE1B_KV_CROSS_SUBSPACE.md).
+
 ## Layout
 
 ```
