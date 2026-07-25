@@ -21,5 +21,8 @@ data/cache/
 .cache/
 hf_cache/
 
+# Generated render/verification intermediates
+tmp/
+
 # OS
 .DS_Store

@@ -1,0 +1,648 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Teaching-Optimal KV Distillation for Latent Reasoning",
+    "description": "A literature-grounded research proposal that turns the CODI–KaVa pilot into a focused study of which teacher KV targets are necessary, sufficient, and efficient for latent reasoning.",
+    "generatedAt": "2026-07-21T17:43:21.325Z",
+    "sources": [
+      {
+        "id": "pilot",
+        "label": "Local CODI–KaVa pilot report",
+        "path": "output/pdf/CODI_vs_KaVa_complete_revised_report.pdf"
+      },
+      {
+        "id": "kava",
+        "label": "KaVa: Latent Reasoning via Compressed KV-Cache Distillation",
+        "href": "https://arxiv.org/html/2510.02312v2"
+      },
+      {
+        "id": "codi",
+        "label": "CODI: Compressing Chain-of-Thought into Continuous Space via Self-Distillation",
+        "href": "https://aclanthology.org/2025.emnlp-main.36/"
+      },
+      {
+        "id": "rkv",
+        "label": "R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+        "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/57e0358aed314784cad14a26e1eba642-Abstract-Conference.html"
+      },
+      {
+        "id": "asymkv",
+        "label": "AsymKV: Enabling 1-Bit Quantization of KV Cache with Layer-Wise Asymmetric Quantization Configurations",
+        "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/750b0f9fccafad88e0da366315e03d1a-Abstract-Conference.html"
+      },
+      {
+        "id": "curdkv",
+        "label": "CurDKV: CUR Decomposition Based KV Cache Compression",
+        "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/721b0b930cae88656b0f71a8f6097ee4-Abstract-Conference.html"
+      },
+      {
+        "id": "minilm",
+        "label": "MiniLM: Deep Self-Attention Distillation",
+        "href": "https://proceedings.neurips.cc/paper/2020/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf"
+      },
+      {
+        "id": "minilmv2",
+        "label": "MiniLMv2: Multi-Head Self-Attention Relation Distillation",
+        "href": "https://aclanthology.org/anthology-files/pdf/findings/2021.findings-acl.188.pdf"
+      },
+      {
+        "id": "marginal",
+        "label": "Knowledge Distillation: A Good Teacher Is Patient and Consistent",
+        "href": "https://aclanthology.org/2021.acl-long.228/"
+      },
+      {
+        "id": "tinybert",
+        "label": "TinyBERT: Distilling BERT for Natural Language Understanding",
+        "href": "https://aclanthology.org/2020.findings-emnlp.372/"
+      },
+      {
+        "id": "pkd",
+        "label": "Patient Knowledge Distillation for BERT Model Compression",
+        "href": "https://aclanthology.org/D19-1441/"
+      },
+      {
+        "id": "implicit",
+        "label": "Implicit Chain of Thought Reasoning via Knowledge Distillation",
+        "href": "https://arxiv.org/abs/2311.01460"
+      },
+      {
+        "id": "explicit_implicit",
+        "label": "From Explicit CoT to Implicit CoT",
+        "href": "https://arxiv.org/abs/2405.14838"
+      },
+      {
+        "id": "pause",
+        "label": "Think before you speak: Training Language Models With Pause Tokens",
+        "href": "https://openreview.net/forum?id=ph04CRkPdC"
+      },
+      {
+        "id": "coconut",
+        "label": "Training Large Language Models to Reason in a Continuous Latent Space",
+        "href": "https://openreview.net/pdf?id=Itxz7S4Ip3"
+      },
+      {
+        "id": "pccot",
+        "label": "PCCoT: Parallel Continuous Chain-of-Thought",
+        "href": "https://aclanthology.org/2025.emnlp-main.47/"
+      },
+      {
+        "id": "dart",
+        "label": "DART: Learning to Reason Without Thinking",
+        "href": "https://aclanthology.org/2025.emnlp-main.256/"
+      },
+      {
+        "id": "system15",
+        "label": "System-1.5 Reasoning: Traversal in Language and Latent Spaces",
+        "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/5e66b9f710a8e38351da690f3806cba9-Abstract-Conference.html"
+      },
+      {
+        "id": "whenstop",
+        "label": "Learning When to Stop: Adaptive Latent Reasoning",
+        "href": "https://arxiv.org/abs/2511.21581"
+      },
+      {
+        "id": "blackbox",
+        "label": "Unlocking the Black Box of Latent Reasoning",
+        "href": "https://aclanthology.org/2026.acl-long.1568/"
+      },
+      {
+        "id": "longflow",
+        "label": "LongFlow: Efficient KV Cache Compression for Reasoning Models",
+        "href": "https://arxiv.org/abs/2603.11504"
+      }
+    ],
+    "tables": [
+      {
+        "id": "literature_map",
+        "title": "Primary literature map",
+        "columns": [
+          {
+            "field": "work",
+            "label": "Work"
+          },
+          {
+            "field": "year",
+            "label": "Year",
+            "type": "number"
+          },
+          {
+            "field": "family",
+            "label": "Research family"
+          },
+          {
+            "field": "mechanism",
+            "label": "Mechanism or supervision signal"
+          },
+          {
+            "field": "relevance",
+            "label": "Relevance to this project"
+          },
+          {
+            "field": "open_gap",
+            "label": "Remaining gap"
+          }
+        ],
+        "defaultSort": {
+          "field": "year",
+          "direction": "desc"
+        },
+        "source": {
+          "id": "literature_synthesis",
+          "label": "Structured synthesis of the cited primary papers",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES\n('CODI', 2025, 'Latent CoT distillation', 'Aligns the student to a teacher hidden state at a designated reasoning endpoint', 'Establishes endpoint hidden-state supervision as the comparison baseline', 'Does not supervise the full key/value trajectory'),\n('KaVa', 2026, 'Latent KV distillation', 'Distills compressed teacher key/value trajectories selected with an adapted R-KV score', 'Directly motivates the proposed study', 'Does not separate keys from values or test teaching-optimal target selection'),\n('R-KV', 2025, 'Serving-time KV compression', 'Combines attention-based importance with key redundancy to retain cache entries', 'KaVa adapts its selector for training targets', 'Serving utility need not equal distillation utility'),\n('AsymKV', 2025, 'Serving-time KV compression', 'Treats locally homogeneous keys and heterogeneous values asymmetrically', 'Challenges paired and symmetric key/value treatment', 'Not studied as a latent-reasoning supervision rule'),\n('CurDKV', 2025, 'Serving-time KV compression', 'Uses value-aware CUR decomposition to preserve attention output', 'Shows that attention-only importance can miss value contribution', 'Not evaluated as teacher-target selection'),\n('MiniLM', 2020, 'Transformer distillation', 'Separately transfers attention distributions and value relations', 'Provides precedent for distinct key/query-side and value-side targets', 'Designed for compressed encoders rather than latent reasoning'),\n('MiniLMv2', 2021, 'Transformer distillation', 'Transfers multi-head self-attention relations', 'Shows relation choice is a first-class distillation decision', 'Does not study causal target selection for reasoning'),\n('Marginal Utility Diminishes', 2021, 'Selective distillation', 'Finds that a small crucial subset of hidden-state knowledge can match extensive transfer', 'Supports sparse supervision rather than copying every representation', 'Selection is not developed for KV trajectories'),\n('TinyBERT', 2020, 'Transformer distillation', 'Distills embeddings, hidden states and attention maps across layers', 'Shows intermediate representation supervision can matter', 'Target budget and reasoning causality are not the focus'),\n('Patient Knowledge Distillation', 2019, 'Transformer distillation', 'Uses multiple intermediate teacher layers rather than only the final layer', 'Motivates layer-selective supervision tests', 'No KV-specific or latent-reasoning analysis'),\n('COCONUT', 2025, 'Continuous latent reasoning', 'Feeds continuous hidden states back as latent thoughts', 'Frames latent computation as a reasoning mechanism rather than only compression', 'Does not address KV target selection'),\n('PCCoT', 2025, 'Parallel latent reasoning', 'Uses parallel continuous thoughts with Jacobi-style iteration', 'Shows the latent execution mechanism can be changed independently of supervision', 'Not a study of which teacher representations should be distilled'),\n('DART', 2025, 'Parallel latent reasoning', 'Uses non-autoregressive silent thoughts and hidden-state alignment', 'Another strong hidden-state trajectory baseline', 'No KV asymmetry or target-budget study'),\n('System-1.5 Reasoning', 2025, 'Adaptive test-time reasoning', 'Learns shortcuts that vary effective reasoning depth', 'Occupies the broad adaptive-latent-length direction', 'Does not identify teaching-optimal KV targets'),\n('Unlocking the Black Box', 2026, 'Latent reasoning interpretability', 'Combines structural, causal and geometric probes with interventions', 'Provides tools for validating causal usefulness of selected targets', 'Interpretability is the end goal rather than supervision design')\n) AS t(work, year, family, mechanism, relevance, open_gap)",
+            "description": "Primary-paper literature map assembled for this research proposal.",
+            "tables_used": [
+              "inline_primary_literature_review"
+            ],
+            "executed_at": "2026-07-21T17:43:21.325Z",
+            "metric_definitions": [
+              "Year is publication or current preprint year. Relevance and open-gap fields are analytical synthesis, not claims made verbatim by the papers."
+            ]
+          }
+        },
+        "dataset": "literature_map"
+      }
+    ],
+    "charts": [
+      {
+        "id": "direction_selection",
+        "title": "Qualitative comparison of candidate research directions",
+        "subtitle": "Scores are planning judgments on a 1–5 scale; the target-selection project combines the clearest question with the strongest fit to the existing CODI–KaVa implementation.",
+        "type": "bar",
+        "encodings": {
+          "x": {
+            "field": "direction",
+            "type": "nominal",
+            "title": "Candidate direction"
+          },
+          "y": {
+            "field": "score",
+            "type": "quantitative",
+            "title": "Planning score (1–5)"
+          },
+          "color": {
+            "field": "criterion",
+            "type": "nominal",
+            "title": "Criterion"
+          }
+        },
+        "options": {
+          "grouping": "grouped",
+          "legend": {
+            "show": true
+          }
+        },
+        "source": {
+          "id": "direction_synthesis",
+          "label": "Research-direction assessment based on the primary literature and current repository",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES\n('Teaching-optimal KV targets', 'Question specificity', 5),\n('Teaching-optimal KV targets', 'Fit to existing code', 5),\n('Teaching-optimal KV targets', 'Compute feasibility', 3),\n('Teaching-optimal KV targets', 'Novelty headroom', 5),\n('Key/value causal map only', 'Question specificity', 5),\n('Key/value causal map only', 'Fit to existing code', 5),\n('Key/value causal map only', 'Compute feasibility', 4),\n('Key/value causal map only', 'Novelty headroom', 3),\n('Adaptive latent length', 'Question specificity', 4),\n('Adaptive latent length', 'Fit to existing code', 3),\n('Adaptive latent length', 'Compute feasibility', 3),\n('Adaptive latent length', 'Novelty headroom', 2),\n('Generic latent interpretability', 'Question specificity', 3),\n('Generic latent interpretability', 'Fit to existing code', 4),\n('Generic latent interpretability', 'Compute feasibility', 4),\n('Generic latent interpretability', 'Novelty headroom', 2),\n('Cross-architecture reproduction', 'Question specificity', 3),\n('Cross-architecture reproduction', 'Fit to existing code', 2),\n('Cross-architecture reproduction', 'Compute feasibility', 1),\n('Cross-architecture reproduction', 'Novelty headroom', 3)\n) AS t(direction, criterion, score)",
+            "description": "Qualitative decision matrix for selecting a tractable and differentiated next project.",
+            "tables_used": [
+              "inline_direction_assessment"
+            ],
+            "executed_at": "2026-07-21T17:43:21.325Z",
+            "metric_definitions": [
+              "Scores range from 1 (weak) to 5 (strong). They are planning judgments, not empirical measurements."
+            ]
+          }
+        },
+        "dataset": "direction_scores"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "block_01",
+        "type": "markdown",
+        "body": "# Teaching-Optimal KV Distillation for Latent Reasoning\n\n**Recommended next project**\n\nDetermine whether the KV entries that are useful to retain in a serving-time cache are also the best entries to use as supervision for a latent reasoner. The proposed study keeps CODI versus KaVa as the empirical foundation but replaces the broad question “Which method is better?” with a narrower causal and design question about **what should be distilled, where, and under what target budget**."
+      },
+      {
+        "id": "block_02",
+        "type": "markdown",
+        "body": "## Technical summary\n\nKaVa improves on CODI by adding compressed key/value trajectory supervision. Its target selector is adapted from R-KV, a serving-time cache-compression method. That design makes an important assumption that has not been isolated experimentally: a token that is useful to keep for inference is also a useful token from which to teach a student. Recent KV-compression work further indicates that keys and values have different redundancy structures and that attention-only importance can overlook value contribution.\n\nThe strongest next direction is therefore **causal and asymmetric KV-target selection for latent-reasoning distillation**. The project asks which teacher keys, values, layers, heads, and latent positions are necessary and sufficient for transferring reasoning under a fixed supervision budget. It then tests a teaching-aware selector against R-KV, random, uniform, attention-only, value-aware, and crop baselines."
+      },
+      {
+        "id": "block_03",
+        "type": "markdown",
+        "body": "## Where the completed pilot fits\n\nYour pilot created useful infrastructure and one important clue. Under a shared GPT-2 setup, KaVa scored above CODI, cross-example latent shuffling harmed KaVa more, and one late latent position appeared especially influential. However, the models used one epoch, batch size four, six autoregressive latent states, and achieved low absolute accuracy. These checkpoints are therefore **hypothesis-generating instruments**, not faithful reproductions of the published systems.\n\nThe pilot motivates the target-selection question in two ways. First, KaVa’s stronger shuffle sensitivity suggests that its trajectory supervision can place more example-specific information in latent states. Second, random and uniform compression controls remaining close to full KaVa means the existing result does not show that R-KV is the reason for the improvement. The next project should test that missing causal link directly.",
+        "sourceId": "pilot"
+      },
+      {
+        "id": "block_04",
+        "type": "markdown",
+        "body": "## Literature synthesis\n\nThe literature separates into four connected streams.\n\n### 1. Internalizing chain-of-thought\nCODI aligns a latent student with an explicit teacher at a designated hidden-state endpoint. Earlier implicit-CoT and explicit-to-implicit work similarly transfers or gradually internalizes visible reasoning. COCONUT instead feeds continuous hidden states back as thoughts, while pause-token work demonstrates that additional serial computation can help even without semantic intermediate tokens.\n\n### 2. Trajectory and parallel latent reasoning\nKaVa supervises a compressed teacher KV trajectory. PCCoT and DART show that the latent execution mechanism can be parallel or non-autoregressive. These papers make supervision signal, target selection, and execution schedule separable design axes.\n\n### 3. KV-cache selection\nR-KV scores cache entries using importance and key redundancy. AsymKV reports that adjacent keys can be homogeneous while values remain heterogeneous. CurDKV argues that importance based mainly on attention scores can miss value contribution and instead preserves attention outputs using value-aware selection. These results directly challenge the assumption that keys and values should always be selected and supervised as identical pairs.\n\n### 4. Selective representation distillation\nMiniLM separately transfers attention distributions and value relations. MiniLMv2 generalizes relation distillation. Patient KD and TinyBERT show benefits from intermediate-layer targets, while selective-distillation work shows that a small, crucial subset of teacher knowledge can approach the benefit of extensive transfer. Together, these works suggest that *which* representations are distilled can matter as much as adding more distillation loss."
+      },
+      {
+        "id": "block_05",
+        "type": "table",
+        "tableId": "literature_map"
+      },
+      {
+        "id": "block_06",
+        "type": "markdown",
+        "body": "## The precise gap left by KaVa\n\nKaVa tests several important design choices, including compressed versus uncropped trajectories, cosine-only versus attention-only selection, distillation coefficient and loss type, latent-token count, Jacobi iterations, and data scale. The reported design still leaves five tightly related questions open.\n\n1. Are keys and values equally useful supervision targets?\n2. Should K and V targets come from the same teacher-token positions?\n3. Is useful supervision sparse over layers, heads, or latent positions?\n4. Does an R-KV serving-time selector maximize student learning per supervised byte?\n5. Can a selector conditioned on answer causality or the student’s current error outperform a fixed teacher-only selector?\n\nThis is a narrow gap with a concrete intervention point in the current KaVa pipeline: the function that constructs the compressed teacher targets.",
+        "sourceId": "kava"
+      },
+      {
+        "id": "block_07",
+        "type": "markdown",
+        "body": "## Proposed research question\n\n**Under a fixed teacher-target budget and a paper-aligned latent-reasoning setup, which parts of the teacher KV trajectory are necessary and sufficient for transferring mathematical reasoning, and can a value-aware or answer-causal selector outperform R-KV as a distillation target?**\n\n### Falsifiable hypotheses\n\n- **H1 — K/V asymmetry.** Keys-only and values-only supervision will not be equivalent, and equal K/V weighting will be suboptimal.\n- **H2 — structural sparsity.** Most useful supervision will concentrate in a subset of layers, heads, or late latent positions.\n- **H3 — serving versus teaching mismatch.** R-KV retention utility will correlate imperfectly with distillation utility.\n- **H4 — budget efficiency.** A teaching-aware selector will beat R-KV at the same target count, or match its accuracy with substantially fewer supervised elements."
+      },
+      {
+        "id": "block_08",
+        "type": "markdown",
+        "body": "## Proposed method — Teaching-Utility KV selection\n\nFor each candidate teacher KV block, construct a score from three components.\n\n- **Answer-causal contribution.** Approximate the change in answer loss attributable to the block using gradient-times-activation, then validate the ranking with exact block removal or activation patching on a subset.\n- **Student gap.** Measure how poorly the student currently matches that teacher block. This favors targets the student has not already learned.\n- **Diversity.** Penalize targets redundant with entries already selected.\n\nA simple starting score is\n\n`score(i) = α × causal_contribution(i) + β × student_gap(i) + γ × diversity(i)`\n\nSelect keys and values independently rather than forcing paired token indices. Compare global selection with per-layer or per-head quotas. A value-aware variant can additionally rank entries by their contribution to the attention output, such as the norm of attention weight times value vector or a CurDKV-style reconstruction criterion.\n\nThe intended contribution is not merely a new saliency score. It is a controlled test of whether **teaching utility** differs from **cache-retention utility**."
+      },
+      {
+        "id": "block_09",
+        "type": "markdown",
+        "body": "## Experimental design\n\n### Stage 0 — reproduction and accuracy gate\n\n1. Validate the evaluator using the official CODI checkpoint.\n2. Reproduce a KaVa-style baseline using the paper-aligned Qwen2.5-0.5B-Instruct configuration, 24 parallel latent tokens, three Jacobi iterations, LoRA, effective batch 128, ten epochs, and the paper’s augmented GSM8K training data.\n3. Implement a CODI-style endpoint-hidden baseline in the same backbone and training pipeline.\n4. Do not make mechanistic claims until the KaVa baseline is within a preregistered tolerance of the published result. A practical gate is within three absolute GSM8K points, subject to matching the paper’s exact evaluation protocol.\n\n### Stage 1 — causal target map without retraining every variant\n\nOn one accurate baseline, estimate the causal utility of teacher K and V blocks across layers, heads, teacher-token positions, and latent positions. Use gradient-times-activation for screening and exact ablation or patching for validation. This stage should eliminate weak selectors before expensive training.\n\n### Stage 2 — matched-budget supervision screening\n\nFirst compare selectors under full K+V supervision: random, uniform, right-crop, attention-only, R-KV, value-aware, and Teaching-Utility KV. Keep the number of selected scalar targets and the total distillation-loss scale fixed.\n\nThen run the K/V factorial only for the best two selectors: endpoint hidden only, K only, V only, and K+V. When using one channel, rescale its coefficient so the total supervision strength is not accidentally halved.\n\n### Stage 3 — structural sparsity\n\nCompare all layers with bottom, middle, and top thirds, plus causally selected top-k layers or heads. Hold the supervised-scalar budget constant.\n\n### Stage 4 — confirmation\n\nRun the two strongest methods for three matched seeds with the full training schedule. Evaluate on complete GSM8K, GSM-Hard, SVAMP, and MultiArith test sets. Add another reasoning domain only after the primary result is stable."
+      },
+      {
+        "id": "block_10",
+        "type": "markdown",
+        "body": "## Controls, metrics, and statistical analysis\n\n### Required controls\n\n- No trajectory distillation\n- CODI-style endpoint hidden-state distillation\n- Random and uniform KV targets\n- Right-crop and attention-only targets\n- Original R-KV targets\n- Value-aware targets\n- Teaching-Utility KV targets\n- K-only, V-only, and K+V variants\n- Equal target counts, supervised scalar counts, optimizer steps, data order, and total loss weight\n\n### Primary outcomes\n\n- Numeric exact-match accuracy on each full benchmark\n- Macro accuracy with paired bootstrap confidence intervals\n- Mean and sample standard deviation across matched seeds\n\n### Efficiency outcomes\n\n- Teacher-target construction time\n- Teacher forward/backward overhead\n- Target storage in bytes\n- Training throughput and convergence\n- Accuracy per supervised byte and per unit of teacher compute\n- Inference latency and memory, verified even when student architecture is unchanged\n\n### Diagnostic outcomes\n\n- Accuracy by reasoning-trace length\n- Error categories such as arithmetic slip, missing step, premature answer, and malformed output\n- Agreement between approximate target ranking and exact causal intervention\n- Rank stability across datasets and training checkpoints"
+      },
+      {
+        "id": "block_11",
+        "type": "markdown",
+        "body": "## Predeclared success criteria\n\nA publishable positive result would satisfy all of the following.\n\n1. The paper-aligned baseline passes the reproduction gate.\n2. K/V asymmetry or layer/head sparsity replicates on at least two datasets and two seeds.\n3. Teaching-Utility KV beats R-KV with a paired confidence interval excluding zero, **or** matches it within a predeclared non-inferiority margin while reducing target storage or supervision by at least 50 percent.\n4. The final finding holds across three matched seeds.\n5. Exact causal interventions confirm the direction predicted by the cheap screening metric.\n\nA strong negative result is also valuable: if R-KV remains optimal under matched target budgets and accurate baselines, the study would provide the first direct evidence that its serving-time criterion transfers effectively to latent-reasoning supervision."
+      },
+      {
+        "id": "block_12",
+        "type": "markdown",
+        "body": "## Compute-aware execution plan\n\nThe project should avoid another seven-way full-training sweep at the outset.\n\n1. Use the official CODI checkpoint to validate evaluation immediately.\n2. Train one paper-aligned KaVa baseline and retain all teacher/student diagnostic hooks.\n3. Build the causal map on a stratified subset.\n4. Screen selectors with short, fixed-budget runs using successive halving.\n5. Before trusting short-run rankings, confirm that the top two and one rejected method preserve their ordering in longer runs.\n6. Allocate full ten-epoch, three-seed runs only to the original R-KV baseline and the best one or two alternatives.\n\nThis turns the expensive part from a large factorial sweep into a small confirmation study. The existing GPT-2 checkpoints remain useful for debugging interventions and estimating runtime, but they should not be the final evidence."
+      },
+      {
+        "id": "block_13",
+        "type": "chart",
+        "chartId": "direction_selection"
+      },
+      {
+        "id": "block_14",
+        "type": "markdown",
+        "body": "## Why this is more focused than the obvious alternatives\n\n- **Adaptive latent length** is important but already has direct recent work on learned reasoning depth and stopping policies. It would require a new control problem in addition to reproducing KaVa.\n- **Generic latent-state interpretability** is broader and now has dedicated structural, geometric, and causal frameworks. It risks producing descriptive findings without an actionable model change.\n- **Cross-architecture reproduction** is necessary validation, but reproduction alone offers limited novelty and high compute cost.\n- **Generic KV-cache compression** is crowded and mainly concerns inference memory. The proposed project instead asks how cache structure should be converted into a *teaching signal*.\n\nThe recommended direction is narrower than “understand latent reasoning” and more novel than “run more seeds.” It changes one well-defined component, has direct controls, and can succeed through either accuracy improvement or equal accuracy with lower supervision cost."
+      },
+      {
+        "id": "block_15",
+        "type": "markdown",
+        "body": "## Novelty boundary and risks\n\nThe literature supports the gap, but a final novelty claim should be checked through a systematic title/abstract search before submission. Adjacent work already studies value-aware cache eviction, asymmetric K/V compression, gradient-derived capability subspaces, and causal latent-state interventions. The defensible novelty is specifically the combination of:\n\n- teacher-target selection rather than serving-time eviction\n- latent mathematical reasoning rather than generic language-model compression\n- independent K/V and structural budgets\n- causal and student-aware teaching utility\n- matched comparisons against R-KV under an accurate KaVa-style baseline\n\nThe main technical risk is that gradient saliency may be noisy or not predict learning value. Exact interventions, rank-stability checks, and a simple value-aware baseline prevent the project from depending on one estimator."
+      },
+      {
+        "id": "block_16",
+        "type": "markdown",
+        "body": "## A concise pitch for your instructor\n\nI propose to study whether KaVa is distilling the *right* parts of the teacher KV trajectory. KaVa reuses an R-KV cache-retention score to choose training targets, but recent KV work shows that keys and values have different redundancy and that attention-only scores can miss value contribution. I will first reproduce an accurate baseline, then compare keys-only, values-only, paired and independently selected targets under the same supervision budget. Finally, I will test whether an answer-causal and student-aware selector can outperform R-KV or match it with substantially less teacher supervision. This gives the project a precise intervention, clear baselines, falsifiable hypotheses, and measurable accuracy–cost outcomes."
+      },
+      {
+        "id": "block_17",
+        "type": "markdown",
+        "body": "## Secondary questions unlocked by the main study\n\nIf the central result is positive, the same evidence can answer several narrower questions.\n\n- Do late latent positions need value content while early positions mainly need routing structure?\n- Are useful teacher targets concentrated in a small group of layers or heads?\n- Does teaching utility change during training as the student closes particular representation gaps?\n- Does a selector learned on arithmetic transfer to symbolic logic or planning?\n- Can target-selection savings be exchanged for more training data, more latent positions, or a larger student under a fixed compute budget?\n\nThese are follow-on analyses. They should not replace the single primary question in the initial proposal."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "status": "ready",
+    "generatedAt": "2026-07-21T17:43:21.325Z",
+    "datasets": {
+      "literature_map": [
+        {
+          "work": "CODI",
+          "year": 2025,
+          "family": "Latent CoT distillation",
+          "mechanism": "Aligns the student to a teacher hidden state at a designated reasoning endpoint",
+          "relevance": "Establishes endpoint hidden-state supervision as the comparison baseline",
+          "open_gap": "Does not supervise the full key/value trajectory"
+        },
+        {
+          "work": "KaVa",
+          "year": 2026,
+          "family": "Latent KV distillation",
+          "mechanism": "Distills compressed teacher key/value trajectories selected with an adapted R-KV score",
+          "relevance": "Directly motivates the proposed study",
+          "open_gap": "Does not separate keys from values or test teaching-optimal target selection"
+        },
+        {
+          "work": "R-KV",
+          "year": 2025,
+          "family": "Serving-time KV compression",
+          "mechanism": "Combines attention-based importance with key redundancy to retain cache entries",
+          "relevance": "KaVa adapts its selector for training targets",
+          "open_gap": "Serving utility need not equal distillation utility"
+        },
+        {
+          "work": "AsymKV",
+          "year": 2025,
+          "family": "Serving-time KV compression",
+          "mechanism": "Treats locally homogeneous keys and heterogeneous values asymmetrically",
+          "relevance": "Challenges paired and symmetric key/value treatment",
+          "open_gap": "Not studied as a latent-reasoning supervision rule"
+        },
+        {
+          "work": "CurDKV",
+          "year": 2025,
+          "family": "Serving-time KV compression",
+          "mechanism": "Uses value-aware CUR decomposition to preserve attention output",
+          "relevance": "Shows that attention-only importance can miss value contribution",
+          "open_gap": "Not evaluated as teacher-target selection"
+        },
+        {
+          "work": "MiniLM",
+          "year": 2020,
+          "family": "Transformer distillation",
+          "mechanism": "Separately transfers attention distributions and value relations",
+          "relevance": "Provides precedent for distinct key/query-side and value-side targets",
+          "open_gap": "Designed for compressed encoders rather than latent reasoning"
+        },
+        {
+          "work": "MiniLMv2",
+          "year": 2021,
+          "family": "Transformer distillation",
+          "mechanism": "Transfers multi-head self-attention relations",
+          "relevance": "Shows relation choice is a first-class distillation decision",
+          "open_gap": "Does not study causal target selection for reasoning"
+        },
+        {
+          "work": "Marginal Utility Diminishes",
+          "year": 2021,
+          "family": "Selective distillation",
+          "mechanism": "Finds that a small crucial subset of hidden-state knowledge can match extensive transfer",
+          "relevance": "Supports sparse supervision rather than copying every representation",
+          "open_gap": "Selection is not developed for KV trajectories"
+        },
+        {
+          "work": "TinyBERT",
+          "year": 2020,
+          "family": "Transformer distillation",
+          "mechanism": "Distills embeddings, hidden states and attention maps across layers",
+          "relevance": "Shows intermediate representation supervision can matter",
+          "open_gap": "Target budget and reasoning causality are not the focus"
+        },
+        {
+          "work": "Patient Knowledge Distillation",
+          "year": 2019,
+          "family": "Transformer distillation",
+          "mechanism": "Uses multiple intermediate teacher layers rather than only the final layer",
+          "relevance": "Motivates layer-selective supervision tests",
+          "open_gap": "No KV-specific or latent-reasoning analysis"
+        },
+        {
+          "work": "COCONUT",
+          "year": 2025,
+          "family": "Continuous latent reasoning",
+          "mechanism": "Feeds continuous hidden states back as latent thoughts",
+          "relevance": "Frames latent computation as a reasoning mechanism rather than only compression",
+          "open_gap": "Does not address KV target selection"
+        },
+        {
+          "work": "PCCoT",
+          "year": 2025,
+          "family": "Parallel latent reasoning",
+          "mechanism": "Uses parallel continuous thoughts with Jacobi-style iteration",
+          "relevance": "Shows the latent execution mechanism can be changed independently of supervision",
+          "open_gap": "Not a study of which teacher representations should be distilled"
+        },
+        {
+          "work": "DART",
+          "year": 2025,
+          "family": "Parallel latent reasoning",
+          "mechanism": "Uses non-autoregressive silent thoughts and hidden-state alignment",
+          "relevance": "Another strong hidden-state trajectory baseline",
+          "open_gap": "No KV asymmetry or target-budget study"
+        },
+        {
+          "work": "System-1.5 Reasoning",
+          "year": 2025,
+          "family": "Adaptive test-time reasoning",
+          "mechanism": "Learns shortcuts that vary effective reasoning depth",
+          "relevance": "Occupies the broad adaptive-latent-length direction",
+          "open_gap": "Does not identify teaching-optimal KV targets"
+        },
+        {
+          "work": "Unlocking the Black Box",
+          "year": 2026,
+          "family": "Latent reasoning interpretability",
+          "mechanism": "Combines structural, causal and geometric probes with interventions",
+          "relevance": "Provides tools for validating causal usefulness of selected targets",
+          "open_gap": "Interpretability is the end goal rather than supervision design"
+        }
+      ],
+      "direction_scores": [
+        {
+          "direction": "Teaching-optimal KV targets",
+          "criterion": "Question specificity",
+          "score": 5
+        },
+        {
+          "direction": "Teaching-optimal KV targets",
+          "criterion": "Fit to existing code",
+          "score": 5
+        },
+        {
+          "direction": "Teaching-optimal KV targets",
+          "criterion": "Compute feasibility",
+          "score": 3
+        },
+        {
+          "direction": "Teaching-optimal KV targets",
+          "criterion": "Novelty headroom",
+          "score": 5
+        },
+        {
+          "direction": "Key/value causal map only",
+          "criterion": "Question specificity",
+          "score": 5
+        },
+        {
+          "direction": "Key/value causal map only",
+          "criterion": "Fit to existing code",
+          "score": 5
+        },
+        {
+          "direction": "Key/value causal map only",
+          "criterion": "Compute feasibility",
+          "score": 4
+        },
+        {
+          "direction": "Key/value causal map only",
+          "criterion": "Novelty headroom",
+          "score": 3
+        },
+        {
+          "direction": "Adaptive latent length",
+          "criterion": "Question specificity",
+          "score": 4
+        },
+        {
+          "direction": "Adaptive latent length",
+          "criterion": "Fit to existing code",
+          "score": 3
+        },
+        {
+          "direction": "Adaptive latent length",
+          "criterion": "Compute feasibility",
+          "score": 3
+        },
+        {
+          "direction": "Adaptive latent length",
+          "criterion": "Novelty headroom",
+          "score": 2
+        },
+        {
+          "direction": "Generic latent interpretability",
+          "criterion": "Question specificity",
+          "score": 3
+        },
+        {
+          "direction": "Generic latent interpretability",
+          "criterion": "Fit to existing code",
+          "score": 4
+        },
+        {
+          "direction": "Generic latent interpretability",
+          "criterion": "Compute feasibility",
+          "score": 4
+        },
+        {
+          "direction": "Generic latent interpretability",
+          "criterion": "Novelty headroom",
+          "score": 2
+        },
+        {
+          "direction": "Cross-architecture reproduction",
+          "criterion": "Question specificity",
+          "score": 3
+        },
+        {
+          "direction": "Cross-architecture reproduction",
+          "criterion": "Fit to existing code",
+          "score": 2
+        },
+        {
+          "direction": "Cross-architecture reproduction",
+          "criterion": "Compute feasibility",
+          "score": 1
+        },
+        {
+          "direction": "Cross-architecture reproduction",
+          "criterion": "Novelty headroom",
+          "score": 3
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "pilot",
+      "label": "Local CODI–KaVa pilot report",
+      "path": "output/pdf/CODI_vs_KaVa_complete_revised_report.pdf"
+    },
+    {
+      "id": "kava",
+      "label": "KaVa: Latent Reasoning via Compressed KV-Cache Distillation",
+      "href": "https://arxiv.org/html/2510.02312v2"
+    },
+    {
+      "id": "codi",
+      "label": "CODI: Compressing Chain-of-Thought into Continuous Space via Self-Distillation",
+      "href": "https://aclanthology.org/2025.emnlp-main.36/"
+    },
+    {
+      "id": "rkv",
+      "label": "R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+      "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/57e0358aed314784cad14a26e1eba642-Abstract-Conference.html"
+    },
+    {
+      "id": "asymkv",
+      "label": "AsymKV: Enabling 1-Bit Quantization of KV Cache with Layer-Wise Asymmetric Quantization Configurations",
+      "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/750b0f9fccafad88e0da366315e03d1a-Abstract-Conference.html"
+    },
+    {
+      "id": "curdkv",
+      "label": "CurDKV: CUR Decomposition Based KV Cache Compression",
+      "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/721b0b930cae88656b0f71a8f6097ee4-Abstract-Conference.html"
+    },
+    {
+      "id": "minilm",
+      "label": "MiniLM: Deep Self-Attention Distillation",
+      "href": "https://proceedings.neurips.cc/paper/2020/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf"
+    },
+    {
+      "id": "minilmv2",
+      "label": "MiniLMv2: Multi-Head Self-Attention Relation Distillation",
+      "href": "https://aclanthology.org/anthology-files/pdf/findings/2021.findings-acl.188.pdf"
+    },
+    {
+      "id": "marginal",
+      "label": "Knowledge Distillation: A Good Teacher Is Patient and Consistent",
+      "href": "https://aclanthology.org/2021.acl-long.228/"
+    },
+    {
+      "id": "tinybert",
+      "label": "TinyBERT: Distilling BERT for Natural Language Understanding",
+      "href": "https://aclanthology.org/2020.findings-emnlp.372/"
+    },
+    {
+      "id": "pkd",
+      "label": "Patient Knowledge Distillation for BERT Model Compression",
+      "href": "https://aclanthology.org/D19-1441/"
+    },
+    {
+      "id": "implicit",
+      "label": "Implicit Chain of Thought Reasoning via Knowledge Distillation",
+      "href": "https://arxiv.org/abs/2311.01460"
+    },
+    {
+      "id": "explicit_implicit",
+      "label": "From Explicit CoT to Implicit CoT",
+      "href": "https://arxiv.org/abs/2405.14838"
+    },
+    {
+      "id": "pause",
+      "label": "Think before you speak: Training Language Models With Pause Tokens",
+      "href": "https://openreview.net/forum?id=ph04CRkPdC"
+    },
+    {
+      "id": "coconut",
+      "label": "Training Large Language Models to Reason in a Continuous Latent Space",
+      "href": "https://openreview.net/pdf?id=Itxz7S4Ip3"
+    },
+    {
+      "id": "pccot",
+      "label": "PCCoT: Parallel Continuous Chain-of-Thought",
+      "href": "https://aclanthology.org/2025.emnlp-main.47/"
+    },
+    {
+      "id": "dart",
+      "label": "DART: Learning to Reason Without Thinking",
+      "href": "https://aclanthology.org/2025.emnlp-main.256/"
+    },
+    {
+      "id": "system15",
+      "label": "System-1.5 Reasoning: Traversal in Language and Latent Spaces",
+      "href": "https://proceedings.neurips.cc/paper_files/paper/2025/hash/5e66b9f710a8e38351da690f3806cba9-Abstract-Conference.html"
+    },
+    {
+      "id": "whenstop",
+      "label": "Learning When to Stop: Adaptive Latent Reasoning",
+      "href": "https://arxiv.org/abs/2511.21581"
+    },
+    {
+      "id": "blackbox",
+      "label": "Unlocking the Black Box of Latent Reasoning",
+      "href": "https://aclanthology.org/2026.acl-long.1568/"
+    },
+    {
+      "id": "longflow",
+      "label": "LongFlow: Efficient KV Cache Compression for Reasoning Models",
+      "href": "https://arxiv.org/abs/2603.11504"
+    }
+  ]
+}

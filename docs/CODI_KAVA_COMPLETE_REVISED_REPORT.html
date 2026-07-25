@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CODI vs KaVa revised complete report</title>
+  <style>
+    @page { size: A4; margin: 12mm 14mm 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: white; color: #000; }
+    body { font-family: "Times New Roman", Times, serif; font-size: 8.5pt; line-height: 1.22; }
+    .sheet { position: relative; height: 269mm; break-after: page; page-break-after: always; padding-bottom: 8mm; overflow: hidden; }
+    .sheet:last-child { break-after: auto; page-break-after: auto; }
+    .title { text-align: center; font-size: 18pt; line-height: 1.08; margin: 1mm 0 1.8mm; font-weight: 700; }
+    .author { text-align: center; font-size: 9pt; margin-bottom: 3mm; }
+    .page-title { text-align: center; font-size: 11pt; font-weight: 700; letter-spacing: .02em; margin: 0 0 3mm; text-transform: uppercase; }
+    .rule { height: .25mm; background: #000; margin: 0 0 3mm; }
+    .summary { border: .3mm solid #000; padding: 2.4mm 3mm; margin-bottom: 3.2mm; font-size: 8.7pt; line-height: 1.26; }
+    .summary h2 { margin: 0 0 1.2mm; font-size: 10.2pt; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; align-items: start; }
+    .column { min-width: 0; }
+    h2 { font-size: 10.2pt; line-height: 1.08; margin: 3mm 0 1.3mm; text-transform: uppercase; }
+    h3 { font-size: 9.1pt; line-height: 1.08; margin: 2.2mm 0 1mm; font-style: italic; }
+    p { margin: 0 0 1.9mm; text-align: justify; }
+    ul, ol { margin: 0 0 2mm 4.8mm; padding: 0; }
+    li { margin-bottom: .9mm; }
+    table { width: 100%; border-collapse: collapse; margin: 1.3mm 0 2.2mm; font-size: 7.25pt; line-height: 1.15; }
+    th { font-weight: 700; text-align: left; background: #ededed; }
+    th, td { border-top: .2mm solid #777; border-bottom: .2mm solid #777; padding: 1mm 1.1mm; vertical-align: top; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    .compact td, .compact th { padding: .8mm .9mm; }
+    .note { border-left: .8mm solid #333; padding: 1.5mm 2mm; margin: 2mm 0; background: #f5f5f5; }
+    .caption { font-size: 7.1pt; line-height: 1.18; margin: .8mm 0 2.1mm; text-align: left; }
+    .figure-title { font-size: 8pt; font-weight: 700; margin: 2mm 0 .8mm; text-align: left; }
+    .chart { width: 100%; display: block; border: .2mm solid #bbb; background: white; }
+    .formula { text-align: center; font-family: "Courier New", monospace; font-size: 7.5pt; border-top: .2mm solid #999; border-bottom: .2mm solid #999; padding: 1.6mm 1mm; margin: 1.8mm 0; }
+    .flow { display: grid; grid-template-columns: 1fr; gap: 1.6mm; margin: 2mm 0; }
+    .flow-step { border: .3mm solid #111; padding: 1.8mm 2mm; background: #f3f3f3; }
+    .flow-arrow { text-align: center; font-size: 10pt; line-height: 1; }
+    .refs { font-size: 7pt; line-height: 1.18; }
+    .refs p { padding-left: 4mm; text-indent: -4mm; margin-bottom: 1mm; text-align: left; }
+    .footer { position: absolute; left: 0; right: 0; bottom: 0; border-top: .2mm solid #aaa; padding-top: 1.5mm; display: flex; justify-content: space-between; font-size: 7pt; }
+    .small { font-size: 7.4pt; }
+    .tight p { margin-bottom: 1.4mm; }
+    .center { text-align: center; }
+  </style>
+</head>
+<body>
+
+<section class="sheet">
+  <div class="title">CODI vs KaVa</div>
+  <div class="rule"></div>
+
+  <div class="grid">
+    <div class="column">
+      <h2>1 Background</h2>
+      <p>Explicit chain of thought models write each reasoning step before producing an answer. This often improves accuracy, but it requires many generated tokens. Latent reasoning replaces those text tokens with a smaller number of continuous internal states.</p>
+      <p>The main difficulty is supervision. The answer alone gives little guidance about what each internal state should contain. CODI and KaVa provide that guidance in different ways.</p>
+
+      <h3>CODI</h3>
+      <p>CODI uses one model as both teacher and student. The teacher sees the written reasoning trace. The student solves the same problem using continuous states. Training matches the teacher and student hidden states near the answer position.</p>
+      <div class="formula">CODI loss = student answer loss + teacher loss + hidden state loss</div>
+
+      <h3>KaVa</h3>
+      <p>KaVa adds supervision from the teacher key and value cache. The full teacher trace is compressed and matched to the student latent trajectory. This gives supervision at several internal positions rather than only at the answer boundary.</p>
+      <div class="formula">KaVa loss = CODI loss + key and value trajectory loss</div>
+
+      <h2>2 Purpose of the pilot</h2>
+      <p>The pilot was built to compare the two supervision styles under one shared implementation. Both methods started from the same pretrained GPT-2 revision. They used the same data, latent length, optimizer, schedule, prompts, decoding, and training budget. The main planned difference was whether the key and value loss was active.</p>
+      <p>This design was useful for testing the code and producing a matched comparison. It was not a faithful reproduction of the original KaVa architecture.</p>
+    </div>
+
+    <div class="column">
+      <h2>3 Pilot setup and training procedure</h2>
+      <table>
+        <tr><th>Component</th><th>Setting</th></tr>
+        <tr><td>Backbone</td><td>Pretrained GPT-2</td></tr>
+        <tr><td>Training data</td><td>385,620 GSM8K-Aug equation examples</td></tr>
+        <tr><td>Latent states</td><td>Six autoregressive states</td></tr>
+        <tr><td>Training</td><td>One epoch and 96,405 optimizer steps</td></tr>
+        <tr><td>Batch size</td><td>Four</td></tr>
+        <tr><td>Learning rate</td><td>1e-4 with cosine decay</td></tr>
+        <tr><td>Evaluation</td><td>Greedy decoding and numeric exact match</td></tr>
+      </table>
+
+      <h3>How each training step worked</h3>
+      <ol class="small">
+        <li>A deterministic seeded batcher selected four equation trace examples. Inputs were limited to 256 tokens.</li>
+        <li>The same GPT-2 parameters served as teacher and student. The teacher received the question, written equation trace, and answer. The student received the question and produced six continuous latent states before predicting the answer.</li>
+        <li>Both methods optimized student answer loss, teacher language model loss, and L1 hidden state matching across all transformer layers at the answer endpoint.</li>
+        <li>KaVa additionally matched compressed teacher keys and values to the six student latent positions across all layers. CODI used the identical training path with the KV loss weight set to zero.</li>
+        <li>AdamW updated all model parameters. The learning rate warmed up for 500 steps to 1e-4 and then followed cosine decay. Weight decay was 0.1 and gradient norm was clipped at 2.0.</li>
+      </ol>
+
+      <h3>Saving and resuming</h3>
+      <p class="small">A checkpoint was written every 1,000 steps and the last two were retained. Each checkpoint stored model weights, optimizer state, random state, loss history, and the experiment fingerprint. A nine hour wall clock guard saved the current state before notebook limits were reached. Kaggle and Colab sessions resumed from the latest verified checkpoint until step 96,405.</p>
+
+      <h3>Evaluation data</h3>
+      <table class="compact">
+        <tr><th>Dataset</th><th class="num">Full size</th><th>Role</th></tr>
+        <tr><td>GSM8K</td><td class="num">1,319</td><td>In domain arithmetic</td></tr>
+        <tr><td>GSM-Hard</td><td class="num">1,319</td><td>Harder numbers</td></tr>
+        <tr><td>SVAMP</td><td class="num">300</td><td>Word problem transfer</td></tr>
+        <tr><td>MultiArith</td><td class="num">180</td><td>Multi step arithmetic</td></tr>
+      </table>
+
+      <h3>Runs completed</h3>
+      <ul>
+        <li>CODI and KaVa at seeds zero, one, and two</li>
+        <li>No trajectory distillation at seed zero</li>
+        <li>Random and uniform compression at seed zero</li>
+        <li>Zero, mean, and cross example latent interventions</li>
+        <li>A position by position KaVa shuffle sweep</li>
+      </ul>
+
+      <h3>Metric and uncertainty</h3>
+      <p>Accuracy is numeric exact match. Macro accuracy is the plain average across the four datasets. The primary comparison used 10,000 paired bootstrap samples. This measures uncertainty from the test questions for the fixed checkpoints. It does not test whether the checkpoints were trained well enough.</p>
+
+    </div>
+  </div>
+
+  <div class="footer"><span>CODI vs KaVa revised complete report</span><span>1</span></div>
+</section>
+
+<section class="sheet">
+  <div class="page-title">Pilot results and their limits</div>
+  <div class="rule"></div>
+  <div class="grid">
+    <div class="column">
+      <h2>4 KaVa scored higher in the pilot</h2>
+      <p>KaVa scored higher on GSM8K, MultiArith, and SVAMP. CODI was slightly higher on GSM-Hard. The largest difference was on MultiArith.</p>
+
+      <div class="figure-title">Figure 1 Full seed zero accuracy</div>
+      <svg class="chart" viewBox="0 0 420 255" role="img" aria-label="Pilot accuracy for CODI and KaVa">
+        <rect x="0" y="0" width="420" height="255" fill="white"/>
+        <line x1="48" y1="210" x2="405" y2="210" stroke="#111" stroke-width="1.2"/>
+        <line x1="48" y1="28" x2="48" y2="210" stroke="#111" stroke-width="1.2"/>
+        <g stroke="#d0d0d0" stroke-width="1">
+          <line x1="48" y1="149" x2="405" y2="149"/>
+          <line x1="48" y1="89" x2="405" y2="89"/>
+          <line x1="48" y1="28" x2="405" y2="28"/>
+        </g>
+        <g font-family="Times New Roman" font-size="10" fill="#111">
+          <text x="40" y="214" text-anchor="end">0</text>
+          <text x="40" y="153" text-anchor="end">10</text>
+          <text x="40" y="93" text-anchor="end">20</text>
+          <text x="40" y="32" text-anchor="end">30</text>
+          <text x="15" y="120" transform="rotate(-90 15 120)" text-anchor="middle">Accuracy percent</text>
+        </g>
+        <g stroke="#111" stroke-width="1">
+          <rect x="68" y="134" width="25" height="76" fill="white"/>
+          <rect x="95" y="130" width="25" height="80" fill="#555"/>
+          <rect x="139" y="194" width="25" height="16" fill="white"/>
+          <rect x="166" y="195" width="25" height="15" fill="#555"/>
+          <rect x="210" y="95" width="25" height="115" fill="white"/>
+          <rect x="237" y="55" width="25" height="155" fill="#555"/>
+          <rect x="281" y="143" width="25" height="67" fill="white"/>
+          <rect x="308" y="137" width="25" height="73" fill="#555"/>
+          <rect x="352" y="142" width="25" height="68" fill="white"/>
+          <rect x="379" y="129" width="25" height="81" fill="#555"/>
+        </g>
+        <g font-family="Times New Roman" font-size="9" font-weight="bold" fill="#111" text-anchor="middle">
+          <text x="80.5" y="129">12.59</text><text x="107.5" y="125">13.12</text>
+          <text x="151.5" y="189">2.65</text><text x="178.5" y="190">2.50</text>
+          <text x="222.5" y="90">18.89</text><text x="249.5" y="50">25.56</text>
+          <text x="293.5" y="138">11.00</text><text x="320.5" y="132">12.00</text>
+          <text x="364.5" y="137">11.28</text><text x="391.5" y="124">13.29</text>
+        </g>
+        <g font-family="Times New Roman" font-size="9" fill="#111" text-anchor="middle">
+          <text x="94" y="228">GSM8K</text><text x="165" y="228">GSM-Hard</text>
+          <text x="236" y="228">MultiArith</text><text x="307" y="228">SVAMP</text><text x="378" y="228">Macro</text>
+        </g>
+        <rect x="270" y="10" width="10" height="8" fill="white" stroke="#111"/>
+        <text x="285" y="18" font-family="Times New Roman" font-size="9">CODI</text>
+        <rect x="330" y="10" width="10" height="8" fill="#555" stroke="#111"/>
+        <text x="345" y="18" font-family="Times New Roman" font-size="9">KaVa</text>
+      </svg>
+      <p class="caption"><strong>Figure 1</strong> Numeric exact match on the complete seed zero evaluation. KaVa gained 2.01 macro points. The 95 percent paired interval was 0.44 to 3.60 points.</p>
+
+      <h3>Task level result</h3>
+      <table class="compact">
+        <tr><th>Dataset</th><th class="num">CODI</th><th class="num">KaVa</th><th class="num">Gain</th></tr>
+        <tr><td>GSM8K</td><td class="num">12.59</td><td class="num">13.12</td><td class="num">0.53</td></tr>
+        <tr><td>GSM-Hard</td><td class="num">2.65</td><td class="num">2.50</td><td class="num">-0.15</td></tr>
+        <tr><td>MultiArith</td><td class="num">18.89</td><td class="num">25.56</td><td class="num">6.67</td></tr>
+        <tr><td>SVAMP</td><td class="num">11.00</td><td class="num">12.00</td><td class="num">1.00</td></tr>
+      </table>
+      <p>Only the MultiArith interval excluded zero. This dataset produced most of the macro gain.</p>
+    </div>
+
+    <div class="column">
+      <h2>5 The direction held across seeds</h2>
+      <table class="compact">
+        <tr><th>Seed</th><th class="num">CODI</th><th class="num">KaVa</th><th class="num">Gain</th></tr>
+        <tr><td>Zero</td><td class="num">11.72</td><td class="num">13.89</td><td class="num">2.17</td></tr>
+        <tr><td>One</td><td class="num">11.78</td><td class="num">12.75</td><td class="num">0.97</td></tr>
+        <tr><td>Two</td><td class="num">11.53</td><td class="num">12.61</td><td class="num">1.08</td></tr>
+        <tr><td>Mean</td><td class="num">11.68</td><td class="num">13.08</td><td class="num">1.41</td></tr>
+      </table>
+      <p>KaVa scored higher at each seed. Three seeds show a stable direction, but they do not provide a precise method level confidence interval.</p>
+
+      <h2>6 Controls did not isolate R-KV</h2>
+      <table class="compact">
+        <tr><th>Seed zero run</th><th class="num">Macro</th></tr>
+        <tr><td>CODI</td><td class="num">11.72</td></tr>
+        <tr><td>No trajectory loss</td><td class="num">13.19</td></tr>
+        <tr><td>Uniform compression</td><td class="num">12.69</td></tr>
+        <tr><td>Random compression</td><td class="num">13.40</td></tr>
+        <tr><td>R-KV KaVa</td><td class="num">13.89</td></tr>
+      </table>
+      <p>Full KaVa scored highest. Its differences from the other controls were uncertain. The pilot therefore did not prove that R-KV selection caused the gain.</p>
+
+      <h2>7 Latent damage affected KaVa more</h2>
+      <p>The same latent damage was applied to both models. Negative values below mean that KaVa lost more accuracy than CODI.</p>
+      <svg class="chart" viewBox="0 0 420 160" role="img" aria-label="Difference in differences for latent interventions">
+        <rect width="420" height="160" fill="white"/>
+        <line x1="105" y1="130" x2="390" y2="130" stroke="#111" stroke-width="1"/>
+        <line x1="355" y1="22" x2="355" y2="135" stroke="#111" stroke-width="1.3"/>
+        <g stroke="#ddd" stroke-width="1">
+          <line x1="105" y1="22" x2="105" y2="130"/><line x1="168" y1="22" x2="168" y2="130"/>
+          <line x1="230" y1="22" x2="230" y2="130"/><line x1="293" y1="22" x2="293" y2="130"/>
+          <line x1="390" y1="22" x2="390" y2="130"/>
+        </g>
+        <g font-family="Times New Roman" font-size="10" fill="#111">
+          <text x="8" y="45">Batch mean</text><text x="8" y="80">Cross example shuffle</text><text x="8" y="115">Zero</text>
+        </g>
+        <g stroke="#111" fill="#333">
+          <line x1="225" y1="41" x2="338" y2="41" stroke-width="2"/><rect x="276" y="37" width="8" height="8"/>
+          <line x1="110" y1="76" x2="267" y2="76" stroke-width="2"/><rect x="198" y="72" width="8" height="8"/>
+          <line x1="216" y1="111" x2="361" y2="111" stroke-width="2"/><rect x="285" y="107" width="8" height="8"/>
+        </g>
+        <g font-family="Times New Roman" font-size="9" fill="#111" text-anchor="middle">
+          <text x="105" y="145">-8</text><text x="168" y="145">-6</text><text x="230" y="145">-4</text><text x="293" y="145">-2</text><text x="355" y="145">0</text><text x="390" y="145">1</text>
+        </g>
+      </svg>
+      <p class="caption"><strong>Figure 2</strong> Difference in differences with 95 percent paired intervals. Cross example shuffling harmed KaVa by 4.60 points more than CODI.</p>
+
+      <div class="note"><strong>Reliability limit</strong><br>These interventions show how the pilot checkpoints behave. They do not show how accurate paper level checkpoints would behave.</div>
+    </div>
+  </div>
+
+  <div class="footer"><span>CODI vs KaVa revised complete report</span><span>2</span></div>
+</section>
+
+<section class="sheet">
+  <div class="page-title">Published results and the reproduction gap</div>
+  <div class="rule"></div>
+  <div class="grid">
+    <div class="column">
+      <h2>8 Published CODI is much stronger</h2>
+      <p>The CODI paper trained GPT-2 on GSM8K-Aug for 40 epochs. It used an effective batch size of 128, a learning rate of 3e-3, LoRA rank 128, and bfloat16. A single GPT-2 run took about 36 hours on one A100 with 80 GB memory.</p>
+      <table class="compact">
+        <tr><th>Model</th><th class="num">GSM8K</th><th class="num">Hard</th><th class="num">SVAMP</th><th class="num">MultiArith</th></tr>
+        <tr><td>Pilot CODI</td><td class="num">12.59</td><td class="num">2.65</td><td class="num">11.00</td><td class="num">18.89</td></tr>
+        <tr><td>Paper GPT-2</td><td class="num">43.7</td><td class="num">9.9</td><td class="num">42.9</td><td class="num">92.8</td></tr>
+        <tr><td>Paper LLaMA 1B</td><td class="num">55.6</td><td class="num">12.8</td><td class="num">61.1</td><td class="num">96.1</td></tr>
+      </table>
+      <p>The paper GPT-2 model was 31.11 points higher on GSM8K and 73.91 points higher on MultiArith. This gap is too large to treat the pilot as a reproduction.</p>
+
+      <div class="figure-title">Figure 3 Pilot CODI compared with paper CODI</div>
+      <svg class="chart" viewBox="0 0 420 245" role="img" aria-label="Pilot and published CODI accuracy">
+        <rect width="420" height="245" fill="white"/>
+        <line x1="105" y1="205" x2="398" y2="205" stroke="#111" stroke-width="1"/>
+        <g stroke="#ddd" stroke-width="1">
+          <line x1="105" y1="25" x2="105" y2="205"/><line x1="178" y1="25" x2="178" y2="205"/>
+          <line x1="251" y1="25" x2="251" y2="205"/><line x1="324" y1="25" x2="324" y2="205"/><line x1="398" y1="25" x2="398" y2="205"/>
+        </g>
+        <g font-family="Times New Roman" font-size="10" fill="#111">
+          <text x="8" y="54">GSM8K</text><text x="8" y="94">GSM-Hard</text><text x="8" y="134">SVAMP</text><text x="8" y="174">MultiArith</text>
+        </g>
+        <g stroke="#111" stroke-width="1">
+          <rect x="105" y="37" width="37" height="11" fill="white"/><rect x="105" y="51" width="128" height="11" fill="#4b4b4b"/>
+          <rect x="105" y="77" width="8" height="11" fill="white"/><rect x="105" y="91" width="29" height="11" fill="#4b4b4b"/>
+          <rect x="105" y="117" width="32" height="11" fill="white"/><rect x="105" y="131" width="126" height="11" fill="#4b4b4b"/>
+          <rect x="105" y="157" width="55" height="11" fill="white"/><rect x="105" y="171" width="272" height="11" fill="#4b4b4b"/>
+        </g>
+        <g font-family="Times New Roman" font-size="9" fill="#111">
+          <text x="146" y="46">12.59</text><text x="237" y="60">43.7</text>
+          <text x="117" y="86">2.65</text><text x="138" y="100">9.9</text>
+          <text x="141" y="126">11.00</text><text x="235" y="140">42.9</text>
+          <text x="164" y="166">18.89</text><text x="381" y="180">92.8</text>
+        </g>
+        <g font-family="Times New Roman" font-size="9" fill="#111" text-anchor="middle">
+          <text x="105" y="220">0</text><text x="178" y="220">25</text><text x="251" y="220">50</text><text x="324" y="220">75</text><text x="398" y="220">100</text>
+        </g>
+        <rect x="255" y="8" width="10" height="8" fill="white" stroke="#111"/><text x="270" y="16" font-family="Times New Roman" font-size="9">Pilot</text>
+        <rect x="320" y="8" width="10" height="8" fill="#4b4b4b" stroke="#111"/><text x="335" y="16" font-family="Times New Roman" font-size="9">Paper</text>
+      </svg>
+      <p class="caption"><strong>Figure 3</strong> The pilot CODI checkpoint is far below the published GPT-2 checkpoint on every shared dataset.</p>
+    </div>
+
+    <div class="column">
+      <h2>9 Published KaVa uses a different setting</h2>
+      <p>The KaVa paper did not evaluate GPT-2. It used Qwen 0.5B and LLaMA 1B and 3B instruction models. Training used LoRA, 24 parallel latent states, and three Jacobi iterations. The 0.5B and 1B models were trained for ten epochs with effective batch size 128.</p>
+      <table class="compact">
+        <tr><th>Backbone</th><th>Method</th><th class="num">GSM8K</th><th class="num">Hard</th><th class="num">SVAMP</th></tr>
+        <tr><td>Qwen 0.5B</td><td>CODI</td><td class="num">37.5</td><td class="num">8.1</td><td class="num">47.0</td></tr>
+        <tr><td>Qwen 0.5B</td><td>KaVa</td><td class="num">46.9</td><td class="num">10.8</td><td class="num">50.6</td></tr>
+        <tr><td>LLaMA 1B</td><td>CODI</td><td class="num">53.9</td><td class="num">12.6</td><td class="num">59.0</td></tr>
+        <tr><td>LLaMA 1B</td><td>KaVa</td><td class="num">56.5</td><td class="num">12.7</td><td class="num">58.9</td></tr>
+        <tr><td>LLaMA 3B</td><td>CODI</td><td class="num">61.0</td><td class="num">15.0</td><td class="num">72.4</td></tr>
+        <tr><td>LLaMA 3B</td><td>KaVa</td><td class="num">65.7</td><td class="num">15.2</td><td class="num">72.7</td></tr>
+      </table>
+      <p>The strongest KaVa gain appeared when the training traces used natural language. With Qwen 0.5B, CODI scored 20.2 on GSM8K and KaVa scored 44.4. This result provides a narrow direction for the next stage.</p>
+
+      <h2>10 Why the pilot was undertrained</h2>
+      <table class="compact">
+        <tr><th>Factor</th><th>Pilot</th><th>Published setting</th></tr>
+        <tr><td>Data exposure</td><td>One epoch</td><td>Forty CODI or ten KaVa epochs</td></tr>
+        <tr><td>Effective batch</td><td>Four</td><td>128</td></tr>
+        <tr><td>Backbone</td><td>GPT-2</td><td>GPT-2 CODI or 0.5B to 3B KaVa</td></tr>
+        <tr><td>KaVa states</td><td>Six autoregressive</td><td>Twenty four parallel states</td></tr>
+        <tr><td>KaVa updates</td><td>Autoregressive</td><td>Three Jacobi iterations</td></tr>
+      </table>
+
+      <h3>Compute and time constraints</h3>
+      <p>The pilot was designed around limited Kaggle and Colab sessions. GPU access was not continuous. Each full checkpoint was about 1.4 GB, so saving, moving, and resuming many runs also took time. A paper level CODI GPT-2 run takes about 36 hours on an A100. The published KaVa setting needs larger models, ten passes through 385,620 examples, and several teacher and student forward passes per batch.</p>
+      <p>These limits led to the one epoch design and the smaller backbone. That choice was reasonable for code validation and a first matched experiment. It was not enough for a final accuracy comparison. The report should have made this distinction earlier.</p>
+
+      <h3>Checkpoint availability</h3>
+      <p>Official CODI weights are available for GPT-2 and LLaMA 1B. They should have been used as the first evaluation check. No official KaVa checkpoint or complete training repository was found in the paper resources.</p>
+    </div>
+  </div>
+
+  <div class="footer"><span>CODI vs KaVa revised complete report</span><span>3</span></div>
+</section>
+
+</body>
+</html>

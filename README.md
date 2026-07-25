@@ -268,6 +268,20 @@ validates step 96,405, evaluates without invoking training, keeps only the final
 records a SHA-256 audit, and uploads `jonraza15/codi-seed2-final-step96405` for the normal
 verified Drive import.
 
+## Stage 1 spectral feasibility gate
+
+Before training a TSV-inspired distillation variant, determine whether the trained KaVa
+teacher-minus-student KV residuals contain stable low-rank directions. The workflow reuses
+the exact R-KV alignment from training, treats keys and values independently, and compares
+split-half spectra against cross-example shuffling and energy-matched isotropic noise.
+It accumulates exact covariance sufficient statistics and never updates model weights.
+
+Use [`colab_stage1_kv_subspaces.ipynb`](notebooks/colab_stage1_kv_subspaces.ipynb) for the
+restartable Drive-backed run. Start with 2,000 examples. A later 5,000-example run extends
+the same deterministic sample prefix without repeating completed examples. The complete
+experimental contract, gate, output schema, and direct CLI commands are in
+[`STAGE1_KV_SUBSPACE.md`](docs/STAGE1_KV_SUBSPACE.md).
+
 ## Layout
 
 ```
