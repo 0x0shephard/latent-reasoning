@@ -80,3 +80,19 @@ kv_boundary_selector:
   selector_signal_margin: 0.01
   required_win_fraction: 0.60
   required_structured_controls: [rkv, uniform]
+
+# Inference-only causal follow-up. The rank-four bases are fitted from the completed
+# official-CODI n5000_seed1 cross moments. No model weights are updated. Position 4
+# and position 5 are the primary family; the remaining positions and all-position
+# intervention are secondary diagnostics.
+kv_causal_intervention:
+  calibration_statistics: outputs/official_codi_kv_subspaces/n5000_seed1/statistics.pt
+  rank: 4
+  ridge_ratio: 0.0001
+  random_seed: 20260727
+  positions: [0, 1, 2, 3, 4, 5]
+  primary_positions: [4, 5]
+  include_all: true
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  familywise_alpha: 0.05

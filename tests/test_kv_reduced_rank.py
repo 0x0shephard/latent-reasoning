@@ -6,8 +6,10 @@ import torch
 from src.mech.kv_cross_subspace import create_cross_moment_collection
 from src.mech.kv_reduced_rank import (
     analyze_reduced_rank_prediction,
+    fit_position_conditioned_student_subspaces,
     fit_position_conditioned_teacher_bases,
     random_orthonormal_bases_like,
+    subspace_expected_energy,
 )
 
 
@@ -110,4 +112,36 @@ def test_exported_teacher_and_random_bases_are_groupwise_orthonormal():
     assert torch.equal(
         random,
         random_orthonormal_bases_like(learned, seed=81),
+    )
+
+
+def test_student_predictive_basis_and_energy_contract():
+    collection = _synthetic_collection(paired=True)
+    learned = fit_position_conditioned_student_subspaces(
+        collection["actual"]["key"],
+        rank=2,
+    )
+    basis = learned["basis"]
+    covariance = learned["covariance"]
+    random = random_orthonormal_bases_like(basis, seed=93)
+    learned_energy = subspace_expected_energy(covariance, basis)
+    random_energy = subspace_expected_energy(covariance, random)
+    scale = torch.sqrt(
+        learned_energy / random_energy.clamp_min(1e-12)
+    )
+    matched_random_energy = random_energy * scale.square()
+
+    assert basis.shape == (2, 2, 3, 8, 2)
+    assert learned["mean"].shape == (2, 2, 3, 8)
+    assert covariance.shape == (2, 2, 3, 8, 8)
+    assert torch.allclose(
+        basis.transpose(-1, -2) @ basis,
+        torch.eye(2),
+        atol=1e-5,
+    )
+    assert torch.allclose(
+        matched_random_energy,
+        learned_energy,
+        rtol=1e-5,
+        atol=1e-6,
     )

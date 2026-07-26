@@ -297,8 +297,9 @@ def generate_official_codi(
     max_new_tokens: int,
     batch_size: int,
     device: torch.device,
+    kv_intervention=None,
 ) -> list[str]:
-    """Greedy generation matching the author-released GPT-2 evaluation path."""
+    """Greedy generation matching the released path, with optional causal KV edits."""
     if latent_iterations <= 0:
         raise ValueError("latent_iterations must be positive")
     if max_new_tokens <= 0:
@@ -339,7 +340,7 @@ def generate_official_codi(
         )
         cache = encoded.past_key_values
         latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
-        for _ in range(latent_iterations):
+        for latent_position in range(latent_iterations):
             latent_output = model.codi(
                 inputs_embeds=latent,
                 past_key_values=cache,
@@ -348,6 +349,8 @@ def generate_official_codi(
                 return_dict=True,
             )
             cache = latent_output.past_key_values
+            if kv_intervention is not None:
+                cache = kv_intervention(cache, latent_position)
             latent = model.prj(
                 latent_output.hidden_states[-1][:, -1, :].unsqueeze(1)
             )

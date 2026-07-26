@@ -111,6 +111,15 @@ for the preregistered confirmation. It excludes every example in the original
 uses R-KV for four interior targets. The exact gate and decision rule are in the
 [boundary-selector contract](docs/OFFICIAL_CODI_BOUNDARY_SELECTOR.md).
 
+If the selector gates do not establish a stronger token selector, stop selector design
+and test the learned spectral directions directly with the
+[official CODI KV causal notebook](notebooks/colab_official_codi_kv_causal.ipynb).
+It performs centered rank-four retain and remove interventions on the frozen official
+checkpoint, compares them with energy-matched random directions, and evaluates paired
+full-GSM8K accuracy by latent position. Positions 4 and 5 are the multiplicity-corrected
+primary tests. See the
+[spectral-causality contract](docs/OFFICIAL_CODI_KV_CAUSAL.md).
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face

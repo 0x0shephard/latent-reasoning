@@ -330,6 +330,78 @@ def fit_position_conditioned_teacher_bases(
     return basis
 
 
+def fit_position_conditioned_student_subspaces(
+    accumulator: SplitCrossMomentAccumulator,
+    *,
+    rank: int,
+    ridge_ratio: float = 1e-4,
+) -> dict[str, torch.Tensor]:
+    """Fit raw student-space predictive bases and centering statistics.
+
+    The reduced-rank map predicts teacher KV vectors as ``student @ W``. The leading
+    left singular vectors of that fitted map are the orthonormal directions in raw
+    student KV space that can affect the prediction. Means and covariances are returned
+    so inference interventions can be centered and random controls can match the
+    expected energy of the learned projection.
+    """
+    if rank <= 0 or rank > accumulator.head_dim:
+        raise ValueError("rank must be positive and no larger than head_dim")
+    tensors = tuple(
+        tensor.sum(dim=0)
+        for tensor in _granularity_tensors(accumulator, "position")
+    )
+    shape = (
+        accumulator.layers,
+        accumulator.heads,
+        accumulator.positions,
+    )
+    basis = torch.empty(
+        (*shape, accumulator.head_dim, rank),
+        dtype=torch.float32,
+    )
+    mean = torch.empty((*shape, accumulator.head_dim), dtype=torch.float32)
+    covariance = torch.empty(
+        (*shape, accumulator.head_dim, accumulator.head_dim),
+        dtype=torch.float32,
+    )
+    group_shape = tuple(tensors[0].shape)
+    for coordinates in itertools.product(*(range(size) for size in group_shape)):
+        training = _centered_training_moments(
+            *(tensor[coordinates] for tensor in tensors)
+        )
+        _, student_mean, _, student_cov, cross_cov = training
+        maps, _, _, _ = _fit_reduced_rank_maps(
+            student_cov,
+            cross_cov,
+            ranks=(rank,),
+            ridge_ratio=ridge_ratio,
+        )
+        left, _, _ = torch.linalg.svd(maps[rank], full_matrices=False)
+        basis[coordinates] = left[:, :rank].to(torch.float32)
+        mean[coordinates] = student_mean.to(torch.float32)
+        covariance[coordinates] = student_cov.to(torch.float32)
+    return {
+        "basis": basis,
+        "mean": mean,
+        "covariance": covariance,
+    }
+
+
+def subspace_expected_energy(
+    covariance: torch.Tensor,
+    basis: torch.Tensor,
+) -> torch.Tensor:
+    """Return ``E[||P(x-mean)||²]`` for each group of orthonormal bases."""
+    if covariance.ndim < 2 or covariance.shape[-1] != covariance.shape[-2]:
+        raise ValueError("covariance must end with square feature dimensions")
+    if basis.shape[:-2] != covariance.shape[:-2]:
+        raise ValueError("basis and covariance group dimensions must match")
+    if basis.shape[-2] != covariance.shape[-1]:
+        raise ValueError("basis feature dimension does not match covariance")
+    projected = torch.einsum("...dr,...de,...er->...r", basis, covariance, basis)
+    return projected.sum(dim=-1).clamp_min(0.0)
+
+
 def random_orthonormal_bases_like(
     basis: torch.Tensor, *, seed: int
 ) -> torch.Tensor:
