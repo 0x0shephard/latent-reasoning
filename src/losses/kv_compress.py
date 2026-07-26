@@ -163,11 +163,15 @@ def random_compress(
     slots: int,
     *,
     generator: torch.Generator | None = None,
+    score_dtype: torch.dtype | None = None,
 ) -> CompressedKV:
     """Select random valid locations independently per layer/head (seedable ablation)."""
     importance = keys.new_zeros(keys.shape[:-1])
     _validate(keys, values, importance, mask, slots)
     scores = torch.rand(
-        keys.shape[:-1], device=keys.device, dtype=keys.dtype, generator=generator
+        keys.shape[:-1],
+        device=keys.device,
+        dtype=score_dtype or keys.dtype,
+        generator=generator,
     )
     return _select_from_scores(keys, values, scores, mask, slots)

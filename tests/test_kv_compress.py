@@ -42,3 +42,19 @@ def test_uniform_and_seeded_random_compression_are_deterministic():
     random_a = random_compress(keys, values, mask, slots=3, generator=gen_a)
     random_b = random_compress(keys, values, mask, slots=3, generator=gen_b)
     assert torch.equal(random_a.indices, random_b.indices)
+
+
+def test_random_compression_can_rank_in_float32_under_low_precision_kv():
+    keys, values, _, mask = _fixture()
+    keys = keys.to(torch.bfloat16)
+    values = values.to(torch.bfloat16)
+    result = random_compress(
+        keys,
+        values,
+        mask,
+        slots=3,
+        generator=torch.Generator().manual_seed(19),
+        score_dtype=torch.float32,
+    )
+    assert result.keys.dtype == torch.bfloat16
+    assert result.scores.dtype == torch.float32

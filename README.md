@@ -97,6 +97,13 @@ held-out reduced-rank test. Its exact teacher/student sequence reconstruction, R
 alignment, shuffled null, durable output paths, and interpretation boundary are in the
 [official KV subspace contract](docs/OFFICIAL_CODI_KV_SUBSPACES.md).
 
+After the independent 5,000-example reduced-rank result is recorded, use the
+[official selector-specificity notebook](notebooks/colab_official_codi_selector_specificity.ipynb)
+to compare R-KV with uniform and four seeded-random teacher-trace selectors in one
+matched pass. The primary score subtracts each selector's own shuffled-pairing null
+before comparing selectors. See the
+[selector-specificity contract](docs/OFFICIAL_CODI_SELECTOR_SPECIFICITY.md).
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face
