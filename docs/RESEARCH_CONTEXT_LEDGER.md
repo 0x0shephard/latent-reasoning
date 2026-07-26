@@ -456,6 +456,12 @@ Completed Kaggle causal export:
 /kaggle/working/official_codi_kv_causal_export/
 ```
 
+Completed Kaggle kind-level target-utility export:
+
+```text
+/kaggle/working/official_codi_kv_target_utility_export/
+```
+
 The Kaggle result should be saved as a Kaggle dataset or imported to Drive before its
 notebook version is deleted. Large external statistics and prediction files are not
 necessarily present in the local repository.
@@ -467,6 +473,9 @@ Protocol documents:
 - `docs/OFFICIAL_CODI_SELECTOR_SPECIFICITY.md`
 - `docs/OFFICIAL_CODI_BOUNDARY_SELECTOR.md`
 - `docs/OFFICIAL_CODI_KV_CAUSAL.md`
+- `docs/ANSWER_CAUSAL_SIGNAL_DEFINITION.md`
+- `docs/OFFICIAL_CODI_KV_TARGET_UTILITY.md`
+- `docs/OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md`
 
 Execution notebooks:
 
@@ -477,6 +486,7 @@ Execution notebooks:
 - `notebooks/colab_official_codi_kv_causal.ipynb`
 - `notebooks/kaggle_official_codi_kv_causal.ipynb`
 - `notebooks/kaggle_official_codi_kv_target_utility.ipynb`
+- `notebooks/kaggle_official_codi_kv_gradient_signal.ipynb`
 
 Core code:
 
@@ -488,6 +498,12 @@ Core code:
 - `src/mech/official_codi_kv_intervention.py`
 - `src/eval/official_codi_kv_causal_analysis.py`
 - `src/models/official_codi.py`
+- `scripts/run_official_codi_kv_target_utility.py`
+- `src/mech/kv_target_utility.py`
+- `src/eval/official_codi_kv_target_utility_analysis.py`
+- `scripts/run_official_codi_kv_gradient_signal.py`
+- `src/mech/kv_gradient_signal.py`
+- `src/eval/official_codi_kv_gradient_signal_analysis.py`
 
 ## 19. Instructions for future continuation
 
@@ -559,3 +575,87 @@ branches.
 The implementation does not itself authorize another TSV decomposition or training
 run. Its first required execution is a small GPU smoke test followed by the kind-level
 screen.
+
+## 22. Completed kind-level target-utility result
+
+The official-CODI kind-level screen completed on Kaggle with the preregistered
+configuration:
+
+- checkpoint revision `fd641b3d3edc`
+- 128 discovery and 128 disjoint validation examples
+- 32 paired update batches of size four
+- all 12 layers and all six latent positions pooled within each KV kind
+- L1 KV loss
+- relative total update norm `1e-4`
+- 10,000 paired update-batch bootstrap samples
+
+Results:
+
+| Target | Candidate vs no target | 95% CI | Candidate vs shuffled | 95% CI | Median gradient cosine | Class |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| key | +0.002446 | [-0.000756, +0.005895] | +0.000882 | [-0.000354, +0.002395] | +0.000906 | neutral or inconclusive |
+| value | +0.001083 | [-0.001940, +0.003780] | +0.000647 | [-0.000668, +0.002090] | -0.000361 | neutral or inconclusive |
+
+These are held-out gold-answer NLL changes, not exact-match accuracy points.
+
+Predefined outcome:
+
+> No helpful target family at kind granularity.
+
+Decision:
+
+- do not run position or layer-band refinement under this hierarchy
+- do not begin spectral distillation training
+- do not interpret the small positive key point estimates as established utility
+
+Bounded conclusion:
+
+> At the final official CODI checkpoint, globally pooled key or value trajectory
+> targets did not provide reproducible incremental answer-loss improvement over
+> answer-only updates or shuffled KV targets.
+
+This strengthens the distinction between predictable representational structure and
+useful optimization signal.
+
+## 23. Sparse answer-aligned gradient follow-up
+
+The next fixed question is:
+
+> Does useful KV supervision exist only as a sparse, consistently answer-aligned
+> gradient component that is obscured when complete KV targets are distilled together?
+
+The experiment changes the denoising object from KV activations to the auxiliary
+parameter gradient. On a fresh calibration split it ranks trainable parameter
+coordinates by repeated positive contributions:
+
+```text
+answer gradient * KV gradient
+```
+
+The top five percent with at least 60 percent positive batch consistency form one
+frozen mask. A fresh update split produces full, learned-sparse, random-sparse,
+shuffled-sparse, and complement KV gradient components. A third split measures
+one-step answer loss. Auxiliary-gradient energy and total parameter-update norm are
+matched.
+
+The primary key gate requires the learned sparse component to beat answer-only, full
+KV, random sparse, shuffled sparse, and complement updates with positive paired
+bootstrap lower bounds. The word **only** additionally requires the complement to have
+a non-positive upper confidence bound versus answer-only.
+
+All 256 normalized question groups from the completed kind-level screen are excluded.
+Value results are secondary and cannot change the primary key gate.
+
+Implementation:
+
+- `scripts/run_official_codi_kv_gradient_signal.py`
+- `src/mech/kv_gradient_signal.py`
+- `src/eval/official_codi_kv_gradient_signal_analysis.py`
+- `docs/OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md`
+- `notebooks/kaggle_official_codi_kv_gradient_signal.ipynb`
+
+Status:
+
+> Implemented and locally validated. Kaggle GPU execution is pending.
+
+No exact-match or long-run training claim is authorized by a positive one-step result.

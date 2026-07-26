@@ -118,3 +118,23 @@ kv_target_utility:
   precision: float32
   bootstrap_samples: 10000
   bootstrap_seed: 0
+
+# Follow-up after neither pooled KV kind passed the marginal-utility gate. A frozen
+# coordinate mask is fitted on a fresh calibration split from repeated positive
+# answer-gradient x KV-gradient contributions. The primary key test uses one fixed
+# five-percent mask and disjoint update/validation splits; value results are secondary.
+kv_gradient_signal:
+  examples_per_split: 128
+  batch_size: 4
+  seed: 5
+  primary_kind: key
+  kinds: [key, value]
+  sparsity: 0.05
+  minimum_positive_fraction: 0.60
+  random_mask_seed: 20260729
+  metric: l1
+  kv_weight: 1.0
+  relative_update_norm: 0.0001
+  precision: float32
+  bootstrap_samples: 10000
+  bootstrap_seed: 0

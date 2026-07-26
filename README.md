@@ -154,6 +154,15 @@ It creates the official full-GSM8K gate if no passed summary is attached, runs t
 and kind-level screens, resumes atomic batch outputs, and packages the results for
 Kaggle Save Version.
 
+That kind-level screen completed with neither pooled key nor pooled value targets
+passing the predefined utility gate. The next frozen-checkpoint diagnostic is the
+[sparse answer-aligned KV gradient notebook](notebooks/kaggle_official_codi_kv_gradient_signal.ipynb).
+It requires the completed `kind_seed3` export, excludes its question groups, learns one
+five-percent coordinate mask on a fresh calibration split, and tests it against full,
+random, shuffled, complement, and answer-only updates on disjoint held-out data. The
+complete gate is defined in
+[`OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md`](docs/OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md).
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face
