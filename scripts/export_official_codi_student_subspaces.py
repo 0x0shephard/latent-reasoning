@@ -138,6 +138,7 @@ def export(args: argparse.Namespace) -> dict:
             "checkpoint_revision": metadata.get("checkpoint_revision"),
             "checkpoint_sha256": metadata.get("checkpoint_sha256"),
             "official_source_revision": metadata.get("official_source_revision"),
+            "reproduction_gate": metadata.get("reproduction_gate"),
             "processed_examples": processed,
             "indices_sha256": metadata.get("indices_sha256"),
             "data_seed": metadata.get("seed"),

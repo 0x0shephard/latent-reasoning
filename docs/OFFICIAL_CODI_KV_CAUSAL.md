@@ -148,3 +148,35 @@ improve a newly trained student.
 A negative result means the earlier predictive subspaces should not be treated as
 causal answer-relevant directions under this intervention contract. It does not erase
 the held-out prediction result.
+
+## Kaggle fallback
+
+Use
+[`notebooks/kaggle_official_codi_kv_causal.ipynb`](../notebooks/kaggle_official_codi_kv_causal.ipynb)
+when Colab GPU quota is unavailable.
+
+Create or attach one read-only Kaggle dataset containing:
+
+```text
+official_codi_kv_subspaces/
+  n5000_seed1/
+    statistics.pt
+    collection_manifest.json  optional but recommended
+```
+
+Only `statistics.pt` is required by the notebook. Its payload contains the checkpoint
+identity, exact calibration indices, completed count, cross moments, and passed
+official-reproduction gate. The Kaggle exporter revalidates those fields and produces
+the compact causal artifact. The unchanged full-GSM8K baseline must also pass the
+official accuracy gate before the intervention run can be accepted.
+
+Enable Internet and a T4 or P100 GPU. Use Save Version with outputs enabled so Kaggle
+runs after the browser closes and publishes `/kaggle/working`. The final package is:
+
+```text
+/kaggle/working/official_codi_kv_causal_export/
+```
+
+If a version ends before all 29 conditions finish, attach that saved output as a new
+Kaggle input, set `RESUME_INPUT`, and rerun. Completed condition files are verified and
+skipped.

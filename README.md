@@ -120,6 +120,13 @@ full-GSM8K accuracy by latent position. Positions 4 and 5 are the multiplicity-c
 primary tests. See the
 [spectral-causality contract](docs/OFFICIAL_CODI_KV_CAUSAL.md).
 
+When Colab GPU quota is unavailable, run the equivalent
+[Kaggle causal notebook](notebooks/kaggle_official_codi_kv_causal.ipynb). Attach a
+Kaggle input dataset containing the completed
+`official_codi_kv_subspaces/n5000_seed1/statistics.pt`, enable Internet and a T4 or
+P100 GPU, pin the repository commit, and use Save Version with outputs enabled. Its
+29 conditions are condition-level resumable from a previously saved Kaggle output.
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face

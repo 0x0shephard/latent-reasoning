@@ -116,12 +116,34 @@ def _completed_condition(
     return summary
 
 
+def _resolve_reproduction_gate(
+    reproduction_summary: Path | None,
+    *,
+    source: dict,
+    cfg,
+) -> dict:
+    if reproduction_summary is not None:
+        return _verify_reproduction_gate(reproduction_summary, cfg)
+    embedded_gate = source.get("reproduction_gate")
+    if (
+        not isinstance(embedded_gate, dict)
+        or embedded_gate.get("status") != "passed"
+    ):
+        raise RuntimeError(
+            "no external reproduction summary was supplied and the subspace "
+            "artifact does not contain a passed embedded reproduction gate"
+        )
+    return {
+        **embedded_gate,
+        "path": "embedded in completed calibration statistics",
+    }
+
+
 @torch.inference_mode()
 def run(args: argparse.Namespace) -> dict:
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
     cfg = load_config(args.config)
-    reproduction = _verify_reproduction_gate(args.reproduction_summary, cfg)
     device = select_device(args.device)
     if device.type != "cuda" and not args.allow_cpu:
         raise RuntimeError(
@@ -150,6 +172,11 @@ def run(args: argparse.Namespace) -> dict:
         raise RuntimeError("subspace artifact uses a different checkpoint revision")
     if str(source.get("checkpoint_sha256")) != str(cfg.checkpoint.sha256):
         raise RuntimeError("subspace artifact uses a different checkpoint")
+    reproduction = _resolve_reproduction_gate(
+        args.reproduction_summary,
+        source=source,
+        cfg=cfg,
+    )
     latent_positions = int(cfg.eval.latent_iterations)
     for kind in ("key", "value"):
         basis = artifact["kinds"][kind]["learned_basis"]
@@ -412,7 +439,7 @@ def main() -> int:
         )
     )
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--reproduction-summary", required=True, type=Path)
+    parser.add_argument("--reproduction-summary", type=Path)
     parser.add_argument("--subspace-artifact", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--checkpoint-path", type=Path)
