@@ -6,6 +6,11 @@ granularity**. See [`docs/PLAN.md`](docs/PLAN.md) for the full research plan and
 [`KAVA_vs_CODI_SProj_Research_Proposal.pdf`](docs/KAVA_vs_CODI_SProj_Research_Proposal.pdf) for
 the proposal.
 
+Before extending the study, read the
+[research context ledger](docs/RESEARCH_CONTEXT_LEDGER.md). It records the original
+question, instructor criticism, TSV-inspired pivot, completed gates, negative
+spectral-causality result, and current decision point.
+
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
 
@@ -127,6 +132,27 @@ Kaggle input dataset containing the completed
 pin the repository commit, and use Save Version with outputs enabled. The current
 Kaggle PyTorch 2.10 build does not support the P100 `sm_60` architecture. Its 29
 conditions are condition-level resumable from a previously saved Kaggle output.
+
+That full-GSM8K experiment is complete and did not establish greater causal value for
+the learned rank-four directions than for energy-matched random directions. Before
+implementing another subspace method, use the
+[operational answer-causal signal definition](docs/ANSWER_CAUSAL_SIGNAL_DEFINITION.md).
+It separates structural, predictive, answer-causal, student-accessible, and
+transferable signal. It also defines a marginal distillation-utility screen that asks
+whether each target family's matched update lowers held-out answer loss before another
+spectral method is fitted.
+
+The executable screen is
+[`scripts/run_official_codi_kv_target_utility.py`](scripts/run_official_codi_kv_target_utility.py).
+Begin with key-versus-value granularity and refine only helpful families by latent
+position and layer band. The full update-matching, split, classification, resume, and
+output contract is in
+[`OFFICIAL_CODI_KV_TARGET_UTILITY.md`](docs/OFFICIAL_CODI_KV_TARGET_UTILITY.md).
+Run the complete default screen on a Kaggle T4 with
+[`kaggle_official_codi_kv_target_utility.ipynb`](notebooks/kaggle_official_codi_kv_target_utility.ipynb).
+It creates the official full-GSM8K gate if no passed summary is attached, runs the smoke
+and kind-level screens, resumes atomic batch outputs, and packages the results for
+Kaggle Save Version.
 
 ## Validate and run the Phase 1 baseline
 

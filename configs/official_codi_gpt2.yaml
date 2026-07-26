@@ -96,3 +96,25 @@ kv_causal_intervention:
   bootstrap_samples: 10000
   bootstrap_seed: 0
   familywise_alpha: 0.05
+
+# Short-horizon optimization screen for deciding which KV target families are worth
+# decomposing or distilling. The runner uses stateless equal-L2-norm updates and evaluates
+# on a disjoint normalized-question split. Begin with kind-level key versus value targets;
+# only refine helpful families by position and layer band.
+kv_target_utility:
+  examples_per_split: 128
+  batch_size: 4
+  discovery_seed: 3
+  hierarchy: [kind, position, layer_band]
+  kinds: [key, value]
+  positions: [0, 1, 2, 3, 4, 5]
+  layer_bands:
+    early: [0, 1, 2, 3]
+    middle: [4, 5, 6, 7]
+    late: [8, 9, 10, 11]
+  metric: l1
+  kv_weight: 1.0
+  relative_update_norm: 0.0001
+  precision: float32
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
