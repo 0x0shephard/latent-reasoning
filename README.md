@@ -90,6 +90,13 @@ python -u -m src.eval.official_codi \
 See [the official-checkpoint validation contract](docs/OFFICIAL_CODI_VALIDATION.md) for
 the pinned revisions, expected benchmark counts, output paths, and interpretation rules.
 
+After the complete GSM8K gate passes, use the
+[official CODI KV subspace notebook](notebooks/colab_official_codi_kv_subspaces.ipynb)
+to run the one-batch alignment audit, 2,000-example paired cross-subspace analysis, and
+held-out reduced-rank test. Its exact teacher/student sequence reconstruction, R-KV
+alignment, shuffled null, durable output paths, and interpretation boundary are in the
+[official KV subspace contract](docs/OFFICIAL_CODI_KV_SUBSPACES.md).
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face

@@ -98,6 +98,10 @@ Passing is not a new performance claim. After passing, Stage 1b and Stage 1c mus
 recomputed from this checkpoint. A projector learned from the pilot checkpoint must never
 be reused because its spectral coordinates are checkpoint-specific.
 
+The follow-up workflow is documented in
+[`OFFICIAL_CODI_KV_SUBSPACES.md`](OFFICIAL_CODI_KV_SUBSPACES.md) and implemented in
+[`notebooks/colab_official_codi_kv_subspaces.ipynb`](../notebooks/colab_official_codi_kv_subspaces.ipynb).
+
 The OOD outputs are preserved but are not currently formal reproduction gates. The CODI
 paper lists 500 MultiArith evaluation examples, whereas the released `test.py` loads the
 180-example `ChilleD/MultiArith` test split. That discrepancy must be reconciled before

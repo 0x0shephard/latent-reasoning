@@ -49,3 +49,10 @@ accuracy_gate:
   # persisted for later protocol reconciliation rather than compared as a formal gate.
   published_accuracy:
     gsm8k: 0.437
+
+# Inference-only KV diagnostic. R-KV is used to align teacher trace tokens after the
+# official GSM8K reproduction gate passes; it is not presented as CODI's train objective.
+kv_subspace:
+  data_config: configs/data.yaml
+  latent_positions: 6
+  importance_weight: 0.1
