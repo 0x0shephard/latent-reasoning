@@ -170,8 +170,9 @@ official-reproduction gate. The Kaggle exporter revalidates those fields and pro
 the compact causal artifact. The unchanged full-GSM8K baseline must also pass the
 official accuracy gate before the intervention run can be accepted.
 
-Enable Internet and a T4 or P100 GPU. Use Save Version with outputs enabled so Kaggle
-runs after the browser closes and publishes `/kaggle/working`. The final package is:
+Enable Internet and a T4 GPU. The current Kaggle PyTorch 2.10 build does not support
+the P100 `sm_60` architecture. Use Save Version with outputs enabled so Kaggle runs
+after the browser closes and publishes `/kaggle/working`. The final package is:
 
 ```text
 /kaggle/working/official_codi_kv_causal_export/

@@ -123,9 +123,10 @@ primary tests. See the
 When Colab GPU quota is unavailable, run the equivalent
 [Kaggle causal notebook](notebooks/kaggle_official_codi_kv_causal.ipynb). Attach a
 Kaggle input dataset containing the completed
-`official_codi_kv_subspaces/n5000_seed1/statistics.pt`, enable Internet and a T4 or
-P100 GPU, pin the repository commit, and use Save Version with outputs enabled. Its
-29 conditions are condition-level resumable from a previously saved Kaggle output.
+`official_codi_kv_subspaces/n5000_seed1/statistics.pt`, enable Internet and a T4 GPU,
+pin the repository commit, and use Save Version with outputs enabled. The current
+Kaggle PyTorch 2.10 build does not support the P100 `sm_60` architecture. Its 29
+conditions are condition-level resumable from a previously saved Kaggle output.
 
 ## Validate and run the Phase 1 baseline
 
