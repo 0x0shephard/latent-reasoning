@@ -228,10 +228,9 @@ def run_session(args) -> int:
         _, code = run(cfg)
         if code == EXIT_COMPLETE and args.eval_limit >= 0:
             mirror.update_status("evaluating", training_exit_code=code)
-            evaluate(
-                cfg,
-                limit=None if args.eval_limit == 0 else args.eval_limit,
-            )
+            # ``evaluate`` treats an explicit zero as "no cap". Passing None
+            # would fall back to cfg.eval.limit (200 in the Stage 1d config).
+            evaluate(cfg, limit=args.eval_limit)
         mirror.close()
         mirror.update_status(
             "complete" if code == EXIT_COMPLETE else "resume_needed",

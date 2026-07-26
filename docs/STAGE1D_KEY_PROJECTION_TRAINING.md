@@ -84,6 +84,20 @@ The primary comparisons are
 If the learned projection is competitive in the capped evaluation, evaluate all four
 completed checkpoints on the full datasets before making a performance claim.
 
+For already completed checkpoints, use the evaluation-only path. It does not invoke the
+trainer and therefore cannot change weights, optimizer state, or checkpoint manifests.
+
+```bash
+python -u scripts/eval_key_projection.py \
+  --drive-root /content/drive/MyDrive/CODI_KAVA \
+  --limit 0 \
+  --include-original-codi
+```
+
+An explicit limit of zero evaluates all 1,319 GSM8K, 1,319 GSM-Hard, 300 SVAMP, and 180
+MultiArith examples. Preserve the capped prediction folders before running this command
+because full predictions use the same checkpoint evaluation directories.
+
 ## Interpretation boundary
 
 This is a warm-started target-efficiency ablation, not a replacement reproduction of
