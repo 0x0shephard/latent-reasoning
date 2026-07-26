@@ -117,7 +117,12 @@ def official_codi_student_answer_forward(
     decoded = model.codi(
         inputs_embeds=embeddings,
         past_key_values=cache,
-        use_cache=False,
+        # Transformers 4.52 converts a legacy tuple cache to ``DynamicCache`` only
+        # when cache output is enabled. The author-released CODI path returns legacy
+        # tuples, so disabling cache output here makes GPT-2 call ``get_seq_length``
+        # directly on a tuple. Keep cache output enabled exactly as in official greedy
+        # generation; the returned extension is unused and logits are unchanged.
+        use_cache=True,
         output_hidden_states=False,
         return_dict=True,
     )

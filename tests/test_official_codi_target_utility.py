@@ -30,6 +30,7 @@ class TinyCausalCache(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab, hidden)
         self.output = nn.Linear(hidden, vocab, bias=False)
+        self.use_cache_calls = []
 
     def forward(
         self,
@@ -37,8 +38,10 @@ class TinyCausalCache(nn.Module):
         input_ids=None,
         inputs_embeds=None,
         past_key_values=None,
+        use_cache=None,
         **_,
     ):
+        self.use_cache_calls.append(use_cache)
         hidden = (
             self.embedding(input_ids)
             if inputs_embeds is None
@@ -154,6 +157,8 @@ def test_official_student_scorer_is_differentiable_and_stateless_callable():
     assert output.per_example_loss.shape == (2,)
     assert output.student_keys.shape == (2, 1, 1, 2, 4)
     assert output.student_values.shape == (2, 1, 1, 2, 4)
+    assert model.codi.use_cache_calls
+    assert all(value is True for value in model.codi.use_cache_calls)
     gradients = torch.autograd.grad(
         output.mean_loss,
         tuple(parameter for parameter in scorer.parameters()),
