@@ -580,6 +580,12 @@ def render_reduced_rank_markdown(
     metadata = metadata or {}
     gate = report["gate"]
     rank = str(gate["rank"])
+    checkpoint = metadata.get("checkpoint_step")
+    if checkpoint is None:
+        revision = metadata.get("checkpoint_revision")
+        checkpoint = (
+            f"official release {str(revision)[:8]}" if revision else "unknown"
+        )
     lines = [
         "# Stage 1c cross-validated reduced-rank KV prediction",
         "",
@@ -596,7 +602,7 @@ def render_reduced_rank_markdown(
         "",
         "## Calibration contract",
         "",
-        f"- Checkpoint step: {metadata.get('checkpoint_step', 'unknown')}",
+        f"- Checkpoint: {checkpoint}",
         f"- Processed examples: {metadata.get('processed_examples', 'unknown')}",
         f"- Split halves: {metadata.get('num_splits', 'unknown')}",
         f"- Gate rank: {rank}",

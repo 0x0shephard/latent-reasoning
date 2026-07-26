@@ -724,6 +724,12 @@ def render_cross_subspace_markdown(report: dict, metadata: dict | None = None) -
     metadata = metadata or {}
     gate = report["gate"]
     rank = str(gate["rank"])
+    checkpoint = metadata.get("checkpoint_step")
+    if checkpoint is None:
+        revision = metadata.get("checkpoint_revision")
+        checkpoint = (
+            f"official release {str(revision)[:8]}" if revision else "unknown"
+        )
     lines = [
         "# Stage 1b paired KV cross-subspace analysis",
         "",
@@ -739,7 +745,7 @@ def render_cross_subspace_markdown(report: dict, metadata: dict | None = None) -
         "",
         "## Calibration contract",
         "",
-        f"- Checkpoint step: {metadata.get('checkpoint_step', 'unknown')}",
+        f"- Checkpoint: {checkpoint}",
         f"- Processed examples: {metadata.get('processed_examples', 'unknown')}",
         f"- Split halves: {metadata.get('num_splits', 'unknown')}",
         f"- Shuffle repeats per batch: {metadata.get('shuffle_repeats', 'unknown')}",

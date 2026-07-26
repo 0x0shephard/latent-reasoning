@@ -281,6 +281,8 @@ def _audit_payload(
         batch.teacher_trace_end - batch.teacher_trace_start
     ).detach().cpu()
     representative = compressed.indices[:, 0, 0].detach().cpu()
+    example_position_mask = compressed.mask[:, 0, 0].detach().cpu()
+    valid_positions = example_position_mask.sum(dim=-1)
     return {
         "contract": {
             "teacher_padding": "right",
@@ -308,6 +310,16 @@ def _audit_payload(
         "teacher_selected_shape": list(compressed.keys.shape),
         "student_latent_shape": list(student_keys.shape),
         "selected_valid_fraction": float(compressed.mask.float().mean()),
+        "per_position_valid_fraction": [
+            float(value)
+            for value in example_position_mask.float().mean(dim=0)
+        ],
+        "valid_positions_per_example_first_eight": [
+            int(value) for value in valid_positions[:8]
+        ],
+        "fraction_examples_with_all_six_targets": float(
+            (valid_positions == compressed.keys.shape[3]).float().mean()
+        ),
         "finite_teacher_keys": bool(torch.isfinite(compressed.keys).all()),
         "finite_teacher_values": bool(torch.isfinite(compressed.values).all()),
         "finite_student_keys": bool(torch.isfinite(student_keys).all()),
@@ -505,16 +517,14 @@ def collect(args: argparse.Namespace) -> dict:
                 f"teacher={tuple(compressed.keys.shape)}, "
                 f"student={tuple(student_keys.shape)}, expected={expected}"
             )
-        if not audit_path.is_file():
-            _atomic_json(
-                _audit_payload(
-                    batch=batch,
-                    compressed=compressed,
-                    student_keys=student_keys,
-                    sample_indices=batch_indices,
-                ),
-                audit_path,
-            )
+        audit_payload = _audit_payload(
+            batch=batch,
+            compressed=compressed,
+            student_keys=student_keys,
+            sample_indices=batch_indices,
+        )
+        if args.audit_only or not audit_path.is_file():
+            _atomic_json(audit_payload, audit_path)
             print(f"[audit] wrote {audit_path}")
         if args.audit_only:
             _atomic_json(

@@ -24,12 +24,16 @@ The collector mirrors the released GPT-2 `icot` training path at source revision
   latent states.
 - R-KV scores explicit trace tokens using 10 percent answer attention and 90 percent key
   novelty.
-- Six selected teacher positions are sorted chronologically.
+- Up to six selected teacher positions are sorted chronologically. Missing slots are
+  explicitly masked when the released final-step removal rule leaves a shorter trace.
 - Teacher and student vectors are paired only at the same layer and KV head, with
   selected teacher positions aligned to latent positions zero through five.
 
 The one-batch audit rejects shape mismatches, invalid selections, non-finite tensors, a
-failed public-checkpoint accuracy gate, or checkpoint revision drift.
+complete absence of trace targets, a failed public-checkpoint accuracy gate, or
+checkpoint revision drift. Short official traces are retained with explicit masks rather
+than silently padded as observations. Before SVD, the primary notebook requires at least
+128 valid observations in each split, layer, head, and position.
 
 ## Statistical design
 
