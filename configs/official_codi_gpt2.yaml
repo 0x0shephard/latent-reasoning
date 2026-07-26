@@ -1,0 +1,51 @@
+# Accuracy/reproduction gate for the author-released CODI GPT-2 checkpoint.
+# This run never updates model weights and writes to an isolated output directory.
+run_name: official_codi_gpt2_validation
+seed: 11
+output_dir: outputs/official_codi_gpt2
+data_config: configs/data_official_codi.yaml
+
+official_source:
+  repo: https://github.com/zhenyi4/codi
+  revision: 2c2314662c63e9f482ebc46614ffe9af17a241e5
+
+checkpoint:
+  repo_id: zen-E/CODI-gpt2
+  revision: fd641b3d3edc59e4f534b55588e906588c9e36bb
+  filename: pytorch_model.bin
+  # Hugging Face LFS object id for the released 406,398,137-byte checkpoint.
+  sha256: fd223b14932b8b66605c2a688e7d7193058ff2b40b2c6f6c1547c227d06d8417
+
+model:
+  base_model: gpt2
+  base_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  model_max_length: 512
+  dtype: auto
+  lora_rank: 128
+  lora_alpha: 32
+  lora_dropout: 0.1
+  projection_dim: 768
+  projection_dropout: 0.0
+  projection_layer_norm: true
+
+eval:
+  latent_iterations: 6
+  max_new_tokens: 256
+  batch_size: 128
+  limit: null
+  datasets: [gsm8k, svamp, multiarith, gsm_hard]
+  expected_counts:
+    gsm8k: 1319
+    svamp: 1000
+    multiarith: 180
+    gsm_hard: 1319
+
+accuracy_gate:
+  reference: CODI paper GPT-2 results
+  primary_dataset: gsm8k
+  absolute_tolerance: 0.03
+  # Only GSM8K is used as a formal reproduction gate. The released source and paper
+  # disagree on the MultiArith evaluation count (180 versus 500), so OOD results are
+  # persisted for later protocol reconciliation rather than compared as a formal gate.
+  published_accuracy:
+    gsm8k: 0.437

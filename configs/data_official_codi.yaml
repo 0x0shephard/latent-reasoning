@@ -1,0 +1,39 @@
+# Benchmark protocol used by the public CODI GPT-2 evaluation script at source
+# revision 2c2314662c63e9f482ebc46614ffe9af17a241e5.
+#
+# This is intentionally separate from configs/data.yaml. In particular, the official
+# CODI protocol concatenates the 700-example SVAMP train split and 300-example test split.
+eval:
+  gsm8k:
+    hf_id: json
+    split: test
+    data_file: https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl
+    kind: gsm8k_main
+    source_repo: openai/grade-school-math
+    source_revision: 3101c7d5072418e28b9008a6636bde82a006892c
+
+  svamp:
+    hf_id: json
+    splits: [train, test]
+    data_files:
+      train: https://huggingface.co/datasets/ChilleD/SVAMP/raw/5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef/train.json
+      test: https://huggingface.co/datasets/ChilleD/SVAMP/raw/5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef/test.json
+    kind: svamp
+    source_repo: ChilleD/SVAMP
+    source_revision: 5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef
+
+  multiarith:
+    hf_id: json
+    split: test
+    data_file: https://huggingface.co/datasets/ChilleD/MultiArith/raw/144d44c3fb87c0b9097ac9593c789e716a282e3e/test.json
+    kind: multiarith
+    source_repo: ChilleD/MultiArith
+    source_revision: 144d44c3fb87c0b9097ac9593c789e716a282e3e
+
+  gsm_hard:
+    hf_id: juyoung-trl/gsm-hard
+    split: train
+    kind: gsm_hard
+    revision: fb5ed446258f12c5e46cb27de4a00fd4934ee1b5
+    source_repo: juyoung-trl/gsm-hard
+    source_revision: fb5ed446258f12c5e46cb27de4a00fd4934ee1b5

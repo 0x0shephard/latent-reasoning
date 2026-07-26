@@ -67,3 +67,58 @@ def test_eval_data_file_limits_remote_download_to_requested_split(monkeypatch):
         "verification_mode": "no_checks",
         "revision": "pinned-revision",
     }
+
+
+def test_eval_multiple_splits_use_one_explicit_concat_expression(monkeypatch):
+    import datasets
+
+    observed = {}
+
+    def fake_load_dataset(hf_id, **kwargs):
+        observed["hf_id"] = hf_id
+        observed.update(kwargs)
+        return Dataset.from_dict(
+            {
+                "Body": ["There are 3 apples."],
+                "Question": ["How many apples are there?"],
+                "Answer": ["3"],
+            }
+        )
+
+    monkeypatch.delenv("CODIKAVA_DATA_ROOT", raising=False)
+    monkeypatch.setattr(datasets, "load_dataset", fake_load_dataset)
+    rows = load_eval_set(
+        "svamp",
+        {
+            "hf_id": "json",
+            "splits": ["train", "test"],
+            "data_files": {"train": "train.json", "test": "test.json"},
+            "kind": "svamp",
+        },
+    )
+
+    assert rows == [{"question": "There are 3 apples. How many apples are there?", "gold": 3}]
+    assert observed == {
+        "hf_id": "json",
+        "split": "train+test",
+        "data_files": {"train": "train.json", "test": "test.json"},
+        "verification_mode": "no_checks",
+    }
+
+
+def test_gsm_hard_accepts_official_codi_field_names(monkeypatch):
+    import datasets
+
+    monkeypatch.delenv("CODIKAVA_DATA_ROOT", raising=False)
+    monkeypatch.setattr(
+        datasets,
+        "load_dataset",
+        lambda *args, **kwargs: Dataset.from_dict(
+            {"instruction": ["What is 9+1?"], "response": ["10"]}
+        ),
+    )
+    rows = load_eval_set(
+        "gsm_hard",
+        {"hf_id": "juyoung-trl/gsm-hard", "split": "train", "kind": "gsm_hard"},
+    )
+    assert rows == [{"question": "What is 9+1?", "gold": 10}]

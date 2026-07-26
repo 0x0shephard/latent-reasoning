@@ -69,6 +69,27 @@ Covers deterministic resume, exact numeric scoring, prompt/data adapters, answer
 SFT/latent collation, provenance guards, R-KV selection, stop-gradient trajectory losses,
 both latent mechanisms, determinism, and tiny-model overfitting. CPU-only, no downloads.
 
+## Validate the author-released CODI checkpoint
+
+The local one-epoch CODI/KaVa runs are compute-limited pilots and are far below the
+published CODI accuracy. Before extending the KV-subspace experiments, use the isolated
+[official CODI validation notebook](notebooks/colab_official_codi_validation.ipynb). It
+loads the pinned `zen-E/CODI-gpt2` weights with the released LoRA, projection, latent
+generation, prompt, and benchmark protocol. It never overwrites the pilot outputs.
+
+The first meaningful gate is the complete 1,319-example GSM8K evaluation:
+
+```bash
+python -u -m src.eval.official_codi \
+  --config configs/official_codi_gpt2.yaml \
+  --datasets gsm8k \
+  --limit 0 \
+  --device cuda
+```
+
+See [the official-checkpoint validation contract](docs/OFFICIAL_CODI_VALIDATION.md) for
+the pinned revisions, expected benchmark counts, output paths, and interpretation rules.
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face

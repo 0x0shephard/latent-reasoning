@@ -45,7 +45,9 @@ def _adapt_multiarith(d: dict) -> tuple[str, object]:
 
 
 def _adapt_gsm_hard(d: dict) -> tuple[str, object]:
-    return str(_row(d, "input", "question")), _row(d, "target", "answer")
+    return str(_row(d, "input", "instruction", "question")), _row(
+        d, "target", "response", "answer"
+    )
 
 
 ADAPTERS: dict[str, Callable[[dict], tuple[str, object]]] = {
@@ -112,10 +114,20 @@ def load_eval_set(name: str, spec: dict) -> list[dict]:
     if prepared:
         ds = load_from_disk(str(prepared))
     else:
-        kwargs = {"split": spec.get("split", "test")}
+        configured_splits = spec.get("splits")
+        if configured_splits:
+            if not isinstance(configured_splits, list) or not configured_splits:
+                raise ValueError(f"{name}.splits must be a non-empty list")
+            split = "+".join(str(value) for value in configured_splits)
+        else:
+            split = spec.get("split", "test")
+        kwargs = {"split": split}
         if "config" in spec:
             kwargs["name"] = spec["config"]
-        if spec.get("data_file"):
+        if spec.get("data_files"):
+            kwargs["data_files"] = spec["data_files"]
+            kwargs["verification_mode"] = "no_checks"
+        elif spec.get("data_file"):
             # Some Hub dataset configs enumerate every split before returning the one
             # requested by `split`. Supplying the pinned file explicitly prevents an
             # evaluation-only run from downloading unrelated training artifacts.

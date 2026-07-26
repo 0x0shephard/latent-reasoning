@@ -1,0 +1,10 @@
+-r requirements.txt
+
+# Match the author-released CODI environment for the reproduction gate. Torch is left
+# at the Colab runtime's CUDA-compatible build and is recorded in the run manifest.
+transformers==4.52.4
+datasets==3.6.0
+peft==0.15.2
+accelerate==1.7.0
+huggingface-hub==0.32.4
+safetensors==0.5.3
