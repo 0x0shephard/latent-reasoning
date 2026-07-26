@@ -66,3 +66,17 @@ kv_selector_specificity:
   rank: 4
   selector_signal_margin: 0.01
   required_win_fraction: 0.60
+
+# Confirmatory follow-up after the original R-KV selector-specificity gate. The
+# previous 5,000 sample indices are excluded before the seed-2 permutation.
+kv_boundary_selector:
+  examples: 5000
+  data_seed: 2
+  forced_boundaries: [first_valid, last_valid]
+  interior_selector: rkv
+  interior_slots: 4
+  random_selector_seeds: [101, 211, 307, 401]
+  rank: 4
+  selector_signal_margin: 0.01
+  required_win_fraction: 0.60
+  required_structured_controls: [rkv, uniform]

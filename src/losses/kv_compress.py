@@ -134,6 +134,49 @@ def rkv_compress(
     return _select_from_scores(keys, values, scores, mask, slots)
 
 
+def boundary_rkv_compress(
+    keys: torch.Tensor,
+    values: torch.Tensor,
+    importance: torch.Tensor,
+    mask: torch.Tensor,
+    slots: int,
+    *,
+    importance_weight: float = 0.1,
+) -> CompressedKV:
+    """Keep trace boundaries and use R-KV to choose the interior targets.
+
+    For traces with at least ``slots`` valid tokens, the first and last valid tokens
+    are forced into the selection and R-KV fills the remaining ``slots - 2`` targets.
+    Shorter traces retain every valid token and use the normal padding mask contract.
+    """
+    _validate(keys, values, importance, mask, slots)
+    if slots < 2:
+        raise ValueError("boundary-aware R-KV requires at least two slots")
+    if not 0.0 <= importance_weight <= 1.0:
+        raise ValueError("importance_weight must be in [0, 1]")
+    valid = mask[:, None, None, :]
+    normalized_importance = importance.masked_fill(~valid, 0.0)
+    normalized_importance = normalized_importance / normalized_importance.sum(
+        dim=-1, keepdim=True
+    ).clamp_min(1e-8)
+    redundancy = redundancy_scores(keys, mask)
+    scores = (
+        importance_weight * normalized_importance
+        + (1.0 - importance_weight) * redundancy
+    )
+    # R-KV scores are convex combinations of two distributions and therefore at
+    # most one. Values above one deterministically force the boundaries into top-k.
+    scores = scores.clone()
+    for batch_index, count_tensor in enumerate(mask.sum(dim=-1)):
+        count = int(count_tensor)
+        if count <= 0:
+            continue
+        scores[batch_index, :, :, 0] = 3.0
+        if count > 1:
+            scores[batch_index, :, :, count - 1] = 2.0
+    return _select_from_scores(keys, values, scores, mask, slots)
+
+
 def uniform_compress(
     keys: torch.Tensor,
     values: torch.Tensor,

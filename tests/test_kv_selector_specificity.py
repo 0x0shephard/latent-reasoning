@@ -3,7 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from src.mech.kv_selector_specificity import analyze_selector_specificity
+from scripts.collect_official_codi_selector_subspaces import (
+    _load_exclusion_manifest,
+    _sample_eligible_indices_excluding,
+)
+from src.mech.kv_selector_specificity import (
+    analyze_candidate_selector_specificity,
+    analyze_selector_specificity,
+)
 
 
 def _report(
@@ -115,4 +122,126 @@ def test_selector_analysis_requires_identical_matched_groups():
         analyze_selector_specificity(
             reports,
             random_selectors=("random_seed1",),
+        )
+
+
+def test_candidate_gate_requires_wins_over_every_control():
+    reports = {
+        "boundary_rkv": _report(
+            _two_kind([0.34, 0.35, 0.36, 0.37]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "rkv": _report(
+            _two_kind([0.23, 0.24, 0.25, 0.26]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "uniform": _report(
+            _two_kind([0.22, 0.23, 0.24, 0.25]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "random_seed1": _report(
+            _two_kind([0.17, 0.18, 0.19, 0.20]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "random_seed2": _report(
+            _two_kind([0.18, 0.19, 0.20, 0.21]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+    }
+    result = analyze_candidate_selector_specificity(
+        reports,
+        candidate_selector="boundary_rkv",
+        structured_controls=("rkv", "uniform"),
+        random_selectors=("random_seed1", "random_seed2"),
+    )
+    assert (
+        result["gate"]["status"]
+        == "boundary_rkv_specificity_supported_for_keys_and_values"
+    )
+    assert all(
+        result["by_kind"]["key"]["structured_control_gates"].values()
+    )
+
+
+def test_candidate_gate_fails_when_uniform_matches_candidate():
+    reports = {
+        "boundary_rkv": _report(
+            _two_kind([0.30, 0.31, 0.32, 0.33]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "rkv": _report(
+            _two_kind([0.20, 0.21, 0.22, 0.23]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "uniform": _report(
+            _two_kind([0.30, 0.31, 0.32, 0.33]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+        "random_seed1": _report(
+            _two_kind([0.17, 0.18, 0.19, 0.20]),
+            _two_kind([0.10, 0.10, 0.10, 0.10]),
+        ),
+    }
+    result = analyze_candidate_selector_specificity(
+        reports,
+        candidate_selector="boundary_rkv",
+        structured_controls=("rkv", "uniform"),
+        random_selectors=("random_seed1",),
+    )
+    assert result["gate"]["status"] == "boundary_rkv_specificity_not_supported"
+    assert not result["by_kind"]["value"]["structured_control_gates"]["uniform"]
+
+
+def test_disjoint_sampler_excludes_every_prior_index():
+    dataset = {"answer": [str(index) for index in range(20)]}
+    excluded = {0, 2, 4, 6, 8}
+    selected, eligible = _sample_eligible_indices_excluding(
+        dataset,
+        examples=10,
+        seed=2,
+        excluded=excluded,
+    )
+    assert eligible == 20
+    assert len(selected) == 10
+    assert not set(selected) & excluded
+    assert selected == _sample_eligible_indices_excluding(
+        dataset,
+        examples=10,
+        seed=2,
+        excluded=excluded,
+    )[0]
+
+
+def test_exclusion_manifest_is_checkpoint_bound_and_duplicate_safe(tmp_path):
+    manifest = tmp_path / "collection_manifest.json"
+    manifest.write_text(
+        (
+            '{"state":"complete","checkpoint_revision":"revision-a",'
+            '"sample_indices":[3,1,4],"train_dataset_fingerprint":"data-a"}'
+        ),
+        encoding="utf-8",
+    )
+    excluded, metadata = _load_exclusion_manifest(
+        manifest,
+        checkpoint_revision="revision-a",
+    )
+    assert excluded == {1, 3, 4}
+    assert metadata["count"] == 3
+    with pytest.raises(RuntimeError, match="different checkpoint"):
+        _load_exclusion_manifest(
+            manifest,
+            checkpoint_revision="revision-b",
+        )
+
+    manifest.write_text(
+        (
+            '{"state":"complete","checkpoint_revision":"revision-a",'
+            '"sample_indices":[3,3]}'
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="duplicate"):
+        _load_exclusion_manifest(
+            manifest,
+            checkpoint_revision="revision-a",
         )

@@ -7,8 +7,10 @@ isolates the choice of teacher trace positions from model execution and data ord
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -28,17 +30,18 @@ from scripts.collect_kv_subspaces import (
 from scripts.collect_official_codi_kv_subspaces import (
     _extract_student_latent_kv,
     _extract_teacher_trace,
-    _sample_eligible_indices,
     _verify_reproduction_gate,
 )
 from src.data.datasets import load_train_set
 from src.data.official_codi_training import (
     OFFICIAL_CODI_SOURCE_REVISION,
     collate_official_codi_kv_rows,
+    official_codi_answer_is_eligible,
 )
 from src.eval.official_codi import select_device
 from src.losses.kv_compress import (
     CompressedKV,
+    boundary_rkv_compress,
     random_compress,
     rkv_compress,
     uniform_compress,
@@ -61,10 +64,66 @@ from src.utils.config import load_config
 SELECTOR_COLLECTION_SCHEMA_VERSION = 1
 
 
-def _selector_names(random_seeds: list[int]) -> list[str]:
+def _selector_names(
+    random_seeds: list[int], *, include_boundary_rkv: bool = False
+) -> list[str]:
     if len(set(random_seeds)) != len(random_seeds):
         raise ValueError("random selector seeds must be unique")
-    return ["rkv", "uniform", *[f"random_seed{seed}" for seed in random_seeds]]
+    names = ["rkv", "uniform"]
+    if include_boundary_rkv:
+        names.insert(0, "boundary_rkv")
+    return [*names, *[f"random_seed{seed}" for seed in random_seeds]]
+
+
+def _load_exclusion_manifest(
+    path: Path | None,
+    *,
+    checkpoint_revision: str,
+) -> tuple[set[int], dict | None]:
+    if path is None:
+        return set(), None
+    if not path.is_file():
+        raise FileNotFoundError(f"exclusion manifest does not exist: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("state") != "complete":
+        raise RuntimeError("exclusion collection manifest is not complete")
+    if str(payload.get("checkpoint_revision")) != str(checkpoint_revision):
+        raise RuntimeError("exclusion manifest uses a different checkpoint revision")
+    indices = payload.get("sample_indices")
+    if not isinstance(indices, list) or not indices:
+        raise RuntimeError("exclusion manifest contains no sample indices")
+    parsed = {int(index) for index in indices}
+    if len(parsed) != len(indices):
+        raise RuntimeError("exclusion manifest contains duplicate sample indices")
+    return parsed, {
+        "path": str(path),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "indices_sha256": _indices_fingerprint(sorted(parsed)),
+        "count": len(parsed),
+        "train_dataset_fingerprint": payload.get("train_dataset_fingerprint"),
+    }
+
+
+def _sample_eligible_indices_excluding(
+    dataset,
+    *,
+    examples: int,
+    seed: int,
+    excluded: set[int],
+) -> tuple[list[int], int]:
+    eligible = [
+        index
+        for index, answer in enumerate(dataset["answer"])
+        if official_codi_answer_is_eligible(answer)
+    ]
+    candidates = [index for index in eligible if index not in excluded]
+    if examples > len(candidates):
+        raise ValueError(
+            f"requested {examples} examples from {len(candidates)} eligible rows "
+            "remaining after exclusions"
+        )
+    random.Random(seed).shuffle(candidates)
+    return candidates[:examples], len(eligible)
 
 
 def _identity(metadata: dict) -> dict:
@@ -87,6 +146,9 @@ def _identity(metadata: dict) -> dict:
         "selectors",
         "random_selector_seeds",
         "random_score_dtype",
+        "include_boundary_rkv",
+        "excluded_indices_sha256",
+        "excluded_indices_count",
         "alignment",
     )
     return {key: metadata.get(key) for key in keys}
@@ -185,6 +247,7 @@ def _compress_all(
     importance_weight: float,
     random_seeds: list[int],
     processed: int,
+    include_boundary_rkv: bool,
 ) -> dict[str, CompressedKV]:
     selected = {
         "rkv": rkv_compress(
@@ -202,6 +265,15 @@ def _compress_all(
             positions,
         ),
     }
+    if include_boundary_rkv:
+        selected["boundary_rkv"] = boundary_rkv_compress(
+            teacher_keys,
+            teacher_values,
+            teacher_importance,
+            teacher_trace_mask,
+            positions,
+            importance_weight=importance_weight,
+        )
     for seed in random_seeds:
         selected[f"random_seed{seed}"] = random_compress(
             teacher_keys,
@@ -339,13 +411,30 @@ def collect(args: argparse.Namespace) -> dict:
     calibration = cfg.kv_subspace
     data_cfg = load_config(str(calibration.data_config))
     dataset = load_train_set(data_cfg, "eq_only")
-    indices, eligible_count = _sample_eligible_indices(
+    excluded_indices, exclusion = _load_exclusion_manifest(
+        args.exclude_manifest,
+        checkpoint_revision=str(cfg.checkpoint.revision),
+    )
+    if (
+        exclusion is not None
+        and exclusion["train_dataset_fingerprint"] not in (None, "unavailable")
+        and exclusion["train_dataset_fingerprint"]
+        != getattr(dataset, "_fingerprint", "unavailable")
+    ):
+        raise RuntimeError("exclusion manifest uses a different training dataset")
+    indices, eligible_count = _sample_eligible_indices_excluding(
         dataset,
         examples=args.examples,
         seed=args.seed,
+        excluded=excluded_indices,
     )
+    if set(indices) & excluded_indices:
+        raise RuntimeError("fresh calibration sample overlaps excluded indices")
     random_seeds = list(args.random_selector_seeds)
-    selectors = _selector_names(random_seeds)
+    selectors = _selector_names(
+        random_seeds,
+        include_boundary_rkv=args.include_boundary_rkv,
+    )
 
     layers = int(model.config.num_hidden_layers)
     heads = int(
@@ -396,6 +485,21 @@ def collect(args: argparse.Namespace) -> dict:
         "selectors": selectors,
         "random_selector_seeds": random_seeds,
         "random_score_dtype": "float32",
+        "include_boundary_rkv": bool(args.include_boundary_rkv),
+        "boundary_selector": (
+            "force first and last valid trace tokens; fill four interior slots "
+            "with R-KV"
+            if args.include_boundary_rkv
+            else None
+        ),
+        "exclusion_manifest": exclusion,
+        "excluded_indices_sha256": (
+            None if exclusion is None else exclusion["indices_sha256"]
+        ),
+        "excluded_indices_count": (
+            0 if exclusion is None else exclusion["count"]
+        ),
+        "sample_overlap_with_exclusion": 0,
         "alignment": (
             "same checkpoint, batch, teacher/student forward pass, layer, and head; "
             "selector-specific teacher trace positions sorted chronologically and "
@@ -471,6 +575,7 @@ def collect(args: argparse.Namespace) -> dict:
                 importance_weight=importance_weight,
                 random_seeds=random_seeds,
                 processed=processed,
+                include_boundary_rkv=args.include_boundary_rkv,
             )
             student_keys, student_values = _extract_student_latent_kv(
                 model,
@@ -635,6 +740,22 @@ def main() -> int:
     parser.add_argument("--shuffle-repeats", type=int, default=4)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--random-selector-seeds", type=_parse_seeds, default=[101, 211, 307, 401])
+    parser.add_argument(
+        "--include-boundary-rkv",
+        action="store_true",
+        help=(
+            "Add a hybrid selector that forces the first and last valid trace "
+            "tokens and uses R-KV for the interior slots."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-manifest",
+        type=Path,
+        help=(
+            "Complete prior collection_manifest.json whose sample indices must "
+            "be excluded from this calibration sample."
+        ),
+    )
     parser.add_argument("--save-every", type=int, default=1_000)
     parser.add_argument(
         "--precision",

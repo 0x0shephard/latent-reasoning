@@ -1,9 +1,15 @@
 """R-KV compression shape, mask, ordering, and selection tests."""
 from __future__ import annotations
 
+import pytest
 import torch
 
-from src.losses.kv_compress import random_compress, rkv_compress, uniform_compress
+from src.losses.kv_compress import (
+    boundary_rkv_compress,
+    random_compress,
+    rkv_compress,
+    uniform_compress,
+)
 
 
 def _fixture():
@@ -58,3 +64,28 @@ def test_random_compression_can_rank_in_float32_under_low_precision_kv():
     )
     assert result.keys.dtype == torch.bfloat16
     assert result.scores.dtype == torch.float32
+
+
+def test_boundary_rkv_forces_endpoints_and_uses_rkv_inside():
+    keys, values, importance, mask = _fixture()
+    result = boundary_rkv_compress(
+        keys,
+        values,
+        importance,
+        mask,
+        slots=4,
+        importance_weight=1.0,
+    )
+    first_example = result.indices[0]
+    assert (first_example == 0).any(dim=-1).all()
+    assert (first_example == 4).any(dim=-1).all()
+    assert (first_example == 3).any(dim=-1).all()
+    # The two-token trace retains both valid boundaries and masks the padding.
+    assert result.mask[1].sum().item() == 2 * 2 * 2
+    assert (result.indices[..., 1:] >= result.indices[..., :-1]).all()
+
+
+def test_boundary_rkv_rejects_a_single_slot():
+    keys, values, importance, mask = _fixture()
+    with pytest.raises(ValueError, match="at least two slots"):
+        boundary_rkv_compress(keys, values, importance, mask, slots=1)

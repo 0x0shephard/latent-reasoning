@@ -281,6 +281,244 @@ def analyze_selector_specificity(
     }
 
 
+def analyze_candidate_selector_specificity(
+    selector_reports: Mapping[str, Mapping],
+    *,
+    candidate_selector: str,
+    structured_controls: Sequence[str],
+    random_selectors: Sequence[str],
+    rank: int = 4,
+    signal_margin: float = 0.01,
+    required_win_fraction: float = 0.60,
+) -> dict:
+    """Test one candidate selector against structured and random controls.
+
+    This is used for confirmatory selector development after the original R-KV
+    specificity gate. The candidate must beat every named structured control and the
+    per-group random median under the same within-selector-null-adjusted signal score.
+    """
+    if not structured_controls:
+        raise ValueError("at least one structured control is required")
+    if candidate_selector in structured_controls:
+        raise ValueError("candidate selector cannot also be a structured control")
+    required = {
+        candidate_selector,
+        *structured_controls,
+        *random_selectors,
+    }
+    missing = sorted(required - set(selector_reports))
+    if missing:
+        raise ValueError(f"missing selector reports: {missing}")
+    if not random_selectors:
+        raise ValueError("at least one random selector is required")
+    if signal_margin < 0:
+        raise ValueError("signal_margin must be non-negative")
+    if not 0.0 <= required_win_fraction <= 1.0:
+        raise ValueError("required_win_fraction must be in [0, 1]")
+
+    by_kind = {}
+    for kind in KV_KINDS:
+        group_scores = {
+            selector: _rank_group_scores(
+                selector_reports[selector], kind, rank
+            )
+            for selector in required
+        }
+        reference_keys = set(group_scores[candidate_selector])
+        for selector, scores in group_scores.items():
+            if set(scores) != reference_keys:
+                raise ValueError(
+                    f"selector {selector!r} has a different {kind} group set"
+                )
+
+        selector_summaries = {}
+        for selector, scores in group_scores.items():
+            actual = [float(value["actual_r2"]) for value in scores.values()]
+            shuffled = [
+                float(value["shuffled_r2"]) for value in scores.values()
+            ]
+            signal = [float(value["signal_r2"]) for value in scores.values()]
+            retention = [
+                float(value["rank_full_retention"])
+                for value in scores.values()
+                if value["rank_full_retention"] is not None
+            ]
+            selector_summaries[selector] = {
+                "matched_groups": len(scores),
+                "median_actual_r2": _median(actual),
+                "median_shuffled_r2": _median(shuffled),
+                "median_signal_r2": _median(signal),
+                "fraction_actual_above_shuffle": (
+                    sum(value > 0 for value in signal) / len(signal)
+                    if signal
+                    else None
+                ),
+                "median_rank_full_retention": _median(retention),
+            }
+
+        candidate_vs_controls = {
+            control: _paired_comparison(
+                group_scores[candidate_selector], group_scores[control]
+            )
+            for control in structured_controls
+        }
+        candidate_vs_each_random = {
+            selector: _paired_comparison(
+                group_scores[candidate_selector], group_scores[selector]
+            )
+            for selector in random_selectors
+        }
+        random_median_scores = {}
+        for key in sorted(reference_keys):
+            random_median_scores[key] = {
+                "signal_r2": float(
+                    statistics.median(
+                        [
+                            group_scores[selector][key]["signal_r2"]
+                            for selector in random_selectors
+                        ]
+                    )
+                )
+            }
+        candidate_vs_random_median = _paired_comparison(
+            group_scores[candidate_selector], random_median_scores
+        )
+
+        by_position = []
+        for position in sorted({key[2] for key in reference_keys}):
+            position_keys = [
+                key for key in sorted(reference_keys) if key[2] == position
+            ]
+            candidate_signal = [
+                float(group_scores[candidate_selector][key]["signal_r2"])
+                for key in position_keys
+            ]
+            control_signals = {
+                control: [
+                    float(group_scores[control][key]["signal_r2"])
+                    for key in position_keys
+                ]
+                for control in structured_controls
+            }
+            random_signal = [
+                float(
+                    statistics.median(
+                        [
+                            group_scores[selector][key]["signal_r2"]
+                            for selector in random_selectors
+                        ]
+                    )
+                )
+                for key in position_keys
+            ]
+            by_position.append(
+                {
+                    "position": position,
+                    "groups": len(position_keys),
+                    "candidate_median_signal_r2": _median(candidate_signal),
+                    "control_median_signal_r2": {
+                        control: _median(values)
+                        for control, values in control_signals.items()
+                    },
+                    "candidate_minus_control_median_delta": {
+                        control: _median(
+                            [
+                                left - right
+                                for left, right in zip(
+                                    candidate_signal, values
+                                )
+                            ]
+                        )
+                        for control, values in control_signals.items()
+                    },
+                    "random_median_signal_r2": _median(random_signal),
+                    "candidate_minus_random_median_delta": _median(
+                        [
+                            left - right
+                            for left, right in zip(
+                                candidate_signal, random_signal
+                            )
+                        ]
+                    ),
+                }
+            )
+
+        candidate_gate = bool(
+            selector_reports[candidate_selector]["gate"]["by_kind"][kind][
+                "supported"
+            ]
+        )
+
+        def comparison_passes(comparison: Mapping) -> bool:
+            return bool(
+                comparison["median_signal_r2_delta"] >= signal_margin
+                and comparison["fraction_left_above_right"]
+                >= required_win_fraction
+            )
+
+        structured_passes = {
+            control: comparison_passes(comparison)
+            for control, comparison in candidate_vs_controls.items()
+        }
+        random_passes = comparison_passes(candidate_vs_random_median)
+        supported = bool(
+            candidate_gate
+            and all(structured_passes.values())
+            and random_passes
+        )
+        by_kind[kind] = {
+            "supported": supported,
+            "candidate_within_selector_gate_supported": candidate_gate,
+            "structured_control_gates": structured_passes,
+            "random_median_gate": random_passes,
+            "selectors": selector_summaries,
+            "candidate_vs_structured_controls": candidate_vs_controls,
+            "candidate_vs_random_median": candidate_vs_random_median,
+            "candidate_vs_each_random": candidate_vs_each_random,
+            "by_position": by_position,
+        }
+
+    if all(result["supported"] for result in by_kind.values()):
+        suffix = "supported_for_keys_and_values"
+    elif any(result["supported"] for result in by_kind.values()):
+        suffix = "supported_for_one_kv_kind"
+    else:
+        suffix = "not_supported"
+    status = f"{candidate_selector}_specificity_{suffix}"
+    return {
+        "schema_version": SELECTOR_SPECIFICITY_REPORT_SCHEMA_VERSION,
+        "analysis": "matched_candidate_teacher_trace_selector_specificity",
+        "candidate_selector": candidate_selector,
+        "structured_controls": list(structured_controls),
+        "random_selectors": list(random_selectors),
+        "gate": {
+            "status": status,
+            "rank": rank,
+            "signal_definition": (
+                "heldout rank-r R2(actual pairing) minus heldout rank-r "
+                "R2(within-selector shuffled pairing)"
+            ),
+            "signal_margin": signal_margin,
+            "required_win_fraction": required_win_fraction,
+            "random_aggregation": (
+                "per-group median across seeded random selectors"
+            ),
+            "required_comparisons": [
+                *structured_controls,
+                "random_median",
+            ],
+            "by_kind": by_kind,
+            "interpretation": (
+                "A positive gate supports the candidate selector as a stronger "
+                "source of transferable linear KV signal than every preregistered "
+                "structured control and the random-selector median. It does not "
+                "establish answer causality or an accuracy improvement."
+            ),
+        },
+        "by_kind": by_kind,
+    }
+
+
 def _format(value: float | None) -> str:
     return "n/a" if value is None else f"{float(value):.4f}"
 
@@ -371,6 +609,132 @@ def render_selector_specificity_markdown(
                 f"{_format(row['rkv_median_signal_r2'])} | "
                 f"{_format(row['rkv_minus_uniform_median_delta'])} | "
                 f"{_format(row['rkv_minus_random_median_delta'])} |"
+            )
+    lines.extend(
+        [
+            "",
+            "## Interpretation boundary",
+            "",
+            gate["interpretation"],
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def render_candidate_selector_markdown(
+    report: Mapping, metadata: Mapping | None = None
+) -> str:
+    metadata = metadata or {}
+    gate = report["gate"]
+    candidate = report["candidate_selector"]
+    controls = list(report["structured_controls"])
+    selectors = [
+        candidate,
+        *controls,
+        *report["random_selectors"],
+    ]
+    lines = [
+        "# Official CODI boundary-aware selector confirmation",
+        "",
+        "## Outcome",
+        "",
+        f"Predefined gate: **{gate['status'].replace('_', ' ')}**.",
+        "",
+        (
+            "The candidate always retains the first and last valid teacher trace "
+            "tokens and uses R-KV for four interior targets. Every arm shares the "
+            "same disjoint examples, split assignments, model states, and nulls."
+        ),
+        "",
+        "## Calibration contract",
+        "",
+        f"- Official checkpoint revision: {str(metadata.get('checkpoint_revision', 'unknown'))[:12]}",
+        f"- Processed examples: {metadata.get('processed_examples', 'unknown')}",
+        f"- Excluded prior examples: {metadata.get('excluded_indices_count', 'unknown')}",
+        f"- Verified overlap: {metadata.get('sample_overlap_with_exclusion', 'unknown')}",
+        f"- Split halves: {metadata.get('num_splits', 'unknown')}",
+        f"- Gate rank: {gate['rank']}",
+        f"- Random selector seeds: {metadata.get('random_selector_seeds', 'unknown')}",
+        "",
+        "## Held-out position-conditioned prediction",
+        "",
+        "| Selector | Key actual R² | Key signal R² | Key retention | "
+        "Value actual R² | Value signal R² | Value retention |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for selector in selectors:
+        key = report["by_kind"]["key"]["selectors"][selector]
+        value = report["by_kind"]["value"]["selectors"][selector]
+        lines.append(
+            f"| {selector} | {_format(key['median_actual_r2'])} | "
+            f"{_format(key['median_signal_r2'])} | "
+            f"{_format(key['median_rank_full_retention'])} | "
+            f"{_format(value['median_actual_r2'])} | "
+            f"{_format(value['median_signal_r2'])} | "
+            f"{_format(value['median_rank_full_retention'])} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Candidate specificity gate",
+            "",
+            "| KV kind | Control | Median signal R² delta | "
+            "Candidate win fraction | Comparison gate |",
+            "| --- | --- | ---: | ---: | --- |",
+        ]
+    )
+    for kind in KV_KINDS:
+        result = report["by_kind"][kind]
+        for control in controls:
+            comparison = result["candidate_vs_structured_controls"][control]
+            lines.append(
+                f"| {kind} | {control} | "
+                f"{_format(comparison['median_signal_r2_delta'])} | "
+                f"{_format(comparison['fraction_left_above_right'])} | "
+                f"{'pass' if result['structured_control_gates'][control] else 'fail'} |"
+            )
+        comparison = result["candidate_vs_random_median"]
+        lines.append(
+            f"| {kind} | random median | "
+            f"{_format(comparison['median_signal_r2_delta'])} | "
+            f"{_format(comparison['fraction_left_above_right'])} | "
+            f"{'pass' if result['random_median_gate'] else 'fail'} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Position-resolved candidate advantage",
+            "",
+            (
+                "| KV kind | Position | Candidate signal R² | "
+                + " | ".join(
+                    f"Candidate minus {control}" for control in controls
+                )
+                + " | Candidate minus random median |"
+            ),
+            (
+                "| --- | ---: | ---: | "
+                + " | ".join("---:" for _ in controls)
+                + " | ---: |"
+            ),
+        ]
+    )
+    for kind in KV_KINDS:
+        for row in report["by_kind"][kind]["by_position"]:
+            lines.append(
+                f"| {kind} | {row['position']} | "
+                f"{_format(row['candidate_median_signal_r2'])} | "
+                + " | ".join(
+                    _format(
+                        row["candidate_minus_control_median_delta"][control]
+                    )
+                    for control in controls
+                )
+                + " | "
+                f"{_format(row['candidate_minus_random_median_delta'])} |"
             )
     lines.extend(
         [

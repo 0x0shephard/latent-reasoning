@@ -104,6 +104,13 @@ matched pass. The primary score subtracts each selector's own shuffled-pairing n
 before comparing selectors. See the
 [selector-specificity contract](docs/OFFICIAL_CODI_SELECTOR_SPECIFICITY.md).
 
+If R-KV beats random selection but fails against uniform selection, use the
+[boundary-aware selector notebook](notebooks/colab_official_codi_boundary_selector.ipynb)
+for the preregistered confirmation. It excludes every example in the original
+5,000-example selector collection, forces the first and last teacher trace tokens, and
+uses R-KV for four interior targets. The exact gate and decision rule are in the
+[boundary-selector contract](docs/OFFICIAL_CODI_BOUNDARY_SELECTOR.md).
+
 ## Validate and run the Phase 1 baseline
 
 Before using a GPU, validate the real model/dataset contract (requires the Hugging Face
