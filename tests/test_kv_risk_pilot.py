@@ -3,6 +3,7 @@ import pytest
 from src.eval.kv_risk_pilot import (
     adjacent_containment,
     deterministic_sample,
+    generation_diagnostics,
     retention_from_condition,
     select_screen_dataset,
 )
@@ -74,3 +75,12 @@ def test_nested_failure_containment_is_directional():
     assert result["comparisons"][1]["containment"] == pytest.approx(2 / 3)
     assert result["mean_adjacent_containment"] == pytest.approx(5 / 6)
 
+
+def test_generation_diagnostics_reject_repeated_token_collapse():
+    healthy = generation_diagnostics(list(range(40)))
+    assert healthy["degenerate_generation"] is False
+    collapsed = generation_diagnostics([17] * 80)
+    assert collapsed["degenerate_generation"] is True
+    assert collapsed["maximum_token_run"] == 80
+    assert collapsed["dominant_token_fraction"] == 1.0
+    assert generation_diagnostics([])["degenerate_generation"] is True

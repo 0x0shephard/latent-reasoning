@@ -34,14 +34,18 @@ from src.eval.kv_risk_pilot import (
 from src.utils.config import load_config
 
 
-def _device(value: str) -> torch.device:
+def resolve_device(value: str) -> torch.device:
     if value == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return torch.device(value)
 
 
-def _dtype(value: str, device: torch.device) -> torch.dtype:
+def resolve_dtype(value: str, device: torch.device) -> torch.dtype:
     if device.type != "cuda":
+        return torch.float32
+    if value == "auto":
+        if torch.cuda.is_bf16_supported():
+            return torch.bfloat16
         return torch.float32
     mapping = {
         "float16": torch.float16,
@@ -54,11 +58,12 @@ def _dtype(value: str, device: torch.device) -> torch.dtype:
         raise ValueError(f"unsupported precision: {value}") from exc
 
 
-def _load_model(cfg, device: torch.device):
+def load_model_and_tokenizer(cfg, device: torch.device):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     token = os.environ.get("HF_TOKEN") or None
     model_cfg = cfg.model
+    dtype = resolve_dtype(str(model_cfg.precision), device)
     tokenizer = AutoTokenizer.from_pretrained(
         str(model_cfg.repo_id),
         revision=str(model_cfg.revision),
@@ -70,7 +75,7 @@ def _load_model(cfg, device: torch.device):
         str(model_cfg.repo_id),
         revision=str(model_cfg.revision),
         token=token,
-        torch_dtype=_dtype(str(model_cfg.precision), device),
+        torch_dtype=dtype,
         attn_implementation=str(model_cfg.attention_implementation),
         low_cpu_mem_usage=True,
     )
@@ -80,7 +85,7 @@ def _load_model(cfg, device: torch.device):
         or getattr(tokenizer, "_commit_hash", None)
         or model_cfg.revision
     )
-    return model, tokenizer, resolved_revision
+    return model, tokenizer, resolved_revision, dtype
 
 
 def _manifest_identity(
@@ -88,6 +93,7 @@ def _manifest_identity(
     cfg,
     stage: str,
     model_revision: str,
+    model_dtype: str,
     examples: list[dict],
     conditions: list[str],
     max_new_tokens: int,
@@ -99,6 +105,7 @@ def _manifest_identity(
         "stage": stage,
         "model_repo": str(cfg.model.repo_id),
         "model_revision": model_revision,
+        "model_dtype": model_dtype,
         "config_sha256": sha256_json(cfg.to_dict()),
         "prompt_instruction": str(cfg.prompt.instruction),
         "example_sha256": sha256_json(
@@ -180,6 +187,7 @@ def _run_condition(
         cfg=cfg,
         stage=stage,
         model_revision=model_revision,
+        model_dtype=str(next(model.parameters()).dtype),
         examples=examples,
         conditions=[condition],
         max_new_tokens=max_new_tokens,
@@ -255,6 +263,14 @@ def _run_condition(
             request=request,
             device=device,
         )
+        if bool(result["degenerate_generation"]):
+            raise RuntimeError(
+                "degenerate generation rejected before scientific scoring: "
+                f"condition={condition} example={example['example_id']} "
+                f"unique_tokens={result['unique_generated_tokens']} "
+                f"dominant_fraction={result['dominant_token_fraction']:.4f} "
+                f"maximum_run={result['maximum_token_run']}"
+            )
         correct = score_answer(
             str(result["generation"]),
             str(example["gold"]),
@@ -421,6 +437,7 @@ def _write_stage_manifest(
     model_revision: str,
     conditions: list[str],
     state: str,
+    model_dtype: str,
 ) -> None:
     atomic_json(
         path,
@@ -430,6 +447,7 @@ def _write_stage_manifest(
             "state": state,
             "selected_dataset": selected,
             "model_revision": model_revision,
+            "model_dtype": model_dtype,
             "example_ids": [value["example_id"] for value in examples],
             "conditions": conditions,
             "updated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -450,6 +468,7 @@ def _run_pilot(args, cfg, model, tokenizer, model_revision, device) -> int:
         model_revision=model_revision,
         conditions=conditions,
         state="running",
+        model_dtype=str(next(model.parameters()).dtype),
     )
     started = time.monotonic()
     for condition in conditions:
@@ -480,6 +499,7 @@ def _run_pilot(args, cfg, model, tokenizer, model_revision, device) -> int:
                 model_revision=model_revision,
                 conditions=conditions,
                 state="resume_needed",
+                model_dtype=str(next(model.parameters()).dtype),
             )
             return 42
         if device.type == "cuda":
@@ -492,6 +512,7 @@ def _run_pilot(args, cfg, model, tokenizer, model_revision, device) -> int:
         model_revision=model_revision,
         conditions=conditions,
         state="complete",
+        model_dtype=str(next(model.parameters()).dtype),
     )
     return 0
 
@@ -521,6 +542,7 @@ def _run_stochastic(args, cfg, model, tokenizer, model_revision, device) -> int:
         model_revision=model_revision,
         conditions=conditions,
         state="running",
+        model_dtype=str(next(model.parameters()).dtype),
     )
     started = time.monotonic()
     for seed in seeds:
@@ -552,6 +574,7 @@ def _run_stochastic(args, cfg, model, tokenizer, model_revision, device) -> int:
                     model_revision=model_revision,
                     conditions=conditions,
                     state="resume_needed",
+                    model_dtype=str(next(model.parameters()).dtype),
                 )
                 return 42
             if device.type == "cuda":
@@ -564,6 +587,7 @@ def _run_stochastic(args, cfg, model, tokenizer, model_revision, device) -> int:
         model_revision=model_revision,
         conditions=conditions,
         state="complete",
+        model_dtype=str(next(model.parameters()).dtype),
     )
     return 0
 
@@ -596,7 +620,7 @@ def main() -> int:
     cfg = load_config(args.config)
     args.output_dir = args.output_dir.resolve()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    device = _device(args.device)
+    device = resolve_device(args.device)
     if device.type != "cuda" and not args.allow_cpu:
         raise RuntimeError("enable a Kaggle GPU or pass --allow-cpu for a tiny smoke test")
     if args.max_new_tokens is None:
@@ -604,10 +628,10 @@ def main() -> int:
     torch.manual_seed(int(cfg.pilot.seed))
     if device.type == "cuda":
         torch.cuda.manual_seed_all(int(cfg.pilot.seed))
-    model, tokenizer, model_revision = _load_model(cfg, device)
+    model, tokenizer, model_revision, dtype = load_model_and_tokenizer(cfg, device)
     print(
         f"[setup] model={cfg.model.repo_id} revision={model_revision} "
-        f"device={device}",
+        f"device={device} dtype={dtype}",
         flush=True,
     )
     if args.stage == "screen":

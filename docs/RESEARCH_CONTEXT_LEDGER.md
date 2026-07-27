@@ -742,3 +742,42 @@ Decision:
 This result does not rule out nonlinear, example-conditional, higher-rank, or
 training-stage-dependent KV utility. Testing any of those would require a new
 question, fresh data, and a separately preregistered gate.
+
+## 25. Pivot to predictable KV-compression risk
+
+Because paper-level KaVa weights and a complete reproduction path are not publicly
+available, the project stepped back from method comparison and adopted a cheaper
+inference-only question:
+
+> Is KV-compression failure a stable, problem-specific property that could be
+> predicted, or is it mainly sampling noise and ordinary problem difficulty?
+
+The preregistered pilot uses DeepSeek-R1-Distill-Qwen-1.5B, first selects a dataset
+whose full-cache accuracy is between 60 and 85 percent, and then compares full-cache
+decoding with 90, 50, 25, and 10 percent generated-token cache retention on 150
+disjoint questions. Its decisive viability test is whether compression failures are
+nested as retention tightens and exceed the stochastic full-cache noise floor.
+
+The first Kaggle execution is invalid and must not be interpreted. On a T4 it forced
+the BF16-origin model into float16. All screened answers collapsed into one repeated
+punctuation token until the 2,048-token limit, and recorded entropy was non-finite.
+The resulting zero accuracies therefore failed numerical validation before they
+could test the research hypothesis.
+
+The repaired workflow now requires, before any scientific screen:
+
+- automatic BF16 on supported GPUs and float32 on T4-class GPUs
+- finite logits and predictive entropy
+- exact greedy-token parity between the custom full-cache decoder and
+  `transformers.generate`
+- rejection of repeated-token collapse
+- a fixed eight-example GSM8K parsing and accuracy gate
+- a finite, non-degenerate compressed-cache smoke decode
+
+Status:
+
+> Repair implemented and statically validated. The mandatory Kaggle GPU preflight
+> and the scientific rerun remain to be executed.
+
+The earlier failed Kaggle dataset must not be attached as a resume source. Only
+outputs carrying the repaired dtype and schema contracts may be resumed.

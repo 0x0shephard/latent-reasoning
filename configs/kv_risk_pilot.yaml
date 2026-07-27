@@ -3,7 +3,10 @@ schema_version: 1
 model:
   repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
   revision: 73d63fa6f97d4285b49bdbedf6a161ceba1e55ad
-  precision: float16
+  # BF16 is used only when the accelerator supports it. T4-class GPUs fall
+  # back to float32 because this BF16-origin checkpoint produced non-finite
+  # logits when it was forced into float16.
+  precision: auto
   attention_implementation: eager
   max_new_tokens: 2048
 

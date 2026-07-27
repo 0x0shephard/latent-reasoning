@@ -15,6 +15,7 @@ predicted, or is it mainly sampling noise and ordinary problem difficulty?
 
 - Model: `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`
 - Model and dataset revisions: pinned in `configs/kv_risk_pilot.yaml`
+- Precision: automatic BF16 on supported accelerators and float32 otherwise
 - Candidate datasets: GSM8K, MATH-500, and AIME 2024
 - Primary decoding: greedy
 - Primary pilot size: 150 questions
@@ -28,6 +29,24 @@ predicted, or is it mainly sampling noise and ordinary problem difficulty?
 
 The simple compressor is intentional. This pilot tests whether meaningful risk
 variation exists, not whether a new eviction policy beats the literature.
+
+## Mandatory numerical preflight
+
+The scientific screen cannot start until all of these checks pass:
+
+1. every evaluated logit and early-token entropy value is finite;
+2. the custom full-cache decoder exactly matches `transformers.generate` token
+   for token on two fixed GSM8K prompts;
+3. generations do not collapse into a repeated-token loop;
+4. at least six of eight fixed GSM8K answers are parseable and at least two are
+   correct; and
+5. a short 50%-retention decode remains finite and non-degenerate.
+
+The first exported run is invalid as scientific evidence. It forced the
+BF16-origin checkpoint into float16 on a T4, produced non-finite entropy, and
+generated one repeated punctuation token until the length limit. Its
+zero-accuracy dataset screen therefore did not measure model ability or
+compression risk. Output from that run must not be resumed.
 
 ## Dataset selection
 
@@ -93,8 +112,10 @@ serving peak-memory savings.
 ## Kaggle execution
 
 Run `notebooks/kaggle_kv_compression_risk_pilot.ipynb` with a T4 or newer GPU
-and Internet enabled. Use Save Version and Run All so the browser can be
-closed. The runner writes one atomic JSON record per condition and question.
-If the wall-clock guard returns exit code 42, save the exported output as a
-Kaggle dataset, attach it to a new run, and execute the notebook again. Verified
-records are skipped, while incompatible resumes are rejected by identity hash.
+and Internet enabled. A T4 uses float32, while an A100 or another accelerator
+with native BF16 support uses bfloat16. Use Save Version and Run All so the
+browser can be closed. The runner writes one atomic JSON record per condition
+and question. If the wall-clock guard returns exit code 42, save the repaired
+exported output as a Kaggle dataset, attach it to a new run, and execute the
+notebook again. Verified records are skipped, while legacy or incompatible
+resumes are rejected by the dtype and identity contracts.

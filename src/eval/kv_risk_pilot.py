@@ -21,7 +21,7 @@ from src.mech.kv_risk_cache import (
 )
 
 
-PILOT_SCHEMA_VERSION = 1
+PILOT_SCHEMA_VERSION = 2
 RETENTION_PATTERN = re.compile(r"^retain_(0(?:\.\d+)?|1(?:\.0+)?)$")
 
 
@@ -189,9 +189,61 @@ def build_prompt(tokenizer, question: str, instruction: str) -> dict[str, torch.
 
 
 def predictive_entropy(logits: torch.Tensor) -> float:
+    assert_finite_logits(logits, context="predictive entropy")
     probabilities = torch.softmax(logits.float(), dim=-1)
     log_probabilities = torch.log_softmax(logits.float(), dim=-1)
-    return float((-(probabilities * log_probabilities).sum(dim=-1)).item())
+    entropy = float((-(probabilities * log_probabilities).sum(dim=-1)).item())
+    if not math.isfinite(entropy):
+        raise FloatingPointError(f"non-finite predictive entropy: {entropy}")
+    return entropy
+
+
+def assert_finite_logits(logits: torch.Tensor, *, context: str) -> None:
+    finite = torch.isfinite(logits)
+    if bool(finite.all()):
+        return
+    nonfinite = int((~finite).sum().item())
+    total = int(logits.numel())
+    raise FloatingPointError(
+        f"non-finite logits during {context}: {nonfinite}/{total} values"
+    )
+
+
+def generation_diagnostics(token_ids: list[int]) -> dict:
+    if not token_ids:
+        return {
+            "unique_generated_tokens": 0,
+            "dominant_token_fraction": 0.0,
+            "maximum_token_run": 0,
+            "degenerate_generation": True,
+        }
+    counts: dict[int, int] = {}
+    maximum_run = 1
+    current_run = 1
+    previous = token_ids[0]
+    for token_id in token_ids:
+        counts[token_id] = counts.get(token_id, 0) + 1
+    for token_id in token_ids[1:]:
+        if token_id == previous:
+            current_run += 1
+            maximum_run = max(maximum_run, current_run)
+        else:
+            current_run = 1
+            previous = token_id
+    dominant_fraction = max(counts.values()) / len(token_ids)
+    degenerate = (
+        len(token_ids) >= 32
+        and (
+            dominant_fraction >= 0.95
+            or maximum_run >= 64
+        )
+    )
+    return {
+        "unique_generated_tokens": len(counts),
+        "dominant_token_fraction": float(dominant_fraction),
+        "maximum_token_run": int(maximum_run),
+        "degenerate_generation": bool(degenerate),
+    }
 
 
 def sample_next_token(
@@ -201,6 +253,7 @@ def sample_next_token(
     top_p: float,
     generator: torch.Generator | None,
 ) -> int:
+    assert_finite_logits(logits, context="token selection")
     if temperature <= 0:
         return int(torch.argmax(logits, dim=-1).item())
     scores = logits.float() / temperature
@@ -360,10 +413,12 @@ def generate_one(
         logits = decoded.logits[:, -1, :]
 
     generation = tokenizer.decode(generated, skip_special_tokens=True)
+    diagnostics = generation_diagnostics(generated)
     generated_steps = max(1, uncompressed_generated_token_steps)
     total_steps = max(1, uncompressed_total_token_steps)
     return {
         "generation": generation,
+        "generated_token_ids": generated,
         "generated_tokens": len(generated),
         "prompt_tokens": prompt_length,
         "finish_reason": finish_reason,
@@ -380,6 +435,7 @@ def generate_one(
         "uncompressed_total_token_steps": uncompressed_total_token_steps,
         "realized_total_retention": retained_total_token_steps / total_steps,
         "max_retained_total_tokens": max_retained_total,
+        **diagnostics,
     }
 
 
@@ -517,4 +573,3 @@ def adjacent_containment(
             None if not defined else float(np.mean(defined))
         ),
     }
-
