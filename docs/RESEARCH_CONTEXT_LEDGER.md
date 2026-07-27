@@ -776,8 +776,61 @@ The repaired workflow now requires, before any scientific screen:
 
 Status:
 
-> Repair implemented and statically validated. The mandatory Kaggle GPU preflight
-> and the scientific rerun remain to be executed.
+> The third repaired Kaggle screen is numerically valid and complete. No candidate
+> passed all preregistered dataset-selection criteria, so the compression sweep has
+> not run.
 
-The earlier failed Kaggle dataset must not be attached as a resume source. Only
-outputs carrying the repaired dtype and schema contracts may be resumed.
+The valid third-run screen used float32 on a T4. Exact decoder parity, finite logits
+and entropy, functional GSM8K performance, and non-degenerate compressed decoding
+all passed. All 158 screen records were complete and finite.
+
+Observed screen:
+
+| Dataset | Correct | Accuracy | Median generated tokens | Length-limited |
+| --- | ---: | ---: | ---: | ---: |
+| GSM8K | 50 / 64 | 78.125% | 405.0 | 0 / 64 |
+| MATH-500 | 32 / 64 | 50.000% | 1,948.5 | 31 / 64 |
+| AIME 2024 | 1 / 30 | 3.333% | 2,048.0 | 30 / 30 |
+
+GSM8K failed only the minimum 512-token reasoning-length rule. MATH-500 failed the
+60% minimum accuracy rule but was visibly constrained by the 2,048-token ceiling.
+AIME failed accuracy and cannot leave 150 fresh problems. The primary research
+question remains unanswered because there is not yet an eligible dataset on which
+to measure compression-risk structure.
+
+The earlier float16 and bfloat16 T4 runs remain diagnostic failures and must not be
+used as scientific evidence or resume sources.
+
+## 26. MATH-500 generation-budget diagnostic
+
+Before moving to a larger model, the next bounded question is:
+
+> Did MATH-500 fail the dataset screen because the 2,048-token generation ceiling
+> truncated the 1.5B model's reasoning?
+
+The paired diagnostic holds the model, revision, float32 precision, prompt, greedy
+decoding, grader, and exact 64 questions fixed. Only `max_new_tokens` changes from
+2,048 to 4,096. It records the paired accuracy change, answer flips, recovery among
+previously length-limited examples, and remaining length truncation.
+
+The original eligibility gate is not relaxed. The candidate cap must recover:
+
+- 60% to 85% accuracy
+- at least 512 median generated tokens
+- at least 150 disjoint examples remaining
+
+If the paired diagnostic passes, a fresh disjoint 64-question MATH-500 confirmation
+must independently pass the same rule before the 150-question compression sweep is
+authorized. If the paired diagnostic fails, no confirmation or compression run is
+started.
+
+Implementation:
+
+- `configs/kv_risk_math_token_budget.yaml`
+- `scripts/run_kv_risk_math_token_budget.py`
+- `notebooks/kaggle_kv_risk_math_token_budget.ipynb`
+- `docs/KV_RISK_MATH_TOKEN_BUDGET.md`
+
+Status:
+
+> Implemented and statically validated. Kaggle execution remains.

@@ -6,6 +6,17 @@ This is a cheap, inference-only gate. It replaces the proposal-first plan.
 No risk predictor or large downstream study should be built unless this pilot
 passes its preregistered checks.
 
+The third repaired screen is numerically valid and complete, but no candidate
+dataset passed every eligibility rule. GSM8K reached 78.125% accuracy but had a
+405-token median trace. MATH-500 reached 50.0% accuracy and 31 of 64 generations
+hit the 2,048-token limit. AIME 2024 reached 3.333% and cannot supply 150 fresh
+questions. The primary compression sweep has therefore not run.
+
+The bounded follow-up is documented in
+`docs/KV_RISK_MATH_TOKEN_BUDGET.md`. It tests the same 64 MATH-500 questions
+at a 4,096-token ceiling, followed by a fresh disjoint confirmation only if the
+unchanged dataset gate is recovered.
+
 ## Question
 
 Is KV-compression failure a stable, problem-specific property that could be
