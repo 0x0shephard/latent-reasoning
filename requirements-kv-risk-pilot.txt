@@ -1,0 +1,12 @@
+-r requirements.txt
+
+# Pin the cache API used by the custom one-token decoder.
+transformers==4.52.4
+datasets==3.6.0
+
+# Symbolic grading for MATH-500 and AIME.
+math-verify[antlr4_13_2]>=0.7,<1
+
+# Preregistered difficulty/uncertainty baselines and figures.
+scikit-learn>=1.4,<2
+matplotlib>=3.8,<4

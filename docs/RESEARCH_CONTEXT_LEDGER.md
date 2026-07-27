@@ -656,6 +656,89 @@ Implementation:
 
 Status:
 
-> Implemented and locally validated. Kaggle GPU execution is pending.
+> Completed on Kaggle. The primary sparse component was not supported.
 
 No exact-match or long-run training claim is authorized by a positive one-step result.
+
+## 24. Completed sparse answer-aligned gradient result
+
+The fresh three-split experiment completed with:
+
+- 128 calibration examples
+- 128 update examples
+- 128 held-out validation examples
+- 32 update batches of size four
+- zero normalized-question overlap among the three splits
+- exclusion of all 256 question groups from the earlier kind-level screen
+- five-percent learned coordinate mask
+- cardinality-matched random mask
+- matched auxiliary-gradient energy
+- matched total parameter-update norm
+- 10,000 paired update-batch bootstrap samples
+
+Primary key results:
+
+| Comparison | Mean advantage | 95% CI |
+| --- | ---: | ---: |
+| sparse vs no target | +0.000949 | [-0.000129, +0.002545] |
+| sparse vs full KV | -0.001161 | [-0.003045, +0.000093] |
+| sparse vs random sparse | +0.001914 | [-0.000228, +0.005461] |
+| sparse vs shuffled sparse | +0.001798 | [+0.000089, +0.005044] |
+| sparse vs complement | -0.000302 | [-0.000871, +0.000179] |
+| full KV vs no target | +0.002110 | [-0.000109, +0.005113] |
+| complement vs no target | +0.001250 | [-0.000109, +0.003128] |
+
+Secondary value results:
+
+| Comparison | Mean advantage | 95% CI |
+| --- | ---: | ---: |
+| sparse vs no target | +0.000631 | [-0.000122, +0.001712] |
+| sparse vs full KV | -0.000888 | [-0.002356, +0.000050] |
+| sparse vs random sparse | +0.001760 | [-0.000035, +0.005149] |
+| sparse vs shuffled sparse | +0.001850 | [+0.000052, +0.005227] |
+| sparse vs complement | -0.000234 | [-0.000667, +0.000058] |
+| full KV vs no target | +0.001519 | [-0.000129, +0.004137] |
+| complement vs no target | +0.000865 | [-0.000108, +0.002118] |
+
+Gradient diagnostics:
+
+| KV kind | Median sparse cosine | Positive batch fraction |
+| --- | ---: | ---: |
+| key | +0.018981 | 0.7812 |
+| value | +0.039987 | 0.7812 |
+
+Predefined outcome:
+
+> Primary sparse component not supported.
+
+The sparse mask beat the shuffled-pairing sparse condition for both keys and values.
+This supports a narrow observation that the mask retained some example-pairing
+information. It does not support useful sparse optimization signal because:
+
+- sparse did not reproducibly beat answer-only
+- sparse did not beat complete KV gradients
+- sparse did not beat cardinality-matched random coordinates
+- sparse did not beat the coordinate complement
+- the complement was not demonstrably unhelpful
+
+The positive gradient cosines therefore did not translate into the required held-out
+utility pattern.
+
+Bounded conclusion:
+
+> At the final official CODI checkpoint, a fixed five-percent coordinate mask selected
+> by calibration-batch answer-gradient alignment did not isolate a uniquely useful KV
+> supervision component. It isolated pairing-sensitive structure, but not a component
+> that improved held-out answer loss beyond the full, random, complement, and
+> answer-only controls.
+
+Decision:
+
+- close this coordinatewise answer-alignment definition
+- do not tune sparsity or consistency thresholds on these results
+- do not begin distillation training with this mask
+- preserve the result as a rigorous negative gate
+
+This result does not rule out nonlinear, example-conditional, higher-rank, or
+training-stage-dependent KV utility. Testing any of those would require a new
+question, fresh data, and a separately preregistered gate.

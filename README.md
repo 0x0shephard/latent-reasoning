@@ -155,12 +155,12 @@ and kind-level screens, resumes atomic batch outputs, and packages the results f
 Kaggle Save Version.
 
 That kind-level screen completed with neither pooled key nor pooled value targets
-passing the predefined utility gate. The next frozen-checkpoint diagnostic is the
-[sparse answer-aligned KV gradient notebook](notebooks/kaggle_official_codi_kv_gradient_signal.ipynb).
-It requires the completed `kind_seed3` export, excludes its question groups, learns one
-five-percent coordinate mask on a fresh calibration split, and tests it against full,
-random, shuffled, complement, and answer-only updates on disjoint held-out data. The
-complete gate is defined in
+passing the predefined utility gate. The subsequent
+[sparse answer-aligned KV gradient notebook](notebooks/kaggle_official_codi_kv_gradient_signal.ipynb)
+also completed with a negative primary gate. Its five-percent mask retained
+pairing-specific information relative to shuffled targets, but did not reproducibly
+beat answer-only, full KV, random sparse, or complement updates. The complete protocol
+and interpretation boundary are defined in
 [`OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md`](docs/OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md).
 
 ## Validate and run the Phase 1 baseline
