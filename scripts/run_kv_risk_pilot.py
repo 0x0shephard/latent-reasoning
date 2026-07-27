@@ -44,7 +44,8 @@ def resolve_dtype(value: str, device: torch.device) -> torch.dtype:
     if device.type != "cuda":
         return torch.float32
     if value == "auto":
-        if torch.cuda.is_bf16_supported():
+        major, _ = torch.cuda.get_device_capability(device)
+        if major >= 8 and torch.cuda.is_bf16_supported():
             return torch.bfloat16
         return torch.float32
     mapping = {

@@ -15,7 +15,8 @@ predicted, or is it mainly sampling noise and ordinary problem difficulty?
 
 - Model: `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`
 - Model and dataset revisions: pinned in `configs/kv_risk_pilot.yaml`
-- Precision: automatic BF16 on supported accelerators and float32 otherwise
+- Precision: automatic BF16 only on compute-capability 8.0+ accelerators and
+  float32 otherwise
 - Candidate datasets: GSM8K, MATH-500, and AIME 2024
 - Primary decoding: greedy
 - Primary pilot size: 150 questions
@@ -112,10 +113,11 @@ serving peak-memory savings.
 ## Kaggle execution
 
 Run `notebooks/kaggle_kv_compression_risk_pilot.ipynb` with a T4 or newer GPU
-and Internet enabled. A T4 uses float32, while an A100 or another accelerator
-with native BF16 support uses bfloat16. Use Save Version and Run All so the
-browser can be closed. The runner writes one atomic JSON record per condition
-and question. If the wall-clock guard returns exit code 42, save the repaired
-exported output as a Kaggle dataset, attach it to a new run, and execute the
-notebook again. Verified records are skipped, while legacy or incompatible
-resumes are rejected by the dtype and identity contracts.
+and Internet enabled. A T4 uses float32, while an A100 or another
+compute-capability 8.0+ accelerator with native BF16 support uses bfloat16. Use
+Save Version and Run All so the browser can be closed. The runner writes one
+atomic JSON record per condition and question. If the wall-clock guard returns
+exit code 42, save the repaired exported output as a Kaggle dataset, attach it
+to a new run, and execute the notebook again. Verified records are skipped,
+while legacy or incompatible resumes are rejected by the dtype and identity
+contracts.

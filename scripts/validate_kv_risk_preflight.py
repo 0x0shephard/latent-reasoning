@@ -253,6 +253,9 @@ def _run(args: argparse.Namespace) -> dict:
         "configured_precision": str(cfg.model.precision),
         "resolved_dtype": str(dtype),
         "gpu": torch.cuda.get_device_name(0),
+        "gpu_compute_capability": list(
+            torch.cuda.get_device_capability(device)
+        ),
         "parity": {
             "examples": len(parity),
             "tokens_per_example": args.parity_tokens,

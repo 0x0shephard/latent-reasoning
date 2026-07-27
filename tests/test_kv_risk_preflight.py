@@ -20,7 +20,22 @@ def test_cpu_auto_precision_is_float32():
     assert resolve_dtype("float16", torch.device("cpu")) == torch.float32
 
 
-def test_cuda_auto_precision_uses_bfloat16_only_when_supported(monkeypatch):
+def test_t4_auto_precision_is_float32_even_if_torch_reports_bf16(monkeypatch):
+    monkeypatch.setattr(
+        torch.cuda,
+        "get_device_capability",
+        lambda _device: (7, 5),
+    )
+    monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: True)
+    assert resolve_dtype("auto", torch.device("cuda")) == torch.float32
+
+
+def test_ampere_auto_precision_uses_bfloat16_only_when_supported(monkeypatch):
+    monkeypatch.setattr(
+        torch.cuda,
+        "get_device_capability",
+        lambda _device: (8, 0),
+    )
     monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: False)
     assert resolve_dtype("auto", torch.device("cuda")) == torch.float32
     monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: True)
