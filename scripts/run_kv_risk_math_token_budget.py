@@ -34,13 +34,13 @@ EXPERIMENT_SCHEMA_VERSION = 1
 
 
 def find_reference_pilot_root(source: Path) -> Path:
-    """Locate one completed third-run pilot tree below an attached dataset."""
+    """Locate one scientifically unique completed third-run pilot tree."""
     source = source.resolve()
     direct = source / "screen/math500/full/run_manifest.json"
     candidates = [direct] if direct.is_file() else list(
         source.rglob("kv_compression_risk_pilot/screen/math500/full/run_manifest.json")
     )
-    roots = sorted(
+    discovered = sorted(
         {
             path.parents[3].resolve()
             for path in candidates
@@ -48,12 +48,63 @@ def find_reference_pilot_root(source: Path) -> Path:
         },
         key=str,
     )
-    if len(roots) != 1:
-        raise RuntimeError(
-            "expected exactly one valid kv_compression_risk_pilot reference "
-            f"below {source}, found {roots}"
+    valid: list[tuple[Path, tuple]] = []
+    for root in discovered:
+        manifest_path = root / "screen/math500/full/run_manifest.json"
+        summary_path = root / "screen/math500/full/summary.json"
+        selection_path = root / "screen/dataset_selection.json"
+        predictions_path = root / "screen/math500/full/predictions.jsonl"
+        records_dir = root / "screen/math500/full/records"
+        if not all(
+            path.is_file()
+            for path in (
+                manifest_path,
+                summary_path,
+                selection_path,
+                predictions_path,
+            )
+        ):
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        if (
+            manifest.get("state") != "complete"
+            or manifest.get("model_dtype") != "torch.float32"
+            or int(manifest.get("max_new_tokens", -1)) != 2048
+            or int(summary.get("examples", -1)) != 64
+            or len(list(records_dir.glob("*.json"))) != 64
+        ):
+            continue
+        fingerprint = (
+            str(manifest.get("model_revision")),
+            str(manifest.get("request_sha256")),
+            str(manifest.get("example_sha256")),
+            sha256_file(predictions_path),
         )
-    return roots[0]
+        valid.append((root, fingerprint))
+    if not valid:
+        raise RuntimeError(
+            "no complete float32 third-run MATH-500 reference found "
+            f"below {source}; discovered {discovered}"
+        )
+    fingerprints = {fingerprint for _, fingerprint in valid}
+    if len(fingerprints) != 1:
+        raise RuntimeError(
+            "multiple conflicting third-run references were found; set "
+            f"--reference-root explicitly after auditing them: {valid}"
+        )
+    roots = [root for root, _ in valid]
+    return min(roots, key=lambda root: (len(root.parts), len(str(root)), str(root)))
+
+
+def sha256_file(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def reference_examples(

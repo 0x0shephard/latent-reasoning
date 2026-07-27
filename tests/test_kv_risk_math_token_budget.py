@@ -27,10 +27,46 @@ def _cfg():
 
 def test_find_reference_pilot_root(tmp_path: Path):
     root = tmp_path / "export/latent-reasoning/outputs/kv_compression_risk_pilot"
-    manifest = root / "screen/math500/full/run_manifest.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(json.dumps({"state": "complete"}), encoding="utf-8")
+    _write_reference(root)
     assert find_reference_pilot_root(tmp_path) == root.resolve()
+
+
+def test_find_reference_accepts_identical_duplicate_exports(tmp_path: Path):
+    first = tmp_path / "copy_a/outputs/kv_compression_risk_pilot"
+    second = tmp_path / "nested/copy_b/outputs/kv_compression_risk_pilot"
+    _write_reference(first)
+    _write_reference(second)
+    assert find_reference_pilot_root(tmp_path) == first.resolve()
+
+
+def _write_reference(root: Path) -> None:
+    condition = root / "screen/math500/full"
+    records = condition / "records"
+    records.mkdir(parents=True)
+    manifest = {
+        "state": "complete",
+        "model_dtype": "torch.float32",
+        "model_revision": "revision",
+        "max_new_tokens": 2048,
+        "request_sha256": "request",
+        "example_sha256": "examples",
+    }
+    (condition / "run_manifest.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    (condition / "summary.json").write_text(
+        json.dumps({"examples": 64}),
+        encoding="utf-8",
+    )
+    (condition / "predictions.jsonl").write_text(
+        "{\"example_id\":\"same\"}\n",
+        encoding="utf-8",
+    )
+    screen = root / "screen"
+    (screen / "dataset_selection.json").write_text("{}", encoding="utf-8")
+    for index in range(64):
+        (records / f"{index:05d}.json").write_text("{}", encoding="utf-8")
 
 
 def test_screen_gate_preserves_original_eligibility_contract():
