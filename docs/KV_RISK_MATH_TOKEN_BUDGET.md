@@ -88,3 +88,20 @@ saved and the exported tree can be attached to a later run.
 This experiment tests whether a generation-length ceiling caused the MATH-500
 screen rejection. It does not measure KV-compression failure, establish that risk
 is predictable, or compare compression policies.
+
+## Completed result
+
+The 4,096-token diagnostic completed on all 64 paired questions:
+
+- accuracy increased from 50.000% to 57.8125%
+- length-limited examples fell from 31 to 20
+- seven answers changed from incorrect to correct
+- two answers changed from correct to incorrect
+- the paired accuracy interval was -1.5625 to +17.1875 percentage points
+- all 2,048-token censored sequences were exact prefixes of their continuations
+- all previously completed EOS generations reproduced exactly
+
+The predefined decision was `candidate_cap_still_binding`. The fresh
+confirmation did not run because the 60% accuracy gate was not reached. The
+final bounded extension is documented in
+`docs/KV_RISK_MATH_TOKEN_BUDGET_8192.md`.

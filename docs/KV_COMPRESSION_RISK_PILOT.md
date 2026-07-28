@@ -17,6 +17,11 @@ The bounded follow-up is documented in
 at a 4,096-token ceiling, followed by a fresh disjoint confirmation only if the
 unchanged dataset gate is recovered.
 
+That diagnostic raised MATH-500 accuracy from 50.000% to 57.8125%, while the
+number of length-limited questions fell from 31 to 20. It did not reach the 60%
+gate. One final 8,192-token extension of only those 20 censored questions is
+defined in `docs/KV_RISK_MATH_TOKEN_BUDGET_8192.md`.
+
 ## Question
 
 Is KV-compression failure a stable, problem-specific property that could be

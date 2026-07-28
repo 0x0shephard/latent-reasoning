@@ -1,0 +1,96 @@
+schema_version: 1
+
+# Match the valid 4,096-token T4 run exactly. Float32 remains fixed so the
+# only scientific change is the maximum generation length.
+model:
+  repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+  revision: 73d63fa6f97d4285b49bdbedf6a161ceba1e55ad
+  precision: float32
+  attention_implementation: eager
+  max_new_tokens: 8192
+
+prompt:
+  instruction: >-
+    Solve the following mathematics problem. Think step by step and put only
+    the final answer inside \boxed{} at the end.
+
+datasets:
+  gsm8k:
+    hf_id: openai/gsm8k
+    revision: 740312a
+    config: main
+    split: test
+    question_field: question
+    answer_field: answer
+    grader: gsm8k_numeric
+    minimum_examples: 150
+  math500:
+    hf_id: HuggingFaceH4/MATH-500
+    revision: 6e4ed1a
+    split: test
+    question_field: problem
+    answer_field: answer
+    level_field: level
+    grader: math_verify
+    minimum_examples: 150
+
+screen:
+  seed: 20260727
+  accuracy_min: 0.60
+  accuracy_max: 0.85
+  accuracy_midpoint: 0.725
+  minimum_median_generated_tokens: 512
+
+token_budget_extension:
+  reference_max_new_tokens: 4096
+  candidate_max_new_tokens: 8192
+  expected_reference_examples: 64
+  expected_reference_correct: 37
+  expected_reference_length_limited: 20
+  confirmation_examples: 64
+  confirmation_seed: 20260729
+  binding_length_limit_fraction: 0.20
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  # This is the final token-cap diagnostic for the 1.5B configuration.
+  further_cap_escalation_allowed: false
+
+pilot:
+  seed: 20260728
+  examples: 150
+  conditions:
+    - full
+    - full_repeat
+    - retain_0.90
+    - retain_0.50
+    - retain_0.25
+    - retain_0.10
+
+compression:
+  policy: heavy_hitter_recent
+  recent_window: 32
+  heavy_fraction: 0.50
+  preserve_prompt: true
+
+stochastic:
+  enabled: true
+  examples: 30
+  retention: 0.50
+  temperature: 0.60
+  top_p: 0.95
+  seeds: [101, 211, 307]
+
+analysis:
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  early_entropy_tokens: 32
+  cross_validation_folds: 5
+
+gates:
+  actionable_failure_rate_min: 0.05
+  actionable_failure_rate_max: 0.25
+  stochastic_noise_multiplier: 2.0
+  minimum_adjacent_containment: 0.70
+  maximum_difficulty_only_auc: 0.80
+  maximum_induced_accuracy_loss: 0.01
+  minimum_oracle_kv_saving: 0.20

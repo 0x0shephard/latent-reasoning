@@ -833,4 +833,62 @@ Implementation:
 
 Status:
 
+> Completed. The candidate cap remained binding and did not reach the unchanged
+> accuracy gate.
+
+Observed paired result:
+
+| Metric | 2,048 tokens | 4,096 tokens |
+| --- | ---: | ---: |
+| Correct | 32 / 64 | 37 / 64 |
+| Accuracy | 50.000% | 57.8125% |
+| Length-limited | 31 / 64 | 20 / 64 |
+| Median generated tokens | 1,948.5 | 1,948.5 |
+
+The accuracy change was +7.8125 points with a 95% paired-bootstrap interval from
+-1.5625 to +17.1875 points. There were seven incorrect-to-correct and two
+correct-to-incorrect changes. Among the 23 previously length-limited incorrect
+answers, seven recovered.
+
+All 33 previously completed EOS generations reproduced exactly. Every one of the
+31 censored 2,048-token sequences was an exact prefix of its 4,096-token
+continuation. The paired change is therefore a deterministic token-budget effect,
+not sampling noise.
+
+The original minimum requires 39 correct answers out of 64. The candidate produced
+37, and 20 questions still reached the new ceiling. Fresh confirmation and the
+compression sweep were correctly blocked.
+
+## 27. Final 8,192-token eligibility extension
+
+The final bounded question for the 1.5B configuration is:
+
+> When only the 20 still-censored MATH-500 questions are allowed to continue from
+> 4,096 to 8,192 tokens, does the composed 64-question screen cross the unchanged
+> eligibility gate?
+
+The 44 completed greedy outputs are reused. Only the 20 length-limited questions
+are regenerated. Each new output must preserve the complete 4,096-token sequence
+as an exact prefix before it can enter the composition.
+
+The unchanged gate still requires:
+
+- 60% to 85% accuracy
+- at least 512 median generated tokens
+- at least 150 disjoint questions remaining
+
+If the composed result passes, a fresh disjoint 64-question confirmation runs at
+8,192 tokens. Only a passing fresh confirmation authorizes the 150-question
+compression-risk pilot. Any failure closes this 1.5B configuration. No further
+token-cap escalation is allowed.
+
+Implementation:
+
+- `configs/kv_risk_math_token_budget_8192.yaml`
+- `scripts/run_kv_risk_math_token_budget_8192.py`
+- `notebooks/kaggle_kv_risk_math_token_budget_8192.ipynb`
+- `docs/KV_RISK_MATH_TOKEN_BUDGET_8192.md`
+
+Status:
+
 > Implemented and statically validated. Kaggle execution remains.
