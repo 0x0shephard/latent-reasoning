@@ -12,6 +12,7 @@ from scripts.run_official_codi_kv_target_utility import (
 from src.mech.official_codi_target_utility import (
     OfficialCODIAnswerScorer,
     build_official_student_answer_io,
+    extract_official_teacher_endpoint_targets,
 )
 
 
@@ -152,13 +153,19 @@ def test_official_student_scorer_is_differentiable_and_stateless_callable():
         teacher_mask=torch.ones(2, 5, dtype=torch.long),
         teacher_trace_end=torch.tensor([2, 2]),
         teacher_answer_start=torch.tensor([3, 3]),
+        teacher_endpoint=torch.tensor([2, 2]),
     )
-    output = scorer(batch, return_kv=True)
+    output = scorer(batch, return_kv=True, return_endpoint_hidden=True)
     assert output.per_example_loss.shape == (2,)
     assert output.student_keys.shape == (2, 1, 1, 2, 4)
     assert output.student_values.shape == (2, 1, 1, 2, 4)
+    assert output.student_endpoint_hidden.shape == (2, 1, 4)
+    teacher = extract_official_teacher_endpoint_targets(model, batch)
+    assert teacher.hidden.shape == (2, 1, 4)
+    assert not teacher.hidden.requires_grad
     assert model.codi.use_cache_calls
-    assert all(value is True for value in model.codi.use_cache_calls)
+    assert all(value is True for value in model.codi.use_cache_calls[:-1])
+    assert model.codi.use_cache_calls[-1] is False
     gradients = torch.autograd.grad(
         output.mean_loss,
         tuple(parameter for parameter in scorer.parameters()),

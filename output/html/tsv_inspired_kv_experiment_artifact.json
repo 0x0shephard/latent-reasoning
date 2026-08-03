@@ -1,0 +1,310 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "TSV-Inspired KV Signal Analysis in Latent Reasoning",
+    "description": "A technical report explaining how low-rank teacher-student KV structure was discovered, tested against controls, and separated from answer-causal and supervision-useful signal.",
+    "generatedAt": "2026-08-03T00:00:00Z",
+    "sources": [
+      {"id": "ledger", "label": "Research context ledger", "path": "docs/RESEARCH_CONTEXT_LEDGER.md"},
+      {"id": "stage1", "label": "Stage 1 residual-subspace protocol", "path": "docs/STAGE1_KV_SUBSPACE.md"},
+      {"id": "stage1b", "label": "Stage 1b paired cross-subspace protocol", "path": "docs/STAGE1B_KV_CROSS_SUBSPACE.md"},
+      {"id": "stage1c", "label": "Stage 1c held-out reduced-rank protocol", "path": "docs/STAGE1C_KV_REDUCED_RANK.md"},
+      {"id": "stage1d", "label": "Stage 1d projection-training protocol", "path": "docs/STAGE1D_KEY_PROJECTION_TRAINING.md"},
+      {"id": "official", "label": "Official CODI validation protocol", "path": "docs/OFFICIAL_CODI_VALIDATION.md"},
+      {"id": "official_subspace", "label": "Official CODI subspace protocol", "path": "docs/OFFICIAL_CODI_KV_SUBSPACES.md"},
+      {"id": "selector", "label": "Official CODI selector-specificity protocol", "path": "docs/OFFICIAL_CODI_SELECTOR_SPECIFICITY.md"},
+      {"id": "boundary", "label": "Boundary-aware selector protocol", "path": "docs/OFFICIAL_CODI_BOUNDARY_SELECTOR.md"},
+      {"id": "causal", "label": "Official CODI spectral-causality protocol", "path": "docs/OFFICIAL_CODI_KV_CAUSAL.md"},
+      {"id": "target", "label": "Official CODI KV target-utility protocol", "path": "docs/OFFICIAL_CODI_KV_TARGET_UTILITY.md"},
+      {"id": "gradient", "label": "Official CODI sparse-gradient protocol", "path": "docs/OFFICIAL_CODI_KV_GRADIENT_SIGNAL.md"}
+    ],
+    "charts": [
+      {
+        "id": "heldout_prediction",
+        "title": "Rank-four held-out KV prediction",
+        "subtitle": "Median position-conditioned results over 864 layer-head-position groups; higher values indicate stronger out-of-sample prediction.",
+        "type": "bar",
+        "encodings": {
+          "x": {"field": "target", "type": "nominal", "title": "KV target"},
+          "y": {"field": "r2", "type": "quantitative", "title": "Median R-squared"},
+          "color": {"field": "measure", "type": "nominal", "title": "Measure"}
+        },
+        "options": {"grouping": "grouped", "legend": {"show": true}},
+        "source": {
+          "id": "heldout_prediction_source",
+          "label": "Stage 1c completed 5,000-example result",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES ('Key', 'Actual held-out', 0.2629), ('Key', 'Actual minus shuffle', 0.2735), ('Value', 'Actual held-out', 0.1730), ('Value', 'Actual minus shuffle', 0.1813)) AS t(target, measure, r2)",
+            "description": "Median rank-four held-out prediction and paired advantage over shuffled teacher-student alignment.",
+            "tables_used": ["Stage 1c reduced-rank analysis"],
+            "executed_at": "2026-08-03T00:00:00Z",
+            "metric_definitions": ["Held-out R-squared compares prediction error with prediction by the training-split teacher mean. Actual-minus-shuffle subtracts the corresponding shuffled-pairing result."]
+          }
+        },
+        "dataset": "heldout_prediction"
+      },
+      {
+        "id": "selector_signal",
+        "title": "Predictive KV signal by teacher-token selector",
+        "subtitle": "Official CODI, 5,000 examples; signal R-squared subtracts each selector's own shuffled-pairing null.",
+        "type": "bar",
+        "encodings": {
+          "x": {"field": "selector", "type": "nominal", "title": "Selector"},
+          "y": {"field": "signal", "type": "quantitative", "title": "Signal R-squared"},
+          "color": {"field": "kv_kind", "type": "nominal", "title": "KV target"}
+        },
+        "options": {"grouping": "grouped", "legend": {"show": true}},
+        "source": {
+          "id": "selector_signal_source",
+          "label": "Official CODI selector-specificity result",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES ('R-KV', 'Key', 0.1686), ('R-KV', 'Value', 0.0872), ('Uniform', 'Key', 0.1770), ('Uniform', 'Value', 0.0955), ('Random median', 'Key', 0.0923), ('Random median', 'Value', 0.0410)) AS t(selector, kv_kind, signal)",
+            "description": "Matched comparison of R-KV, uniform, and four seeded-random teacher-trace selectors.",
+            "tables_used": ["Official CODI selector-specificity analysis"],
+            "executed_at": "2026-08-03T00:00:00Z",
+            "metric_definitions": ["Signal R-squared equals held-out rank-four R-squared minus the within-selector shuffled-pairing R-squared."]
+          }
+        },
+        "dataset": "selector_signal"
+      },
+      {
+        "id": "causal_accuracy",
+        "title": "Learned and random rank-four causal interventions",
+        "subtitle": "Official CODI full GSM8K accuracy at the preregistered primary latent positions; baseline accuracy was 43.67%.",
+        "type": "bar",
+        "encodings": {
+          "x": {"field": "intervention", "type": "nominal", "title": "Intervention"},
+          "y": {"field": "accuracy", "type": "quantitative", "title": "GSM8K accuracy (%)"},
+          "color": {"field": "subspace", "type": "nominal", "title": "Subspace"}
+        },
+        "options": {"grouping": "grouped", "legend": {"show": true}},
+        "source": {
+          "id": "causal_accuracy_source",
+          "label": "Full GSM8K causal report",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES ('P4 retain', 'Learned', 38.21), ('P4 retain', 'Random', 38.06), ('P4 remove', 'Learned', 43.29), ('P4 remove', 'Random', 43.59), ('P5 retain', 'Learned', 43.44), ('P5 retain', 'Random', 43.52), ('P5 remove', 'Learned', 43.52), ('P5 remove', 'Random', 43.59)) AS t(intervention, subspace, accuracy)",
+            "description": "Paired sufficiency and necessity interventions comparing learned and energy-matched random rank-four KV directions.",
+            "tables_used": ["Full GSM8K causal analysis"],
+            "executed_at": "2026-08-03T00:00:00Z",
+            "metric_definitions": ["Retain keeps only the selected centered rank-four component. Remove deletes that component while preserving its orthogonal complement. Accuracy is numeric exact match over all 1,319 GSM8K questions."]
+          }
+        },
+        "dataset": "causal_accuracy"
+      }
+    ],
+    "tables": [
+      {
+        "id": "evidence_ladder",
+        "title": "Experimental evidence ladder",
+        "columns": [
+          {"field": "order", "label": "Stage", "type": "number"},
+          {"field": "test", "label": "Test"},
+          {"field": "finding", "label": "Result and decision"}
+        ],
+        "defaultSort": {"field": "order", "direction": "asc"},
+        "source": {
+          "id": "evidence_ladder_source",
+          "label": "Synthesis of the completed preregistered TSV-inspired gates",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM tsv_evidence_ladder ORDER BY \"order\" ASC",
+            "description": "Ordered record of each experimental question, result, and resulting project decision.",
+            "tables_used": ["Research context ledger"],
+            "executed_at": "2026-08-03T00:00:00Z",
+            "metric_definitions": ["Each row records a distinct level of evidence. Passing an earlier level does not imply passing a later causal or training-utility level."]
+          }
+        },
+        "dataset": "evidence_ladder"
+      },
+      {
+        "id": "training_results",
+        "title": "Warm-started key-projection training results",
+        "columns": [
+          {"field": "run", "label": "Run"},
+          {"field": "extra_supervision", "label": "Additional supervision"},
+          {"field": "macro_pct", "label": "Full-evaluation macro (%)", "type": "number"}
+        ],
+        "defaultSort": {"field": "macro_pct", "direction": "desc"},
+        "source": {
+          "id": "training_results_source",
+          "label": "Stage 1d completed full evaluation",
+          "query": {
+            "engine": "duckdb",
+            "language": "sql",
+            "sql": "SELECT * FROM (VALUES ('Original CODI seed 1', 'No continuation', 10.70), ('CODI continuation', 'Zero KV loss', 9.97), ('Full keys', 'Full-dimensional key target', 10.26), ('Learned rank four', 'Learned four-dimensional key target', 10.00), ('Random rank four', 'Random four-dimensional key target', 10.14)) AS t(run, extra_supervision, macro_pct)",
+            "description": "Full GSM8K, GSM-Hard, MultiArith, and SVAMP evaluation after matched 10,000-step warm-started continuations.",
+            "tables_used": ["Stage 1d full evaluation"],
+            "executed_at": "2026-08-03T00:00:00Z",
+            "metric_definitions": ["Macro accuracy is the unweighted mean of numeric exact-match accuracy across four mathematical reasoning datasets."]
+          }
+        },
+        "dataset": "training_results"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "b01",
+        "type": "markdown",
+        "body": "# TSV-Inspired KV Signal Analysis in Latent Reasoning\n\n**Technical report on the completed CODI teacher-student KV experiments**\n\nThe study asked whether the difference between teacher and student key/value states contains a small, stable set of useful reasoning directions. The answer separated into two parts. A compact and reproducible predictive structure did exist, especially for keys. However, stronger experiments found that the learned directions were not more important for correct answers than energy-matched random directions and did not provide reliable supervision benefits. The project therefore established a distinction between **structure that describes model computation** and **signal that causally improves reasoning**."
+      },
+      {
+        "id": "b02",
+        "type": "markdown",
+        "body": "## Technical summary\n\nThe work followed a staged evidence ladder rather than beginning with expensive retraining. First, teacher-minus-student KV residuals were tested for low-rank stability. Shuffled teacher-student pairings were used to reveal whether apparent stability was genuinely paired or merely the repeated geometry of each model. Second, position-conditioned cross-covariance and held-out reduced-rank prediction tested whether student states could reconstruct aligned teacher states on untouched examples. Third, the resulting rank-four directions were compared with full targets, random directions, alternative teacher-token selectors, and exact answer interventions. Finally, whole and sparse KV gradients were tested for held-out answer-loss utility.\n\nKeys passed the held-out prediction gate with median R-squared 0.2629 and 82.72% retention of full-rank prediction. Yet R-KV did not outperform uniform token selection, learned directions did not outperform random directions in full-GSM8K causal tests, and neither complete nor sparse KV supervision passed its held-out utility gate. The supported conclusion is representational, not causal: **stable low-rank teacher-student correspondence exists, but the tested correspondence is not established as useful reasoning supervision.**"
+      },
+      {
+        "id": "b03",
+        "type": "markdown",
+        "body": "## Why a TSV-style idea was tested\n\nThe motivating concern was that hidden states and KV caches contain a mixture of task information, redundant representation structure, and noise. Task Singular Vector methods in model merging use spectral decomposition to identify directions that recur across task updates while suppressing conflicting or noisy components. We adapted the intuition rather than the model-merging procedure itself.\n\nR-KV selected **where** to look in the teacher reasoning trace. The spectral analysis selected **which directions** inside those teacher and student KV vectors appeared stable and transferable. The working hypothesis was: `teacher-student KV relationship = stable low-rank signal + noise and redundant directions`.\n\nThe hypothesis was deliberately split into stronger levels: existence, correct teacher-student pairing, held-out predictability, selector specificity, answer causality, and supervision utility. This prevented a stable SVD pattern from being mislabeled as reasoning signal without additional evidence."
+      },
+      {
+        "id": "b04",
+        "type": "markdown",
+        "body": "## Experimental objects and alignment\n\nFor each example, transformer layer, attention head, and one of six latent positions, the experiment extracted teacher and student keys and values. R-KV selected six teacher trace tokens. Those tokens were sorted in chronological order and paired with student latent positions 0 through 5. Layers and heads were matched by identical index because teacher and student paths used the same backbone.\n\nStage 1 formed residuals: `teacher key - student key` and `teacher value - student value`. Later stages kept teacher and student moments separately so their cross-relationship could be measured directly. Keys and values were always analyzed independently. Statistics were stored both after pooling latent positions and with position identity preserved.\n\nExamples were divided deterministically into independent halves. Shuffled controls preserved teacher and student distributions while destroying correct example pairing. Random isotropic or orthonormal controls were energy matched so they could not win or lose merely because their vector magnitudes differed."
+      },
+      {
+        "id": "b05",
+        "type": "markdown",
+        "body": "## Stage 1 found stable geometry, but the shuffle control exposed a confound\n\nThe first 2,000-example residual-covariance analysis appeared strongly positive. Rank-four split overlap was 0.9924 for keys and 0.9895 for values, far above isotropic random controls near 0.06. However, cross-example shuffled residuals produced even slightly higher overlap: 0.9941 for keys and 0.9918 for values.\n\nResidual covariance contains the teacher's own covariance, the student's own covariance, and their paired cross terms. Shuffling destroys the paired cross terms but leaves the two large marginal structures. Therefore, the first result showed that teacher and student representations each had stable geometry. It did not show a stable relationship between the correct teacher and student example. The preregistered gate was recorded as negative, and the method was revised rather than interpreted optimistically."
+      },
+      {
+        "id": "b06",
+        "type": "markdown",
+        "body": "## Stage 1b showed that latent-position identity must be preserved\n\nWhitened teacher-student cross-covariance was introduced to isolate paired linear dependence after controlling for marginal covariance. The original pooled layer-head gate still failed. Only 45.1% of key groups and 41.0% of value groups were both stronger and more stable than shuffle, and median stability advantages were approximately zero.\n\nThe position-resolved diagnostic told a different story. Correct pairing beat shuffle in 97.8% of key groups and 99.9% of value groups. Median canonical-correlation advantages were 0.705 for keys and 0.678 for values, with substantial teacher-student stability advantages. Pooling had mixed six different position-specific maps into one estimate. The project therefore made position-conditioned analysis primary for the next preregistered test while retaining the pooled failure as an important negative control."
+      },
+      {
+        "id": "b07",
+        "type": "markdown",
+        "body": "## Stage 1c established held-out low-rank prediction for keys\n\nA reduced-rank linear map was fitted on one 2,500-example half and evaluated on the untouched half, then the split direction was reversed. The map predicted aligned teacher KV states from student KV states while preserving layer, head, and latent position. Rank four was fixed as the primary dimension before evaluation. A full-rank ridge map served as an upper reference, and the complete procedure was repeated with shuffled pairing.\n\nKeys passed every condition: all 864 groups had positive held-out R-squared and exceeded shuffle, median actual R-squared was 0.2629, median actual-minus-shuffle R-squared was 0.2735, and rank four retained 82.72% of full-rank prediction. Values were also predictable but retained 71.82% of full-rank performance, below the predefined 80% low-rank sufficiency threshold. This supported testing keys first, but only as a predictive target."
+      },
+      {
+        "id": "b08",
+        "type": "chart",
+        "chartId": "heldout_prediction"
+      },
+      {
+        "id": "b09",
+        "type": "markdown",
+        "body": "## Warm-started training did not convert predictability into accuracy\n\nFour seed-one CODI arms were continued for 10,000 matched steps: zero additional KV loss, full key targets, learned rank-four key targets, and random rank-four targets. All arms used the same batches, schedule, teacher computation, R-KV alignment, answer losses, hidden loss, and reset optimizer. The learned subspace had been fitted from a separate seed-zero KaVa calibration run to reduce same-student leakage.\n\nLearned rank-four supervision did not beat full keys, random rank four, or continued CODI. Because every checkpoint remained low accuracy, this result was treated as a warning rather than a decisive method-level rejection. It motivated repeating structural and causal tests on the author-released CODI checkpoint instead of spending more compute on weak local models."
+      },
+      {
+        "id": "b10",
+        "type": "table",
+        "tableId": "training_results"
+      },
+      {
+        "id": "b11",
+        "type": "markdown",
+        "body": "## Official CODI removed the undertraining confound\n\nThe official checkpoint was evaluated with its released LoRA weights, projection, prompts, six-step latent generation, and scoring procedure. It produced 576 correct GSM8K answers out of 1,319, or 43.67%, matching the paper's reported 43.7%. The low-rank collection was then repeated with a 2,000-example seed-zero calibration and an independent 5,000-example seed-one calibration. The predictive low-rank result replicated, showing that it was not merely an artifact of the undertrained local checkpoint.\n\nThis was an essential validity gate. All later claims about selector specificity, causal interventions, and answer-loss utility were made on the paper-accuracy official model."
+      },
+      {
+        "id": "b12",
+        "type": "markdown",
+        "body": "## R-KV was not uniquely responsible for the predictable structure\n\nOn the same 5,000 official-CODI examples, R-KV was compared with uniform token selection and four fixed random selectors. Every arm shared examples, split assignments, student states, target count, and shuffled nulls. R-KV produced much more predictive signal than random selection, but uniform selection was slightly stronger in aggregate for both keys and values.\n\nA boundary-aware follow-up used a fresh disjoint 5,000 examples. It always kept the first and last valid teacher tokens and used R-KV for four interior positions. The candidate beat random controls and sometimes improved aggregate R-squared, but it did not meet the required margins and group-win fractions against unchanged R-KV and uniform selection. The decision was to stop designing token selectors based only on representation predictability."
+      },
+      {
+        "id": "b13",
+        "type": "chart",
+        "chartId": "selector_signal"
+      },
+      {
+        "id": "b14",
+        "type": "markdown",
+        "body": "## Full-GSM8K interventions tested sufficiency and necessity directly\n\nFor every layer, head, position, and KV kind, the leading four student-side directions from the reduced-rank map defined a centered projector. A retain intervention kept only the learned component, testing whether it was sufficient. A remove intervention deleted the learned component and retained the orthogonal remainder, testing whether it was necessary. Random orthonormal rank-four projectors were scaled to match expected projected calibration energy.\n\nThe frozen official checkpoint was evaluated under 29 conditions: baseline, learned and random retain/remove at positions 0 through 5, and the same interventions at all positions. Positions 4 and 5 formed the preregistered primary family. Effects were paired by question, evaluated with 10,000 bootstrap samples and exact McNemar tests, and Holm-corrected across four primary comparisons."
+      },
+      {
+        "id": "b15",
+        "type": "chart",
+        "chartId": "causal_accuracy"
+      },
+      {
+        "id": "b16",
+        "type": "markdown",
+        "body": "## Learned directions were not more causal than random directions\n\nLearned-minus-random effects were tiny at both primary positions and none passed the corrected gate. At position 4, retaining learned directions produced 38.21% accuracy versus 38.06% for random directions. Removing learned directions produced 43.29% versus 43.59% after random removal. Position 5 was even closer. Retaining rank four across all six positions collapsed accuracy from 43.67% to about 13% for both learned and random subspaces, while removing learned directions caused little unique damage.\n\nThe result does not deny that high-dimensional KV information matters. It shows that the particular four-dimensional predictive subspace was not more necessary or sufficient than a matched random four-dimensional subspace. Predictive structure therefore could not be called answer-causal signal."
+      },
+      {
+        "id": "b17",
+        "type": "markdown",
+        "body": "## Optimization-level tests also failed to establish useful supervision\n\nThe next screen asked whether adding a KV-target gradient to an answer-loss update reduced answer loss on disjoint validation examples. Key and value targets were tested separately. Candidate, shuffled-target, and answer-only updates were normalized to the same parameter L2 norm and applied statelessly to the official checkpoint. Neither complete key nor complete value targets passed the paired held-out utility gate, so the hierarchy stopped before position and layer-band refinement.\n\nA final follow-up searched for a sparse five-percent parameter-gradient component with consistently positive answer-gradient times KV-gradient contributions. Calibration, update, and validation examples were disjoint, and all conditions matched auxiliary energy and total update norm. The sparse component beat shuffled pairing slightly, indicating pair-sensitive information, but it did not reliably beat answer-only, full KV, random sparse coordinates, or the coordinate complement. This coordinatewise definition was closed without training a new model."
+      },
+      {
+        "id": "b18",
+        "type": "table",
+        "tableId": "evidence_ladder"
+      },
+      {
+        "id": "b19",
+        "type": "markdown",
+        "body": "## What the experiment established\n\nThe study supports four bounded findings.\n\n- Teacher and student KV representations contain stable low-dimensional geometry.\n- Correctly paired, position-conditioned student states predict aligned teacher states on held-out examples, especially for keys.\n- R-KV is stronger than random position selection for this predictive signal, but not stronger than uniform selection.\n- The tested learned rank-four directions are not uniquely answer-causal and the tested full or sparse KV gradients are not reliably useful one-step supervision.\n\nThe strongest interpretation is that the spectral method discovered a compact **signature** of the computation, not a demonstrated **control mechanism** for correct reasoning. Like engine sound, the pattern may reliably accompany the process without being what drives it."
+      },
+      {
+        "id": "b20",
+        "type": "markdown",
+        "body": "## Limits and recommended use of the result\n\nThe negative conclusion is bounded to official CODI GPT-2, six latent positions, linear rank-four subspaces, R-KV-based teacher alignment, GSM8K causal evaluation, and one-step utility tests at the final checkpoint. It does not rule out higher-rank, nonlinear, example-dependent, training-stage-dependent, or redundantly distributed KV information. It also does not evaluate a paper-aligned KaVa checkpoint.\n\nThe evidence does rule out starting expensive rank-four spectral distillation on the assumption that the learned directions are special. The completed work is best used as a rigorous negative result and as a methodological lesson: future representation analyses should require paired nulls, held-out prediction, energy-matched random controls, direct answer interventions, and an optimization-utility gate before retraining."
+      },
+      {
+        "id": "b21",
+        "type": "markdown",
+        "body": "## Reproducibility map\n\nThe experiment is documented by separate protocols for residual covariance, paired cross-subspaces, held-out reduced-rank prediction, projection training, official checkpoint validation, selector controls, causal intervention, target utility, and sparse gradient utility. Large activation statistics and full prediction files were stored durably on Google Drive or Kaggle, while the repository contains the collection, analysis, intervention, evaluation, resume, and test code.\n\nThe central reproducibility rule was that every stage had a fixed gate and a stopping decision. A negative result narrowed or closed the branch instead of triggering threshold tuning on the same evidence."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "status": "ready",
+    "generatedAt": "2026-08-03T00:00:00Z",
+    "datasets": {
+      "heldout_prediction": [
+        {"target": "Key", "measure": "Actual held-out", "r2": 0.2629},
+        {"target": "Key", "measure": "Actual minus shuffle", "r2": 0.2735},
+        {"target": "Value", "measure": "Actual held-out", "r2": 0.1730},
+        {"target": "Value", "measure": "Actual minus shuffle", "r2": 0.1813}
+      ],
+      "selector_signal": [
+        {"selector": "R-KV", "kv_kind": "Key", "signal": 0.1686},
+        {"selector": "R-KV", "kv_kind": "Value", "signal": 0.0872},
+        {"selector": "Uniform", "kv_kind": "Key", "signal": 0.1770},
+        {"selector": "Uniform", "kv_kind": "Value", "signal": 0.0955},
+        {"selector": "Random median", "kv_kind": "Key", "signal": 0.0923},
+        {"selector": "Random median", "kv_kind": "Value", "signal": 0.0410}
+      ],
+      "causal_accuracy": [
+        {"intervention": "P4 retain", "subspace": "Learned", "accuracy": 38.21},
+        {"intervention": "P4 retain", "subspace": "Random", "accuracy": 38.06},
+        {"intervention": "P4 remove", "subspace": "Learned", "accuracy": 43.29},
+        {"intervention": "P4 remove", "subspace": "Random", "accuracy": 43.59},
+        {"intervention": "P5 retain", "subspace": "Learned", "accuracy": 43.44},
+        {"intervention": "P5 retain", "subspace": "Random", "accuracy": 43.52},
+        {"intervention": "P5 remove", "subspace": "Learned", "accuracy": 43.52},
+        {"intervention": "P5 remove", "subspace": "Random", "accuracy": 43.59}
+      ],
+      "training_results": [
+        {"run": "Original CODI seed 1", "extra_supervision": "No continuation", "macro_pct": 10.70},
+        {"run": "CODI continuation", "extra_supervision": "Zero KV loss", "macro_pct": 9.97},
+        {"run": "Full keys", "extra_supervision": "Full-dimensional key target", "macro_pct": 10.26},
+        {"run": "Learned rank four", "extra_supervision": "Learned four-dimensional key target", "macro_pct": 10.00},
+        {"run": "Random rank four", "extra_supervision": "Random four-dimensional key target", "macro_pct": 10.14}
+      ],
+      "evidence_ladder": [
+        {"order": 1, "test": "Residual covariance", "finding": "Stable, but shuffle was equally stable. Measure paired cross-terms."},
+        {"order": 2, "test": "Paired cross-subspace", "finding": "Pooled gate failed; position-resolved signal was strong. Preserve position."},
+        {"order": 3, "test": "Held-out prediction", "finding": "Keys passed rank four; values missed retention. Test keys first."},
+        {"order": 4, "test": "Projection training", "finding": "Learned rank four did not beat full or random. Move to official CODI."},
+        {"order": 5, "test": "Official reproduction", "finding": "43.67% matched 43.7%. Accept checkpoint for mechanism tests."},
+        {"order": 6, "test": "Selector specificity", "finding": "R-KV beat random, not uniform. No unique R-KV attribution."},
+        {"order": 7, "test": "Spectral causality", "finding": "Learned directions did not beat random. No answer-causal claim."},
+        {"order": 8, "test": "Whole-target utility", "finding": "Neither KV kind passed. Stop position and layer refinement."},
+        {"order": 9, "test": "Sparse gradient utility", "finding": "Pair-sensitive, not uniquely useful. Close this supervision definition."}
+      ]
+    }
+  }
+}

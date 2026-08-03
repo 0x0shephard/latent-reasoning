@@ -892,3 +892,46 @@ Implementation:
 Status:
 
 > Implemented and statically validated. Kaggle execution remains.
+
+## 28. Return to CODI's native endpoint with TSV-C-inspired filtering
+
+The earlier spectral work operated on teacher and student KV trajectories. It established
+stable low-rank relationships, but the learned directions were not more causally useful
+than matched random directions. R-KV was not superior to uniform token selection, and
+complete, sparse, and answer-gradient-selected KV targets failed their held-out utility
+gates. Those results do not directly test CODI's native distillation target because CODI
+matches hidden states at an answer-cue endpoint rather than KV trajectories.
+
+The next bounded question is therefore:
+
+> At the paper-accuracy official CODI checkpoint, do leading singular directions of the
+> teacher-student endpoint hidden-state residual provide specifically useful answer
+> updates beyond answer-only, random, bottom-spectrum, and shuffled controls?
+
+The original TSV-C method compresses per-layer weight-difference matrices. This is an
+explicit activation-space adaptation and will be called TSV-C-inspired filtering.
+
+The experiment separates trajectory location from transformer depth:
+
+- `endpoint_all_layers` is the primary CODI-native condition over blocks 0 through 11.
+- `endpoint_layer11` is a secondary localization condition at the same final endpoint.
+
+The fixed contract uses the official 43.67-percent GSM8K checkpoint, 5,000 calibration
+questions, 256 update questions, 256 disjoint validation questions, uncentered per-layer
+SVD, rank 77, equal auxiliary-gradient norms, equal total-update norms, and 10,000 paired
+update-batch bootstrap samples. Training remains blocked unless the all-layer primary
+gate passes all four prespecified comparisons with Holm correction.
+
+Implementation:
+
+- `configs/official_codi_gpt2.yaml` under `endpoint_tsvc`
+- `scripts/collect_official_codi_endpoint_tsvc.py`
+- `scripts/run_official_codi_endpoint_tsvc_utility.py`
+- `scripts/analyze_official_codi_endpoint_tsvc.py`
+- `notebooks/kaggle_official_codi_endpoint_tsvc.ipynb`
+- `docs/OFFICIAL_CODI_ENDPOINT_TSVC.md`
+
+Status:
+
+> Implemented and locally unit-tested. Official-checkpoint calibration and both utility
+> scopes remain pending on Kaggle GPU. No endpoint TSV-C result exists yet.

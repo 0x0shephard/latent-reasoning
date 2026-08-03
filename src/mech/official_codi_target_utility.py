@@ -17,6 +17,7 @@ class OfficialCODIStudentAnswerOutput:
     mean_loss: torch.Tensor
     student_keys: torch.Tensor | None
     student_values: torch.Tensor | None
+    student_endpoint_hidden: torch.Tensor | None
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,13 @@ class OfficialCODITeacherKVTargets:
     keys: torch.Tensor
     values: torch.Tensor
     mask: torch.Tensor
+
+
+@dataclass(frozen=True)
+class OfficialCODITeacherEndpointTargets:
+    """Detached transformer-block states at the explicit teacher answer cue."""
+
+    hidden: torch.Tensor
 
 
 def build_official_student_answer_io(
@@ -82,6 +90,7 @@ def official_codi_student_answer_forward(
     *,
     latent_positions: int,
     return_kv: bool,
+    return_endpoint_hidden: bool = False,
 ) -> OfficialCODIStudentAnswerOutput:
     """Run the released six-step student path with differentiable answer NLL."""
     if latent_positions <= 0:
@@ -95,7 +104,8 @@ def official_codi_student_answer_forward(
     )
     cache = encoded.past_key_values
     latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
-    for _ in range(latent_positions):
+    endpoint_hidden = None
+    for position in range(latent_positions):
         latent_output = model.codi(
             inputs_embeds=latent,
             past_key_values=cache,
@@ -104,6 +114,13 @@ def official_codi_student_answer_forward(
             return_dict=True,
         )
         cache = latent_output.past_key_values
+        if return_endpoint_hidden and position + 1 == latent_positions:
+            # Hugging Face returns the embedding state followed by one tensor per
+            # transformer block. CODI distils only the block outputs.
+            endpoint_hidden = torch.stack(
+                [state[:, -1, :] for state in latent_output.hidden_states[1:]],
+                dim=1,
+            )
         latent = model.prj(
             latent_output.hidden_states[-1][:, -1, :].unsqueeze(1)
         )
@@ -147,6 +164,7 @@ def official_codi_student_answer_forward(
         mean_loss=per_example.mean(),
         student_keys=student_keys,
         student_values=student_values,
+        student_endpoint_hidden=endpoint_hidden,
     )
 
 
@@ -158,13 +176,44 @@ class OfficialCODIAnswerScorer(nn.Module):
         self.model = model
         self.latent_positions = int(latent_positions)
 
-    def forward(self, batch, *, return_kv: bool = False):
+    def forward(
+        self,
+        batch,
+        *,
+        return_kv: bool = False,
+        return_endpoint_hidden: bool = False,
+    ):
         return official_codi_student_answer_forward(
             self.model,
             batch,
             latent_positions=self.latent_positions,
             return_kv=return_kv,
+            return_endpoint_hidden=return_endpoint_hidden,
         )
+
+
+def extract_official_teacher_endpoint_targets(
+    model,
+    batch,
+) -> OfficialCODITeacherEndpointTargets:
+    """Gather detached all-block states at the exact official answer-cue endpoint."""
+    with torch.no_grad():
+        outputs = model.codi(
+            input_ids=batch.teacher_ids,
+            attention_mask=batch.teacher_mask,
+            use_cache=False,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        block_states = torch.stack(outputs.hidden_states[1:], dim=1)
+        if block_states.ndim != 4:
+            raise RuntimeError("official teacher hidden states must be [B,L,T,D]")
+        row = torch.arange(block_states.shape[0], device=block_states.device)
+        endpoints = batch.teacher_endpoint.to(device=block_states.device)
+        hidden = block_states[row, :, endpoints, :]
+        if not torch.isfinite(hidden).all():
+            raise RuntimeError("official teacher endpoint states contain non-finite values")
+    return OfficialCODITeacherEndpointTargets(hidden=hidden.detach())
 
 
 def extract_official_teacher_kv_targets(
