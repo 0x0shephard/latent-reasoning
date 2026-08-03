@@ -43,7 +43,7 @@ def test_corrected_native_full_loss_and_gradient_parity():
         candidate_gradient,
         reference_gradient,
     )
-    assert abs(float(reference - candidate)) <= 1e-7
+    assert abs(float((reference - candidate).detach())) <= 1e-7
     assert relative <= 1e-6
     assert cosine >= 0.999999
 

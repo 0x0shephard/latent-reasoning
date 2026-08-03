@@ -140,7 +140,14 @@ def corrected_endpoint_tsvc_loss(
             unbiased=True
         ).clamp_min(eps)
         per_state.append(value / scale)
-    return torch.stack(per_state).mean()
+    # Match the released CODI Python-loop accumulation exactly.  ``torch.mean`` is
+    # mathematically equivalent but can differ by one float32 ULP because its reduction
+    # order is different, which would make the preregistered parity gate platform
+    # dependent.
+    total = per_state[0]
+    for value in per_state[1:]:
+        total = total + value
+    return total / len(per_state)
 
 
 def relative_gradient_error(
