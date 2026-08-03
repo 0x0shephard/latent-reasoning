@@ -155,14 +155,25 @@ def test_official_student_scorer_is_differentiable_and_stateless_callable():
         teacher_answer_start=torch.tensor([3, 3]),
         teacher_endpoint=torch.tensor([2, 2]),
     )
-    output = scorer(batch, return_kv=True, return_endpoint_hidden=True)
+    output = scorer(
+        batch,
+        return_kv=True,
+        return_endpoint_hidden=True,
+        return_answer_endpoint_hidden=True,
+    )
     assert output.per_example_loss.shape == (2,)
     assert output.student_keys.shape == (2, 1, 1, 2, 4)
     assert output.student_values.shape == (2, 1, 1, 2, 4)
     assert output.student_endpoint_hidden.shape == (2, 1, 4)
+    assert output.student_answer_endpoint_hidden.shape == (2, 2, 4)
     teacher = extract_official_teacher_endpoint_targets(model, batch)
     assert teacher.hidden.shape == (2, 1, 4)
+    assert teacher.all_hidden.shape == (2, 2, 4)
+    # This context-free fixture makes the answer-cue token identity directly visible:
+    # both paths must gather token ids 20 and 22, not the pre-cue latent state.
+    assert torch.equal(output.student_answer_endpoint_hidden, teacher.all_hidden)
     assert not teacher.hidden.requires_grad
+    assert not teacher.all_hidden.requires_grad
     assert model.codi.use_cache_calls
     assert all(value is True for value in model.codi.use_cache_calls[:-1])
     assert model.codi.use_cache_calls[-1] is False

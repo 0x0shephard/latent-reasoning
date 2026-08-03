@@ -893,7 +893,7 @@ Status:
 
 > Implemented and statically validated. Kaggle execution remains.
 
-## 28. Return to CODI's native endpoint with TSV-C-inspired filtering
+## 28. Historical teacher-colon versus student-pre-cue TSV-C diagnostic
 
 The earlier spectral work operated on teacher and student KV trajectories. It established
 stable low-rank relationships, but the learned directions were not more causally useful
@@ -902,7 +902,7 @@ complete, sparse, and answer-gradient-selected KV targets failed their held-out 
 gates. Those results do not directly test CODI's native distillation target because CODI
 matches hidden states at an answer-cue endpoint rather than KV trajectories.
 
-The next bounded question is therefore:
+The bounded historical question was:
 
 > At the paper-accuracy official CODI checkpoint, do leading singular directions of the
 > teacher-student endpoint hidden-state residual provide specifically useful answer
@@ -911,16 +911,17 @@ The next bounded question is therefore:
 The original TSV-C method compresses per-layer weight-difference matrices. This is an
 explicit activation-space adaptation and will be called TSV-C-inspired filtering.
 
-The experiment separates trajectory location from transformer depth:
+The implementation separated transformer depth, but a later pinned-source audit found
+that its trajectory alignment was not the native CODI match:
 
-- `endpoint_all_layers` is the primary CODI-native condition over blocks 0 through 11.
-- `endpoint_layer11` is a secondary localization condition at the same final endpoint.
+- `endpoint_all_layers` used teacher colon states but student pre-cue latent-six states.
+- `endpoint_layer11` used the same cross-location pairing at block 11.
 
-The fixed contract uses the official 43.67-percent GSM8K checkpoint, 5,000 calibration
+The fixed historical contract used the official 43.67-percent GSM8K checkpoint, 5,000 calibration
 questions, 256 update questions, 256 disjoint validation questions, uncentered per-layer
 SVD, rank 77, equal auxiliary-gradient norms, equal total-update norms, and 10,000 paired
-update-batch bootstrap samples. Training remains blocked unless the all-layer primary
-gate passes all four prespecified comparisons with Holm correction.
+update-batch bootstrap samples. Its preregistered rule required the all-layer primary
+gate to pass four prespecified comparisons with Holm correction.
 
 Implementation:
 
@@ -933,5 +934,85 @@ Implementation:
 
 Status:
 
-> Implemented and locally unit-tested. Official-checkpoint calibration and both utility
-> scopes remain pending on Kaggle GPU. No endpoint TSV-C result exists yet.
+> Complete as a historical cross-location diagnostic. It cannot authorize or block a
+> training study based on CODI's native answer-cue endpoint.
+
+Completed result:
+
+- `endpoint_all_layers` failed all four required comparisons. Learned top-77 versus
+  answer-only had mean advantage -0.000466 with 95% CI [-0.001758, +0.000791].
+  Learned versus random, bottom-spectrum, and shuffled controls was also non-positive
+  or inconclusive. Median answer-gradient cosine was -0.005703.
+- `endpoint_layer11` showed a small positive mean advantage over answer-only of
+  +0.000215, but its 95% CI [-0.000035, +0.000526] crossed zero and Holm p was 0.3508.
+  It did not beat random, bottom-spectrum, or shuffled controls. Median cosine was
+  +0.000565.
+- Learned top-77 did not beat the full endpoint target in either scope.
+- The combined decision was `endpoint_tsvc_not_supported`, with
+  `training_authorized=false`.
+
+Durable provenance:
+
+- Kaggle dataset:
+  `jonraza15/official-codi-endpoint-tsv-c-inspired-experiment`, version 1
+- Run commit: `8b70b0d95e6b28ce3dfc512929bd0ac942f8a427`
+- All files in the purpose-built export passed SHA-256 verification after download on
+  2026-08-03.
+
+Bounded historical conclusion:
+
+> At the final official CODI checkpoint, the leading rank-77 directions of the
+> teacher-colon versus student-pre-cue latent-six residual did not isolate locally useful
+> update signal beyond matched controls. This does not answer the native CODI endpoint
+> question because the student was sampled before EOT and the answer cue, the embedding
+> state was excluded, and the diagnostic used L1 rather than the released SmoothL1 loss.
+
+## 29. Corrected source-native CODI endpoint TSV-C experiment
+
+A pinned-source audit of official CODI revision
+`2c2314662c63e9f482ebc46614ffe9af17a241e5` corrected three material details:
+
+1. The student target is gathered at the colon in its decoded `The answer is:` cue,
+   after six continuous latents and EOT, not at latent step six itself.
+2. The released distillation loop consumes all 13 Hugging Face hidden-state entries for
+   GPT-2, including the embedding state and 12 transformer-block outputs.
+3. The released GPT-2 run uses SmoothL1, divides each state loss by the unbiased teacher
+   standard deviation, and averages over the 13 states.
+
+The corrected primary question is:
+
+> At the paper-accuracy official CODI checkpoint, do leading rank-77 singular directions
+> of the source-native teacher-student answer-cue endpoint residual produce locally
+> useful answer updates beyond answer-only, random, bottom-spectrum, and shuffled-pairing
+> controls?
+
+The corrected primary scope is `endpoint_all_states`. The secondary localization scope
+is `endpoint_layer11`, which maps to hidden-state tuple index 12. The original completed
+artifacts are preserved; the corrected experiment writes to separate output, report,
+and log trees.
+
+A mandatory four-example parity gate runs before calibration. It verifies matching
+colon token IDs, `[B,13,768]` finite tensors, detached teacher states, native loss error
+at most `1e-7`, parameter-gradient relative L2 error at most `1e-6`, and gradient cosine
+at least `0.999999`. A failed parity check blocks the 5,000-example calibration.
+
+The remaining contract is frozen at 5,000 calibration examples, 256 update examples,
+256 paired validation examples, rank 77, sampling seed 11, random-basis seed 20260803,
+64 paired update batches, equal auxiliary-gradient norms, equal total-update norms, and
+10,000 paired bootstrap samples. Only a primary all-state gate pass can authorize a
+separately preregistered training experiment.
+
+Implementation:
+
+- `configs/official_codi_gpt2.yaml` under `endpoint_tsvc_corrected`
+- `src/mech/endpoint_tsvc_corrected.py`
+- `scripts/collect_official_codi_endpoint_tsvc_corrected.py`
+- `scripts/run_official_codi_endpoint_tsvc_corrected_utility.py`
+- `scripts/analyze_official_codi_endpoint_tsvc_corrected.py`
+- `notebooks/kaggle_official_codi_endpoint_tsvc_corrected.ipynb`
+- `docs/OFFICIAL_CODI_ENDPOINT_TSVC_CORRECTED.md`
+
+Status:
+
+> Implemented. Local syntax validation is complete. Kaggle parity smoke, calibration,
+> utility execution, and the combined decision remain pending.

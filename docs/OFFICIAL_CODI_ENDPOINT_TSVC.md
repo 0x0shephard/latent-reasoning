@@ -1,4 +1,11 @@
-# Official CODI endpoint TSV-C-inspired experiment
+# Historical CODI pre-cue TSV-C-inspired diagnostic
+
+> **Alignment correction recorded 2026-08-03.** This completed run paired the
+> teacher's answer-cue colon with the student's sixth latent state *before* EOT and
+> `The answer is:`. It therefore did **not** test the source-native CODI endpoint
+> loss. Its artifacts and negative result remain valid only for that cross-location
+> diagnostic. The corrected experiment is preregistered in
+> `OFFICIAL_CODI_ENDPOINT_TSVC_CORRECTED.md` and uses a separate output tree.
 
 ## Status
 
@@ -9,15 +16,49 @@
 | Resumable utility runner and analyzer | complete |
 | Kaggle notebook | complete |
 | Local unit and static validation | complete |
-| Official-checkpoint alignment smoke test | pending Kaggle GPU |
-| 5,000-example calibration | pending Kaggle GPU |
-| All-layer endpoint utility screen | pending calibration |
-| Layer-11 endpoint utility screen | pending calibration |
-| Final gate decision | pending both screens |
+| Official-checkpoint alignment smoke test | complete |
+| 5,000-example calibration | complete |
+| All-layer endpoint utility screen | complete, gate failed |
+| Layer-11 endpoint utility screen | complete, gate failed |
+| Final diagnostic decision | pre-cue cross-location TSV-C not supported |
 
 Runtime progress is stored under `outputs/official_codi_endpoint_tsvc`. Large basis and
 batch files are intentionally not committed. This document and
 `RESEARCH_CONTEXT_LEDGER.md` preserve the scientific state in Git.
+
+The completed, checksummed Kaggle artifact is
+[`jonraza15/official-codi-endpoint-tsv-c-inspired-experiment`](https://www.kaggle.com/datasets/jonraza15/official-codi-endpoint-tsv-c-inspired-experiment),
+version 1, produced from repository commit
+`8b70b0d95e6b28ce3dfc512929bd0ac942f8a427`. All files listed in its
+`SHA256SUMS.txt` were independently verified after download on 2026-08-03.
+
+## Completed historical diagnostic result
+
+Both prespecified scopes failed their gates. The learned top-rank-77 endpoint
+directions did not produce lower held-out answer loss than all required controls.
+
+| Scope | Comparison | Mean learned advantage | 95% paired-bootstrap CI | Holm p |
+| --- | --- | ---: | ---: | ---: |
+| All layers | versus answer only | -0.000466 | [-0.001758, +0.000791] | 1.0000 |
+| All layers | versus random rank 77 | -0.000302 | [-0.001253, +0.000385] | 1.0000 |
+| All layers | versus bottom rank 77 | -0.000988 | [-0.002336, +0.000094] | 1.0000 |
+| All layers | versus shuffled top 77 | -0.000032 | [-0.000129, +0.000052] | 1.0000 |
+| Layer 11 | versus answer only | +0.000215 | [-0.000035, +0.000526] | 0.3508 |
+| Layer 11 | versus random rank 77 | +0.000035 | [-0.000084, +0.000149] | 0.8696 |
+| Layer 11 | versus bottom rank 77 | +0.000060 | [-0.000338, +0.000449] | 0.8696 |
+| Layer 11 | versus shuffled top 77 | -0.000026 | [-0.000244, +0.000143] | 0.8696 |
+
+The primary all-layer median cosine with the answer gradient was -0.005703. The
+secondary layer-11 cosine was +0.000565, but none of its required loss comparisons
+passed. Learned top-77 was also indistinguishable from the full target in both scopes.
+
+Decision for this historical alignment only:
+
+- do not launch the proposed compute-matched distillation training
+- close this fixed rank-77 teacher-colon versus student-pre-cue definition
+- retain the result as a preregistered negative finding
+- do not tune rank, scope, or thresholds on these same samples and relabel the result
+  as confirmatory
 
 ## Motivation
 
@@ -26,10 +67,11 @@ It found statistically stable low-rank structure, but learned KV directions were
 more causally useful than energy-matched random directions. Complete and sparse KV
 targets also failed the held-out answer-loss utility gates.
 
-CODI does not natively distil those KV tensors. Its published objective matches teacher
-and student hidden states at one answer-cue endpoint across all transformer blocks. The
-current experiment therefore moves the spectral test to CODI's actual supervision
-location.
+CODI does not natively distil those KV tensors. This historical experiment attempted to
+move the spectral test toward CODI's supervision location, but it incorrectly used the
+student state immediately after latent step six. A later source audit showed that the
+released objective first decodes EOT and `The answer is:` and then matches student and
+teacher at the colon. The corrected experiment implements that exact alignment.
 
 The original TSV-C method decomposes per-layer weight-difference matrices. This work
 adapts only its truncated-SVD principle to activation residual matrices. Every result
@@ -37,16 +79,17 @@ must be described as **TSV-C-inspired activation filtering**, not unchanged TSV-
 
 ## Research question
 
-> At the paper-accuracy official CODI checkpoint, do the leading singular directions of
-> teacher-student endpoint hidden-state residuals produce specifically useful answer
-> updates beyond answer-only, random, bottom-spectrum, and shuffled-pairing controls?
+> At the paper-accuracy official CODI checkpoint, do leading singular directions of the
+> teacher-colon versus student-pre-cue latent-six residual produce specifically useful
+> answer updates beyond matched controls?
 
 Two axes must not be confused:
 
-- **Endpoint** is the trajectory-time location. The teacher state is taken at the final
-  token of `The answer is:` and the student state after its sixth continuous latent step.
+- **Historical alignment** used the teacher at the final token of `The answer is:` and
+  the student immediately after its sixth continuous latent step. These are different
+  sequence locations and must not be called CODI's native matched endpoint.
 - **Layer** is transformer depth. The primary scope uses all 12 blocks. The secondary
-  scope uses block 11 only at that same endpoint.
+  scope uses block 11 only under the same historical cross-location pairing.
 
 ## Checkpoint and alignment gate
 
@@ -59,7 +102,7 @@ For each example and block `l`:
 
 ```text
 teacher_l = hidden state at the final token of "The answer is:"
-student_l = hidden state after continuous latent iteration 6
+student_l = hidden state after continuous latent iteration 6, before EOT/answer cue
 R_l       = student_l - stop_gradient(teacher_l)
 ```
 
@@ -98,7 +141,9 @@ For a selected orthonormal basis `B_l`, the differentiable filtered residual is
 projected_l = R_l B_l B_l^T
 ```
 
-The loss retains CODI's L1 and teacher-standard-deviation contract:
+The historical runner used an L1 teacher-standard-deviation-normalized diagnostic. The
+released CODI GPT-2 run instead used SmoothL1, so this was another reason it could not
+serve as a native-loss parity test:
 
 ```text
 L_projected = sum_l mean(abs(projected_l)) / std(teacher_l)

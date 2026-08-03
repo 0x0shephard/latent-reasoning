@@ -17,7 +17,13 @@ class OfficialCODIStudentAnswerOutput:
     mean_loss: torch.Tensor
     student_keys: torch.Tensor | None
     student_values: torch.Tensor | None
+    # Historical diagnostic captured immediately after the final continuous latent
+    # step, before EOT and the answer cue.  This is not CODI's native distillation
+    # endpoint and is retained only for backwards compatibility.
     student_endpoint_hidden: torch.Tensor | None
+    # Source-faithful CODI endpoint: embedding state plus every transformer-block
+    # state at the colon in the student's teacher-forced ``The answer is:`` cue.
+    student_answer_endpoint_hidden: torch.Tensor | None
 
 
 @dataclass(frozen=True)
@@ -29,9 +35,10 @@ class OfficialCODITeacherKVTargets:
 
 @dataclass(frozen=True)
 class OfficialCODITeacherEndpointTargets:
-    """Detached transformer-block states at the explicit teacher answer cue."""
+    """Detached block-only and complete hidden tuples at the teacher answer cue."""
 
     hidden: torch.Tensor
+    all_hidden: torch.Tensor
 
 
 def build_official_student_answer_io(
@@ -91,6 +98,7 @@ def official_codi_student_answer_forward(
     latent_positions: int,
     return_kv: bool,
     return_endpoint_hidden: bool = False,
+    return_answer_endpoint_hidden: bool = False,
 ) -> OfficialCODIStudentAnswerOutput:
     """Run the released six-step student path with differentiable answer NLL."""
     if latent_positions <= 0:
@@ -140,9 +148,34 @@ def official_codi_student_answer_forward(
         # directly on a tuple. Keep cache output enabled exactly as in official greedy
         # generation; the returned extension is unused and logits are unchanged.
         use_cache=True,
-        output_hidden_states=False,
+        output_hidden_states=return_answer_endpoint_hidden,
         return_dict=True,
     )
+    answer_endpoint_hidden = None
+    if return_answer_endpoint_hidden:
+        if not decoded.hidden_states:
+            raise RuntimeError("student answer pass returned no hidden states")
+        # ``answer_inputs`` begins with EOT, followed by the exact answer cue.  The
+        # colon is therefore at index ``len(answer_prompt_ids)``.  Reconstruct that
+        # length from the independently tokenized teacher boundaries and verify the
+        # gathered input token is identical to the teacher's endpoint token.
+        endpoints = (
+            batch.teacher_answer_start - batch.teacher_trace_end
+        ).to(device=answer_inputs.device)
+        row = torch.arange(answer_inputs.shape[0], device=answer_inputs.device)
+        if bool((endpoints < 1).any()) or bool((endpoints >= answer_inputs.shape[1]).any()):
+            raise RuntimeError("student answer-cue endpoint is outside decoder inputs")
+        student_tokens = answer_inputs[row, endpoints]
+        teacher_tokens = batch.teacher_ids[
+            row.to(device=batch.teacher_ids.device),
+            batch.teacher_endpoint.to(device=batch.teacher_ids.device),
+        ].to(device=student_tokens.device)
+        if not torch.equal(student_tokens, teacher_tokens):
+            raise RuntimeError("teacher and student answer-cue endpoint tokens differ")
+        all_states = torch.stack(decoded.hidden_states, dim=1)
+        answer_endpoint_hidden = all_states[row, :, endpoints, :]
+        if not torch.isfinite(answer_endpoint_hidden).all():
+            raise RuntimeError("student answer endpoint states contain non-finite values")
     token_loss = F.cross_entropy(
         decoded.logits.transpose(1, 2),
         answer_targets,
@@ -165,6 +198,7 @@ def official_codi_student_answer_forward(
         student_keys=student_keys,
         student_values=student_values,
         student_endpoint_hidden=endpoint_hidden,
+        student_answer_endpoint_hidden=answer_endpoint_hidden,
     )
 
 
@@ -182,6 +216,7 @@ class OfficialCODIAnswerScorer(nn.Module):
         *,
         return_kv: bool = False,
         return_endpoint_hidden: bool = False,
+        return_answer_endpoint_hidden: bool = False,
     ):
         return official_codi_student_answer_forward(
             self.model,
@@ -189,6 +224,7 @@ class OfficialCODIAnswerScorer(nn.Module):
             latent_positions=self.latent_positions,
             return_kv=return_kv,
             return_endpoint_hidden=return_endpoint_hidden,
+            return_answer_endpoint_hidden=return_answer_endpoint_hidden,
         )
 
 
@@ -205,15 +241,22 @@ def extract_official_teacher_endpoint_targets(
             output_hidden_states=True,
             return_dict=True,
         )
-        block_states = torch.stack(outputs.hidden_states[1:], dim=1)
+        all_states = torch.stack(outputs.hidden_states, dim=1)
+        block_states = all_states[:, 1:, :, :]
         if block_states.ndim != 4:
             raise RuntimeError("official teacher hidden states must be [B,L,T,D]")
         row = torch.arange(block_states.shape[0], device=block_states.device)
         endpoints = batch.teacher_endpoint.to(device=block_states.device)
         hidden = block_states[row, :, endpoints, :]
+        all_hidden = all_states[row, :, endpoints, :]
         if not torch.isfinite(hidden).all():
             raise RuntimeError("official teacher endpoint states contain non-finite values")
-    return OfficialCODITeacherEndpointTargets(hidden=hidden.detach())
+        if not torch.isfinite(all_hidden).all():
+            raise RuntimeError("official teacher all-state endpoints contain non-finite values")
+    return OfficialCODITeacherEndpointTargets(
+        hidden=hidden.detach(),
+        all_hidden=all_hidden.detach(),
+    )
 
 
 def extract_official_teacher_kv_targets(

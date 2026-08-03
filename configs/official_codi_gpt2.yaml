@@ -139,10 +139,10 @@ kv_gradient_signal:
   bootstrap_samples: 10000
   bootstrap_seed: 0
 
-# TSV-C-inspired activation filtering at CODI's native answer-cue endpoint. The
-# original TSV-C method decomposes weight-difference matrices; this experiment instead
-# decomposes uncentered per-layer student-minus-teacher endpoint residual matrices.
-# Rank and partitions are preregistered and must not be tuned after observing results.
+# Historical TSV-C-inspired diagnostic. This completed contract paired the teacher
+# answer-cue colon with the student's pre-cue sixth latent state, excluded the embedding
+# state, and used L1. It is retained for artifact reproducibility and is not CODI's
+# source-native endpoint objective. Use ``endpoint_tsvc_corrected`` for the correction.
 endpoint_tsvc:
   data_config: configs/data.yaml
   calibration_examples: 5000
@@ -156,6 +156,33 @@ endpoint_tsvc:
   scopes: [endpoint_all_layers, endpoint_layer11]
   primary_scope: endpoint_all_layers
   metric: l1
+  relative_update_norm: 0.0001
+  precision: float32
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  familywise_alpha: 0.05
+  primary_controls:
+    [answer_only, random_rank77, bottom_rank77, shuffled_top77]
+
+# Corrected source-faithful endpoint experiment. Unlike the historical
+# ``endpoint_tsvc`` diagnostic, both teacher and student states are gathered at the
+# colon in their respective answer cues. The released CODI implementation consumes
+# the complete Hugging Face hidden-state tuple: embedding state plus 12 block outputs.
+endpoint_tsvc_corrected:
+  data_config: configs/data.yaml
+  calibration_examples: 5000
+  update_examples: 256
+  validation_examples: 256
+  calibration_batch_size: 16
+  utility_batch_size: 4
+  parity_examples: 4
+  sampling_seed: 11
+  random_basis_seed: 20260803
+  rank: 77
+  scopes: [endpoint_all_states, endpoint_layer11]
+  primary_scope: endpoint_all_states
+  metric: smooth_l1
+  teacher_std_unbiased: true
   relative_update_norm: 0.0001
   precision: float32
   bootstrap_samples: 10000
