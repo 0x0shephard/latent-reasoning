@@ -399,6 +399,19 @@ training, full key supervision, learned rank-four key supervision, and random ra
 supervision. The complete leakage, compute, loss, and decision contract is in
 [`STAGE1D_KEY_PROJECTION_TRAINING.md`](docs/STAGE1D_KEY_PROJECTION_TRAINING.md).
 
+## Answer-conditioned CODI endpoint follow-up
+
+The corrected answer-cue endpoint run found strongly concentrated residual spectra but
+no rank-77 answer utility. The fresh follow-up therefore fits residual PCs on one new
+partition and selects block-state directions on a second new partition using stable
+positive alignment with the gold-answer NLL gradient. It excludes the embedding state
+and every normalized question used by the completed seed-11 endpoint experiment.
+
+Run the complete restartable workflow with
+[`kaggle_official_codi_endpoint_answer_conditioned.ipynb`](notebooks/kaggle_official_codi_endpoint_answer_conditioned.ipynb).
+The frozen selection rule, matched controls, early-stop behavior, and final gate are in
+[`OFFICIAL_CODI_ENDPOINT_ANSWER_CONDITIONED.md`](docs/OFFICIAL_CODI_ENDPOINT_ANSWER_CONDITIONED.md).
+
 ## Layout
 
 ```

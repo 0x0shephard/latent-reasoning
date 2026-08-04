@@ -24,6 +24,10 @@ class OfficialCODIStudentAnswerOutput:
     # Source-faithful CODI endpoint: embedding state plus every transformer-block
     # state at the colon in the student's teacher-forced ``The answer is:`` cue.
     student_answer_endpoint_hidden: torch.Tensor | None
+    # Raw decoder hidden-state tuple.  Unlike the gathered endpoint tensor, these
+    # tensors are ancestors of the answer logits and can therefore be used to obtain
+    # answer-loss gradients at the colon without another forward pass.
+    student_answer_hidden_states: tuple[torch.Tensor, ...] | None
 
 
 @dataclass(frozen=True)
@@ -99,6 +103,7 @@ def official_codi_student_answer_forward(
     return_kv: bool,
     return_endpoint_hidden: bool = False,
     return_answer_endpoint_hidden: bool = False,
+    return_answer_hidden_states: bool = False,
 ) -> OfficialCODIStudentAnswerOutput:
     """Run the released six-step student path with differentiable answer NLL."""
     if latent_positions <= 0:
@@ -139,6 +144,9 @@ def official_codi_student_answer_forward(
         pad_token_id=model.pad_token_id,
     )
     embeddings = model.input_embeddings()(answer_inputs)
+    need_answer_hidden_states = (
+        return_answer_endpoint_hidden or return_answer_hidden_states
+    )
     decoded = model.codi(
         inputs_embeds=embeddings,
         past_key_values=cache,
@@ -148,7 +156,7 @@ def official_codi_student_answer_forward(
         # directly on a tuple. Keep cache output enabled exactly as in official greedy
         # generation; the returned extension is unused and logits are unchanged.
         use_cache=True,
-        output_hidden_states=return_answer_endpoint_hidden,
+        output_hidden_states=need_answer_hidden_states,
         return_dict=True,
     )
     answer_endpoint_hidden = None
@@ -176,6 +184,11 @@ def official_codi_student_answer_forward(
         answer_endpoint_hidden = all_states[row, :, endpoints, :]
         if not torch.isfinite(answer_endpoint_hidden).all():
             raise RuntimeError("student answer endpoint states contain non-finite values")
+    answer_hidden_states = None
+    if return_answer_hidden_states:
+        if not decoded.hidden_states:
+            raise RuntimeError("student answer pass returned no raw hidden states")
+        answer_hidden_states = tuple(decoded.hidden_states)
     token_loss = F.cross_entropy(
         decoded.logits.transpose(1, 2),
         answer_targets,
@@ -199,6 +212,7 @@ def official_codi_student_answer_forward(
         student_values=student_values,
         student_endpoint_hidden=endpoint_hidden,
         student_answer_endpoint_hidden=answer_endpoint_hidden,
+        student_answer_hidden_states=answer_hidden_states,
     )
 
 
@@ -217,6 +231,7 @@ class OfficialCODIAnswerScorer(nn.Module):
         return_kv: bool = False,
         return_endpoint_hidden: bool = False,
         return_answer_endpoint_hidden: bool = False,
+        return_answer_hidden_states: bool = False,
     ):
         return official_codi_student_answer_forward(
             self.model,
@@ -225,6 +240,7 @@ class OfficialCODIAnswerScorer(nn.Module):
             return_kv=return_kv,
             return_endpoint_hidden=return_endpoint_hidden,
             return_answer_endpoint_hidden=return_answer_endpoint_hidden,
+            return_answer_hidden_states=return_answer_hidden_states,
         )
 
 

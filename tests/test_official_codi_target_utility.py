@@ -160,12 +160,21 @@ def test_official_student_scorer_is_differentiable_and_stateless_callable():
         return_kv=True,
         return_endpoint_hidden=True,
         return_answer_endpoint_hidden=True,
+        return_answer_hidden_states=True,
     )
     assert output.per_example_loss.shape == (2,)
     assert output.student_keys.shape == (2, 1, 1, 2, 4)
     assert output.student_values.shape == (2, 1, 1, 2, 4)
     assert output.student_endpoint_hidden.shape == (2, 1, 4)
     assert output.student_answer_endpoint_hidden.shape == (2, 2, 4)
+    assert len(output.student_answer_hidden_states) == 2
+    hidden_gradients = torch.autograd.grad(
+        output.mean_loss,
+        output.student_answer_hidden_states,
+        retain_graph=True,
+        allow_unused=True,
+    )
+    assert all(value is not None for value in hidden_gradients)
     teacher = extract_official_teacher_endpoint_targets(model, batch)
     assert teacher.hidden.shape == (2, 1, 4)
     assert teacher.all_hidden.shape == (2, 2, 4)

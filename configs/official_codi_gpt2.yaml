@@ -190,3 +190,36 @@ endpoint_tsvc_corrected:
   familywise_alpha: 0.05
   primary_controls:
     [answer_only, random_rank77, bottom_rank77, shuffled_top77]
+
+# Fresh answer-conditioned follow-up to the completed corrected rank-77 experiment.
+# Residual PCs are fitted and scored on separate partitions, every normalized question
+# from the seed-11 corrected experiment is excluded, and the embedding state is not an
+# eligible target.  Rank is selected independently per block by split-stable positive
+# alignment with the gold-answer NLL gradient, not by residual energy alone.
+endpoint_answer_conditioned:
+  data_config: configs/data.yaml
+  residual_fit_examples: 1024
+  direction_selection_examples: 1024
+  update_examples: 256
+  validation_examples: 256
+  fit_batch_size: 16
+  selection_batch_size: 4
+  utility_batch_size: 4
+  parity_examples: 4
+  sampling_seed: 29
+  random_basis_seed: 20260804
+  minimum_split_z: 1.645
+  selection_fdr: 0.05
+  maximum_rank_per_state: 64
+  exclude_embedding: true
+  selection_scope: endpoint_blocks_answer_conditioned
+  metric: smooth_l1
+  teacher_std_unbiased: true
+  relative_update_norm: 0.0001
+  precision: float32
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  familywise_alpha: 0.05
+  primary_controls:
+    [answer_only, energy_rank_matched, random_rank_matched,
+     shuffled_answer_rank_matched, shuffled_teacher]
