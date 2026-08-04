@@ -130,6 +130,24 @@ def _math_sdpa_context(device: torch.device):
             yield
 
 
+def _dense_candidate_scores(
+    values: torch.Tensor, identities: torch.Tensor
+) -> torch.Tensor:
+    """Scatter candidate scores without changing their statistical precision."""
+    if values.ndim != 1 or identities.shape != (values.numel(), 2):
+        raise ValueError("candidate values and identities do not align")
+    resolved_identities = identities.to(device=values.device, dtype=torch.long)
+    result = torch.zeros(
+        1,
+        GPT2_STATE_COUNT,
+        GPT2_HIDDEN_SIZE,
+        dtype=values.dtype,
+        device=values.device,
+    )
+    result[0, resolved_identities[:, 0], resolved_identities[:, 1]] = values
+    return result
+
+
 def sample_fresh_parameter_aware_partitions(
     dataset,
     *,
@@ -608,12 +626,10 @@ def collect(args: argparse.Namespace) -> dict:
             hutchinson_probes=args.hutchinson_probes,
             seed=args.probe_seed + batch_index,
         )
-        actual = torch.zeros(1, GPT2_STATE_COUNT, GPT2_HIDDEN_SIZE)
-        shuffled = torch.zeros_like(actual)
-        actual[0, identities[:, 0], identities[:, 1]] = scores["cosines"]["answer"]
-        shuffled[0, identities[:, 0], identities[:, 1]] = scores["cosines"][
-            "shuffled_answer"
-        ]
+        actual = _dense_candidate_scores(scores["cosines"]["answer"], identities)
+        shuffled = _dense_candidate_scores(
+            scores["cosines"]["shuffled_answer"], identities
+        )
         split_ids = torch.tensor([batch_index % 2], dtype=torch.long)
         update_answer_alignment_moments(
             alignment_moments, actual, shuffled, split_ids

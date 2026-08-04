@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from scripts.collect_official_codi_endpoint_parameter_aware import (
+    _dense_candidate_scores,
     _math_sdpa_context,
     _shuffled_answer_batch,
     sample_fresh_parameter_aware_partitions,
@@ -48,6 +49,17 @@ def test_math_sdpa_context_supports_double_backward_after_context_exit():
     first = torch.autograd.grad(output.square().sum(), query, create_graph=True)[0]
     second = torch.autograd.grad(first.square().sum(), query)[0]
     assert torch.isfinite(second).all()
+
+
+def test_dense_candidate_scores_preserves_float64_precision():
+    values = torch.tensor([0.25, -0.5], dtype=torch.float64)
+    identities = torch.tensor([[11, 2], [12, 3]])
+    dense = _dense_candidate_scores(values, identities)
+    assert dense.dtype == torch.float64
+    assert dense.shape == (1, 13, 768)
+    assert dense[0, 11, 2] == 0.25
+    assert dense[0, 12, 3] == -0.5
+    assert torch.count_nonzero(dense) == 2
 
 
 def test_parameter_gradient_cosines_match_exact_two_dimensional_geometry():
