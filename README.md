@@ -412,6 +412,22 @@ Run the complete restartable workflow with
 The frozen selection rule, matched controls, early-stop behavior, and final gate are in
 [`OFFICIAL_CODI_ENDPOINT_ANSWER_CONDITIONED.md`](docs/OFFICIAL_CODI_ENDPOINT_ANSWER_CONDITIONED.md).
 
+## Parameter-aware CODI endpoint follow-up
+
+The answer-conditioned run dynamically reduced rank 77 to six PCs in the final two
+block states, but their induced update was effectively orthogonal to the answer
+gradient. The parameter-aware follow-up therefore selects from the first 64 residual
+PCs in those two states using their induced LoRA-parameter-gradient cosine with the
+gold-answer gradient. Candidate norms use deterministic Hutchinson sketches, and all
+questions from both completed endpoint experiments are excluded before fresh seed-41
+sampling.
+
+Run the restartable workflow with
+[`kaggle_official_codi_endpoint_parameter_aware.ipynb`](notebooks/kaggle_official_codi_endpoint_parameter_aware.ipynb).
+The parameter geometry, split-stable selection rule, controls, and final utility gate
+are documented in
+[`OFFICIAL_CODI_ENDPOINT_PARAMETER_AWARE.md`](docs/OFFICIAL_CODI_ENDPOINT_PARAMETER_AWARE.md).
+
 ## Layout
 
 ```

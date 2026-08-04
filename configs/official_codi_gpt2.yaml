@@ -223,3 +223,38 @@ endpoint_answer_conditioned:
   primary_controls:
     [answer_only, energy_rank_matched, random_rank_matched,
      shuffled_answer_rank_matched, shuffled_teacher]
+
+# Fresh follow-up after the negative seed-29 activation-local screen. Candidate
+# residual PCs are restricted to the final two block states and ranked by induced
+# LoRA-parameter-gradient cosine with the gold-answer gradient. PC-gradient norms use
+# a deterministic Hutchinson sketch. All seed-11 and seed-29 questions are excluded.
+endpoint_parameter_aware:
+  data_config: configs/data.yaml
+  residual_fit_examples: 1024
+  direction_selection_examples: 1024
+  update_examples: 256
+  validation_examples: 256
+  fit_batch_size: 16
+  selection_batch_size: 8
+  utility_batch_size: 4
+  parity_examples: 4
+  sampling_seed: 41
+  random_basis_seed: 20260805
+  probe_seed: 314159
+  candidate_states: [11, 12]
+  candidate_pc_count: 64
+  hutchinson_probes: 8
+  minimum_split_z: 1.645
+  selection_fdr: 0.05
+  maximum_rank_per_state: 8
+  selection_scope: endpoint_final_two_blocks_parameter_aware
+  metric: smooth_l1
+  teacher_std_unbiased: true
+  relative_update_norm: 0.0001
+  precision: float32
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  familywise_alpha: 0.05
+  primary_controls:
+    [answer_only, energy_rank_matched, random_rank_matched,
+     shuffled_answer_rank_matched, shuffled_teacher]
