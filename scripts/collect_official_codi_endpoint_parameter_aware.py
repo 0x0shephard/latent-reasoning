@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
@@ -108,6 +108,26 @@ def _amp_context(device: torch.device, precision: str):
     if dtype is None:
         raise ValueError("precision must be float32, float16, or bfloat16")
     return torch.autocast(device_type="cuda", dtype=dtype)
+
+
+@contextmanager
+def _math_sdpa_context(device: torch.device):
+    """Use the CUDA attention backend whose backward supports double backward."""
+    if device.type != "cuda":
+        yield
+        return
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+    except ImportError:
+        with torch.backends.cuda.sdp_kernel(
+            enable_flash=False,
+            enable_math=True,
+            enable_mem_efficient=False,
+        ):
+            yield
+    else:
+        with sdpa_kernel(SDPBackend.MATH):
+            yield
 
 
 def sample_fresh_parameter_aware_partitions(
@@ -386,6 +406,7 @@ def collect(args: argparse.Namespace) -> dict:
         "hidden_states": GPT2_STATE_COUNT,
         "hidden_size": GPT2_HIDDEN_SIZE,
         "precision": args.precision,
+        "selection_attention_backend": "math_sdpa_on_cuda_default_on_cpu",
         "endpoint": "teacher and student answer-cue colon after six student latents and EOT",
         "selection_score": (
             "Hutchinson-normalized cosine between each rank-one residual-PC target "
@@ -554,7 +575,10 @@ def collect(args: argparse.Namespace) -> dict:
             len(indices), generator=generator, device=device
         )
         shuffled_batch = _shuffled_answer_batch(batch, permutation)
-        with _amp_context(device, args.precision):
+        # Efficient/flash SDPA backward does not implement the mixed derivative used
+        # by ``parameter_gradient_cosines``.  Dispatch these graph-producing forwards
+        # through math SDPA; the residual fit and utility retain their normal backend.
+        with _math_sdpa_context(device), _amp_context(device, args.precision):
             output = scorer(batch, return_answer_endpoint_hidden=True)
             shuffled_output = scorer(shuffled_batch)
         student = output.student_answer_endpoint_hidden

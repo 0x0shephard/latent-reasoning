@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import math
 
+import pytest
 import torch
+import torch.nn.functional as F
 
 from scripts.collect_official_codi_endpoint_parameter_aware import (
+    _math_sdpa_context,
     _shuffled_answer_batch,
     sample_fresh_parameter_aware_partitions,
 )
@@ -32,6 +35,19 @@ class TinyDataset:
 
     def __len__(self):
         return len(self.rows)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_math_sdpa_context_supports_double_backward_after_context_exit():
+    device = torch.device("cuda")
+    query = torch.randn(1, 2, 4, 8, device=device, requires_grad=True)
+    key = torch.randn(1, 2, 4, 8, device=device, requires_grad=True)
+    value = torch.randn(1, 2, 4, 8, device=device, requires_grad=True)
+    with _math_sdpa_context(device):
+        output = F.scaled_dot_product_attention(query, key, value)
+    first = torch.autograd.grad(output.square().sum(), query, create_graph=True)[0]
+    second = torch.autograd.grad(first.square().sum(), query)[0]
+    assert torch.isfinite(second).all()
 
 
 def test_parameter_gradient_cosines_match_exact_two_dimensional_geometry():

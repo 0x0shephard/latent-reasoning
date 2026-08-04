@@ -88,6 +88,12 @@ g_A
 
 with respect to `w`.
 
+This mixed derivative requires second-order autograd through attention. During these
+selection forwards only, CUDA uses PyTorch's math SDPA backend because the efficient
+and flash SDPA backward kernels do not implement the required double backward. The
+residual-fit and held-out utility phases retain the normal attention backend. The
+chosen selection backend is recorded in the collection metadata.
+
 ## Deterministic parameter-norm sketch
 
 Computing 128 complete LoRA gradients per selection minibatch would be unnecessarily
