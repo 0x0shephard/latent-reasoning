@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import torch
 
 from scripts.collect_official_codi_endpoint_answer_conditioned import (
+    _answer_gradients_at_colon,
     sample_fresh_answer_conditioned_partitions,
 )
 from scripts.collect_official_codi_endpoint_tsvc import (
@@ -30,6 +33,28 @@ class TinyDataset:
 
     def __len__(self):
         return len(self.rows)
+
+
+def test_answer_gradient_collection_skips_frozen_embedding_state():
+    batch_size, width, hidden = 2, 3, 768
+    embedding = torch.zeros(batch_size, width, hidden)
+    blocks = tuple(
+        torch.randn(batch_size, width, hidden, requires_grad=True)
+        for _ in range(12)
+    )
+    loss = sum(value.sum() for value in blocks) / batch_size
+    output = SimpleNamespace(
+        mean_loss=loss,
+        student_answer_hidden_states=(embedding, *blocks),
+    )
+    batch = SimpleNamespace(
+        teacher_answer_start=torch.tensor([2, 2]),
+        teacher_trace_end=torch.tensor([1, 1]),
+    )
+    gradients = _answer_gradients_at_colon(output, batch)
+    assert gradients.shape == (batch_size, 13, hidden)
+    assert torch.count_nonzero(gradients[:, 0, :]) == 0
+    assert torch.allclose(gradients[:, 1:, :], torch.ones_like(gradients[:, 1:, :]))
 
 
 def test_split_stable_positive_direction_is_selected_and_embedding_is_excluded():

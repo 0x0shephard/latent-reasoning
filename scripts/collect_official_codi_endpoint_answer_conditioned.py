@@ -206,14 +206,41 @@ def _answer_gradients_at_colon(output, batch) -> torch.Tensor:
     hidden_states = output.student_answer_hidden_states
     if not hidden_states or len(hidden_states) != GPT2_STATE_COUNT:
         raise RuntimeError("answer-gradient collection requires all 13 raw hidden states")
-    gradients = torch.autograd.grad(
+    # State 0 is the frozen embedding/positional output in the released PEFT model.
+    # It therefore does not require gradients, and it is ineligible for this experiment
+    # anyway.  Differentiate only transformer-block states 1..12, then prepend an
+    # explicit zero state so downstream tensors retain the audited [B,13,768] shape.
+    block_hidden_states = tuple(hidden_states[1:])
+    non_differentiable = [
+        index + 1
+        for index, value in enumerate(block_hidden_states)
+        if not value.requires_grad
+    ]
+    if non_differentiable:
+        raise RuntimeError(
+            "transformer-block answer states do not require gradients: "
+            f"{non_differentiable}"
+        )
+    block_gradients = torch.autograd.grad(
         output.mean_loss,
-        hidden_states,
+        block_hidden_states,
         retain_graph=False,
         allow_unused=True,
     )
-    if any(value is None for value in gradients):
-        raise RuntimeError("an answer hidden-state entry is disconnected from answer NLL")
+    disconnected = [
+        index + 1
+        for index, value in enumerate(block_gradients)
+        if value is None
+    ]
+    if disconnected:
+        raise RuntimeError(
+            "transformer-block states are disconnected from answer NLL: "
+            f"{disconnected}"
+        )
+    gradients = (
+        torch.zeros_like(hidden_states[0]),
+        *(value for value in block_gradients if value is not None),
+    )
     endpoints = (
         batch.teacher_answer_start - batch.teacher_trace_end
     ).to(device=hidden_states[0].device)
