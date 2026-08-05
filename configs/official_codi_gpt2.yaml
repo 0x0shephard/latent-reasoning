@@ -258,3 +258,31 @@ endpoint_parameter_aware:
   primary_controls:
     [answer_only, energy_rank_matched, random_rank_matched,
      shuffled_answer_rank_matched, shuffled_teacher]
+
+# Rank-matched retention follow-up across the three completed endpoint selectors.
+# Each method receives exactly three directions at states 11 and 12. The selected-only
+# and discarded-complement targets are trained as separate arms; the student forward
+# representation itself remains width 768. Consequently, this experiment measures
+# target sufficiency but does not alter inference FLOPs or model architecture.
+endpoint_retention:
+  data_config: configs/data.yaml
+  training_examples: 512
+  data_seed: 53
+  training_seeds: [53, 59, 61]
+  epochs: 1
+  batch_size: 4
+  learning_rate: 0.00001
+  weight_decay: 0.0
+  save_every: 32
+  common_states: [11, 12]
+  common_rank_per_state: 3
+  precision: float32
+  eval_dataset: gsm8k
+  eval_batch_size: 128
+  noninferiority_margin: 0.01
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  arms:
+    [answer_only, full_common,
+     energy_selected, answer_conditioned_selected, parameter_aware_selected,
+     energy_complement, answer_conditioned_complement, parameter_aware_complement]
