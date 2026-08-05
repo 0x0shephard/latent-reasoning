@@ -30,6 +30,8 @@ def test_retention_notebook_has_the_frozen_complete_contract():
         "ENERGY_BASIS_INPUT",
         "native_loss_gradient_parity.json",
         "basis.pt diagnostics",
+        "paths_by_sha",
+        "byte-identical mounted copies",
         "run_official_codi_endpoint_retention.py",
         "analyze_official_codi_endpoint_retention.py",
         "RUN_SMOKE",
