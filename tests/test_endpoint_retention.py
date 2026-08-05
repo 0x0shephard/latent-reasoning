@@ -13,6 +13,7 @@ from src.mech.endpoint_retention import (
     RETENTION_METHODS,
     RETENTION_TRAINING_ARMS,
     RetentionBasis,
+    _artifact_metadata,
     endpoint_retention_loss,
     retention_basis_for_arm,
     validate_retention_basis,
@@ -44,6 +45,21 @@ class TinyDataset:
 def test_registered_retention_bases_are_rank_matched():
     for name in RETENTION_METHODS:
         validate_retention_basis(_basis(name))
+
+
+def test_older_corrected_export_merges_manifest_and_parity_sidecars(tmp_path):
+    basis_path = tmp_path / "basis.pt"
+    basis_path.write_bytes(b"identity-only")
+    (tmp_path / "run_manifest.json").write_text(
+        '{"state":"complete","contract":"energy-contract","calibration_examples":5000}'
+    )
+    (tmp_path / "native_loss_gradient_parity.json").write_text(
+        '{"status":"passed"}'
+    )
+    metadata = _artifact_metadata(basis_path, {"metadata": {"rank": 77}})
+    assert metadata["contract"] == "energy-contract"
+    assert metadata["calibration_examples"] == 5000
+    assert metadata["native_parity_gate"]["status"] == "passed"
 
 
 def test_selected_and_complement_ignore_opposite_coordinates():

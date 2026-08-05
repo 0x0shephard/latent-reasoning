@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -48,6 +49,24 @@ class RetentionBasis:
     source_sha256: str
     source_request_sha256: str
     source_contract: str
+
+
+def _artifact_metadata(path: Path, payload: Mapping) -> dict:
+    """Merge immutable collection sidecars used by the older corrected export."""
+    metadata = dict(payload.get("metadata", {}))
+    manifest_path = path.parent / "run_manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("state") not in {None, "complete"}:
+            raise RuntimeError(f"basis collection is not complete: {manifest_path}")
+        for key, value in manifest.items():
+            metadata.setdefault(key, value)
+    parity_path = path.parent / "native_loss_gradient_parity.json"
+    if parity_path.is_file() and "native_parity_gate" not in metadata:
+        metadata["native_parity_gate"] = json.loads(
+            parity_path.read_text(encoding="utf-8")
+        )
+    return metadata
 
 
 def _rank_matched_basis(
@@ -136,7 +155,9 @@ def load_retention_bases(
         if not path.is_file():
             raise FileNotFoundError(f"{name} basis does not exist: {path}")
         payload = torch.load(path, map_location="cpu", weights_only=False)
-        metadata = payload.get("metadata", {})
+        metadata = _artifact_metadata(path, payload)
+        payload = dict(payload)
+        payload["metadata"] = metadata
         if metadata.get("checkpoint_sha256") != checkpoint_sha256:
             raise RuntimeError(f"{name} basis uses a different CODI checkpoint")
         if not isinstance(payload.get("request_sha256"), str):
