@@ -342,6 +342,7 @@ def run(args: argparse.Namespace) -> dict:
         "learning_rate": args.learning_rate,
         "weight_decay": args.weight_decay,
         "precision": args.precision,
+        "eval_precision": args.eval_precision,
         "eval_limit": args.eval_limit,
         "eval_batch_size": args.eval_batch_size,
         "auxiliary_norm_matching": "selected/complement matched to full-common every batch",
@@ -358,11 +359,12 @@ def run(args: argparse.Namespace) -> dict:
     }
     request_sha256 = _sha256_json(request)
     compatible_progress_hashes = {request_sha256}
-    if args.eval_batch_size != 128:
-        # Migration for runs from the first retention notebook revision. Evaluation
-        # batching cannot change trained weights, so its completed training checkpoint
-        # remains valid after the T4-memory fix from 128 to 64.
-        legacy_request = {**request, "eval_batch_size": 128}
+    # Migrations from the first two notebook revisions. Evaluation dtype/batching cannot
+    # change already-trained weights, so those completed training states remain valid.
+    for legacy_batch_size in (128, 64):
+        legacy_request = dict(request)
+        legacy_request.pop("eval_precision", None)
+        legacy_request["eval_batch_size"] = legacy_batch_size
         compatible_progress_hashes.add(_sha256_json(legacy_request))
     request["request_sha256"] = request_sha256
     output_dir = args.output_dir
@@ -388,7 +390,10 @@ def run(args: argparse.Namespace) -> dict:
         if progress.get("request_sha256") not in compatible_progress_hashes:
             raise RuntimeError("training checkpoint belongs to a different request")
         if progress.get("request_sha256") != request_sha256:
-            print("[resume] accepting pre-memory-fix training state; only eval batching changed")
+            print(
+                "[resume] accepting pre-memory-fix training state; only evaluation "
+                "dtype/batching changed"
+            )
         _restore_trainable(parameters_by_name, progress["trainable"])
         optimizer.load_state_dict(progress["optimizer"])
         torch.random.set_rng_state(progress["cpu_rng_state"])
@@ -494,7 +499,13 @@ def run(args: argparse.Namespace) -> dict:
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
-    model.eval()
+    # The official reproduction config uses dtype=auto, which resolves to float16 on a
+    # T4. Training remains float32; only the already-frozen evaluation copy is cast.
+    eval_dtype = resolve_torch_dtype(args.eval_precision, device)
+    model.to(device=device, dtype=eval_dtype).eval()
+    gc.collect()
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
     eval_cfg = load_config(str(cfg.data_config))
     examples = load_eval_set("gsm8k", eval_cfg.eval.gsm8k)
     if len(examples) != int(cfg.eval.expected_counts.gsm8k):
@@ -600,7 +611,8 @@ def main() -> int:
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--save-every", type=int, default=32)
     parser.add_argument("--eval-limit", type=int, default=0)
-    parser.add_argument("--eval-batch-size", type=int, default=64)
+    parser.add_argument("--eval-batch-size", type=int, default=16)
+    parser.add_argument("--eval-precision", default="auto")
     parser.add_argument("--precision", default="float32")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--allow-cpu", action="store_true")

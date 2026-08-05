@@ -50,7 +50,9 @@ The eight training arms are:
 
 Every arm uses the released checkpoint, the same 512 fresh normalized questions, the
 same order within each of three training seeds, AdamW at \(10^{-5}\), one epoch, and the
-same full 1,319-example GSM8K evaluation. All 10,632 questions used anywhere in the
+same full 1,319-example GSM8K evaluation. Training uses float32; evaluation uses the
+official `auto` dtype contract (float16 on a T4) with a fixed batch size of 16. All
+10,632 questions used anywhere in the
 three completed experiments are excluded from the new training partition.
 
 ## Registered decisions

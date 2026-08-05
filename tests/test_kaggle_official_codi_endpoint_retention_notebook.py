@@ -48,7 +48,9 @@ def test_retention_notebook_defaults_to_rank_matched_three_seed_full_eval():
     assert "TRAINING_EXAMPLES = 512" in sources
     assert "TRAINING_SEEDS = [53, 59, 61]" in sources
     assert "NONINFERIORITY_MARGIN = 0.01" in sources
-    assert "EVAL_BATCH_SIZE = 64" in sources
+    assert "EVAL_BATCH_SIZE = 16" in sources
+    assert 'EVAL_PRECISION = "auto"' in sources
+    assert "PYTORCH_ALLOC_CONF" in sources
     assert "RUN_FULL = True" in sources
     assert 'eval_limit=0' in sources
     for arm in (

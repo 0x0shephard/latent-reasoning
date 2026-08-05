@@ -278,7 +278,8 @@ endpoint_retention:
   common_rank_per_state: 3
   precision: float32
   eval_dataset: gsm8k
-  eval_batch_size: 64
+  eval_batch_size: 16
+  eval_precision: auto
   noninferiority_margin: 0.01
   bootstrap_samples: 10000
   bootstrap_seed: 0
