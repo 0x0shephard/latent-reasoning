@@ -5,6 +5,7 @@ import argparse
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
+import gc
 import hashlib
 import json
 import os
@@ -356,6 +357,13 @@ def run(args: argparse.Namespace) -> dict:
         for name, state in request["basis_sources"].items()
     }
     request_sha256 = _sha256_json(request)
+    compatible_progress_hashes = {request_sha256}
+    if args.eval_batch_size != 128:
+        # Migration for runs from the first retention notebook revision. Evaluation
+        # batching cannot change trained weights, so its completed training checkpoint
+        # remains valid after the T4-memory fix from 128 to 64.
+        legacy_request = {**request, "eval_batch_size": 128}
+        compatible_progress_hashes.add(_sha256_json(legacy_request))
     request["request_sha256"] = request_sha256
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -377,8 +385,10 @@ def run(args: argparse.Namespace) -> dict:
     start_step = 0
     if progress_path.is_file():
         progress = torch.load(progress_path, map_location="cpu", weights_only=False)
-        if progress.get("request_sha256") != request_sha256:
+        if progress.get("request_sha256") not in compatible_progress_hashes:
             raise RuntimeError("training checkpoint belongs to a different request")
+        if progress.get("request_sha256") != request_sha256:
+            print("[resume] accepting pre-memory-fix training state; only eval batching changed")
         _restore_trainable(parameters_by_name, progress["trainable"])
         optimizer.load_state_dict(progress["optimizer"])
         torch.random.set_rng_state(progress["cpu_rng_state"])
@@ -444,6 +454,7 @@ def run(args: argparse.Namespace) -> dict:
         for parameter, gradient in zip(parameters, total_gradients):
             parameter.grad = None if gradient is None else gradient.detach()
         optimizer.step()
+        del parameter, gradient
         if matching is not None:
             norm_records.append(matching)
         iterator.set_postfix(answer_loss=float(output.mean_loss.detach().float()))
@@ -457,6 +468,10 @@ def run(args: argparse.Namespace) -> dict:
                 device=device,
             )
         del batch, teacher, output, student, base_gradients, total_gradients
+        if needs_auxiliary:
+            del full_loss, raw_auxiliary, reference_auxiliary, matched_auxiliary
+            if args.arm != "full_common":
+                del arm_loss
     training_seconds = time.perf_counter() - train_started
     # Preserve the fully trained state if generation is interrupted after training.
     _save_progress(
@@ -467,6 +482,17 @@ def run(args: argparse.Namespace) -> dict:
         optimizer=optimizer,
         device=device,
     )
+
+    # AdamW keeps two parameter-sized moment buffers, and the final batch may retain
+    # auxiliary gradient tuples. Neither is needed for inference. Releasing them before
+    # prompt logits are allocated is required for full-GSM8K evaluation on a 16 GiB T4.
+    optimizer.zero_grad(set_to_none=True)
+    for parameter in parameters:
+        parameter.grad = None
+    del optimizer
+    gc.collect()
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
 
     model.eval()
     eval_cfg = load_config(str(cfg.data_config))
@@ -574,7 +600,7 @@ def main() -> int:
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--save-every", type=int, default=32)
     parser.add_argument("--eval-limit", type=int, default=0)
-    parser.add_argument("--eval-batch-size", type=int, default=128)
+    parser.add_argument("--eval-batch-size", type=int, default=64)
     parser.add_argument("--precision", default="float32")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--allow-cpu", action="store_true")
