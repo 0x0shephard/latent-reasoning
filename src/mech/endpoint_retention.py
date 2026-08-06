@@ -49,6 +49,7 @@ class RetentionBasis:
     source_sha256: str
     source_request_sha256: str
     source_contract: str
+    selected_pc_indices: torch.Tensor | None = None
 
 
 def _artifact_metadata(path: Path, payload: Mapping) -> dict:
@@ -133,6 +134,11 @@ def validate_retention_basis(
         )
     ):
         raise ValueError("retention basis source identity is incomplete")
+    if value.selected_pc_indices is not None and value.selected_pc_indices.shape != (
+        GPT2_STATE_COUNT,
+        common_rank,
+    ):
+        raise ValueError("retention selected-PC identities have the wrong shape")
 
 
 def load_retention_bases(
@@ -222,6 +228,14 @@ def load_retention_bases(
         "answer_conditioned": answer.answer_conditioned,
         "parameter_aware": parameter.parameter_aware,
     }
+    source_pc_indices = {
+        "energy": torch.arange(common_rank, dtype=torch.int64)
+        .unsqueeze(0)
+        .expand(GPT2_STATE_COUNT, -1)
+        .clone(),
+        "answer_conditioned": answer.selected_pc_indices[:, :common_rank].long(),
+        "parameter_aware": parameter.selected_pc_indices[:, :common_rank].long(),
+    }
     results = {}
     for name, source in source_tensors.items():
         basis, ranks = _rank_matched_basis(
@@ -237,6 +251,7 @@ def load_retention_bases(
             source_sha256=sha256_file(path),
             source_request_sha256=str(payload["request_sha256"]),
             source_contract=str(payload["metadata"]["contract"]),
+            selected_pc_indices=source_pc_indices[name].clone(),
         )
         validate_retention_basis(
             value, common_states=common_states, common_rank=common_rank
@@ -259,6 +274,11 @@ def retention_bases_state(values: Mapping[str, RetentionBasis]) -> dict:
             "source_sha256": value.source_sha256,
             "source_request_sha256": value.source_request_sha256,
             "source_contract": value.source_contract,
+            "selected_pc_indices": (
+                None
+                if value.selected_pc_indices is None
+                else value.selected_pc_indices.tolist()
+            ),
         }
     return result
 

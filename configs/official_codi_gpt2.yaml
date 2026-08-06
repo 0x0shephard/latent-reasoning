@@ -287,3 +287,23 @@ endpoint_retention:
     [answer_only, full_common,
      energy_selected, answer_conditioned_selected, parameter_aware_selected,
      energy_complement, answer_conditioned_complement, parameter_aware_complement]
+
+# Frozen-checkpoint causal follow-up. Candidate directions are removed only from the
+# exact Hugging Face hidden-state entries 11/12 on the generated answer-cue colon. No
+# weight is updated. Rank-matched random arms form the empirical accuracy-loss null.
+endpoint_inference_ablation:
+  activation_calibration_examples: 1024
+  activation_calibration_seed: 67
+  activation_calibration_batch_size: 16
+  common_states: [11, 12]
+  common_rank_per_state: 3
+  random_replicates: 20
+  random_seed: 20260806
+  alpha: 1.0
+  minimum_endpoint_coverage: 0.95
+  eval_dataset: gsm8k
+  eval_batch_size: 32
+  precision: auto
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  familywise_alpha: 0.05

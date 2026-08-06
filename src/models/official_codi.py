@@ -13,6 +13,7 @@ Reference source revision:
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 import hashlib
 from pathlib import Path
@@ -287,6 +288,25 @@ def _normalized_official_questions(questions: Iterable[str]) -> list[str]:
     return [str(question).strip().replace("  ", " ") for question in questions]
 
 
+def _new_answer_endpoint_mask(
+    generated: list[list[int]],
+    cue_ids: list[int],
+    already_applied: torch.Tensor,
+) -> torch.Tensor:
+    """Rows whose current input is the first exact generated cue-final token."""
+    applied = already_applied.detach().cpu().tolist()
+    return torch.tensor(
+        [
+            (not bool(applied[row]))
+            and len(token_ids) >= len(cue_ids)
+            and token_ids[-len(cue_ids) :] == cue_ids
+            for row, token_ids in enumerate(generated)
+        ],
+        dtype=torch.bool,
+        device=already_applied.device,
+    )
+
+
 @torch.inference_mode()
 def generate_official_codi(
     model: OfficialCODIGPT2,
@@ -298,7 +318,10 @@ def generate_official_codi(
     batch_size: int,
     device: torch.device,
     kv_intervention=None,
-) -> list[str]:
+    answer_endpoint_intervention=None,
+    answer_cue: str = "The answer is:",
+    return_endpoint_metadata: bool = False,
+) -> list[str] | tuple[list[str], dict]:
     """Greedy generation matching the released path, with optional causal KV edits."""
     if latent_iterations <= 0:
         raise ValueError("latent_iterations must be positive")
@@ -309,8 +332,14 @@ def generate_official_codi(
 
     model.eval()
     outputs: list[str] = []
+    endpoint_reached: list[bool] = []
     embedding = model.input_embeddings()
     normalized = _normalized_official_questions(questions)
+    cue_ids = list(
+        tokenizer(f" {answer_cue}", add_special_tokens=False)["input_ids"]
+    )
+    if not cue_ids:
+        raise ValueError("answer cue must tokenize to at least one token")
 
     for start in range(0, len(normalized), batch_size):
         chunk = normalized[start : start + batch_size]
@@ -363,17 +392,28 @@ def generate_official_codi(
         )
         token_embedding = embedding(eot_ids).unsqueeze(1)
         finished = torch.zeros(len(chunk), dtype=torch.bool, device=device)
+        endpoint_applied = torch.zeros(len(chunk), dtype=torch.bool, device=device)
         generated: list[list[int]] = [[] for _ in chunk]
 
         for _ in range(max_new_tokens):
-            decoded = model.codi(
-                inputs_embeds=token_embedding,
-                past_key_values=cache,
-                use_cache=True,
-                output_hidden_states=False,
-                output_attentions=False,
-                return_dict=True,
+            endpoint_mask = _new_answer_endpoint_mask(
+                generated, cue_ids, endpoint_applied
             )
+            endpoint_applied |= endpoint_mask
+            context = (
+                answer_endpoint_intervention.activate(endpoint_mask)
+                if answer_endpoint_intervention is not None and bool(endpoint_mask.any())
+                else nullcontext()
+            )
+            with context:
+                decoded = model.codi(
+                    inputs_embeds=token_embedding,
+                    past_key_values=cache,
+                    use_cache=True,
+                    output_hidden_states=False,
+                    output_attentions=False,
+                    return_dict=True,
+                )
             cache = decoded.past_key_values
             # The released script excludes only the final synthetic EOT id.
             next_token = decoded.logits[:, -1, : model.eot_id].argmax(dim=-1)
@@ -390,7 +430,16 @@ def generate_official_codi(
             tokenizer.decode(token_ids, skip_special_tokens=True)
             for token_ids in generated
         )
+        endpoint_reached.extend(bool(value) for value in endpoint_applied.tolist())
 
     if len(outputs) != len(questions):
         raise RuntimeError("official CODI generation count mismatch")
+    if return_endpoint_metadata:
+        return outputs, {
+            "answer_cue": answer_cue,
+            "answer_cue_token_ids": cue_ids,
+            "endpoint_reached": endpoint_reached,
+            "endpoint_reached_count": int(sum(endpoint_reached)),
+            "endpoint_reached_fraction": float(sum(endpoint_reached) / len(endpoint_reached)),
+        }
     return outputs
