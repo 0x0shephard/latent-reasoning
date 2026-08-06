@@ -140,13 +140,14 @@ def run(args: argparse.Namespace) -> dict:
         "eval_batch_size": args.eval_batch_size,
         "precision": args.precision,
         "weights_updated": False,
+        "answer_cue_mode": "frozen EOT plus fixed answer cue, then greedy answer decoding",
         "state_module_map": {
             "11": "transformer.h[10] output",
             "12": "transformer.ln_f output after transformer.h[11]",
         },
         "intervention_timing": (
             "exact Hugging Face hidden-state entries 11/12 on the forward that "
-            "consumes the first exact generated answer-cue colon"
+            "consumes the fixed answer-cue colon"
         ),
     }
     request_sha256 = _sha256_json(request)
@@ -200,6 +201,7 @@ def run(args: argparse.Namespace) -> dict:
         device=device,
         answer_endpoint_intervention=intervention,
         answer_cue=style.answer_prefix,
+        force_answer_cue=True,
         return_endpoint_metadata=True,
     )
     if device.type == "cuda":

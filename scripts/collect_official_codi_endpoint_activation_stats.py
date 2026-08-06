@@ -162,7 +162,7 @@ def collect(args: argparse.Namespace) -> dict:
         "batch_size": args.batch_size,
         "precision": args.precision,
         "states": [11, 12],
-        "endpoint": "student generated/teacher-forced answer-cue colon after EOT",
+        "endpoint": "student fixed teacher-forced answer-cue colon after EOT",
     }
     request_sha256 = _sha256_json(request)
     output_dir = args.output_dir

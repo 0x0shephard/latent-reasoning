@@ -100,6 +100,10 @@ def analyze_endpoint_inference_ablation(
         raise ValueError("frozen-checkpoint baseline is required")
     baseline = np.asarray(by_arm["baseline"]["correctness"], dtype=bool)
     reached = np.asarray(by_arm["baseline"]["endpoint_reached"], dtype=bool)
+    native_accuracy_value = by_arm["baseline"].get("native_reproduction_accuracy")
+    native_accuracy = (
+        None if native_accuracy_value is None else float(native_accuracy_value)
+    )
     if baseline.ndim != 1 or baseline.size == 0:
         raise ValueError("baseline correctness must be a nonempty vector")
     if float(reached.mean()) < minimum_endpoint_coverage:
@@ -193,9 +197,14 @@ def analyze_endpoint_inference_ablation(
         "single_state_12": random_family(single_random[12]),
     }
     return {
-        "analysis": "official_codi_frozen_answer_colon_inference_ablation",
+        "analysis": "official_codi_frozen_forced_answer_colon_inference_ablation",
         "evaluated_examples": int(baseline.size),
         "baseline_accuracy": float(baseline.mean()),
+        "forced_cue_baseline_accuracy": float(baseline.mean()),
+        "native_reproduction_accuracy": native_accuracy,
+        "forced_cue_minus_native_accuracy": (
+            None if native_accuracy is None else float(baseline.mean()) - native_accuracy
+        ),
         "answer_cue_endpoint_coverage": float(reached.mean()),
         "bootstrap_samples": bootstrap_samples,
         "familywise_alpha": familywise_alpha,
@@ -209,6 +218,7 @@ def analyze_endpoint_inference_ablation(
         "random_null": random_summary,
         "interpretation": (
             "Only listed critical arms have confirmatory evidence that their removal "
-            "causally lowers frozen-checkpoint GSM8K accuracy at the answer-cue colon."
+            "causally lowers frozen-checkpoint GSM8K accuracy conditional on the fixed "
+            "answer-cue colon used by the residual collectors."
         ),
     }

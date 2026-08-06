@@ -320,6 +320,7 @@ def generate_official_codi(
     kv_intervention=None,
     answer_endpoint_intervention=None,
     answer_cue: str = "The answer is:",
+    force_answer_cue: bool = False,
     return_endpoint_metadata: bool = False,
 ) -> list[str] | tuple[list[str], dict]:
     """Greedy generation matching the released path, with optional causal KV edits."""
@@ -384,21 +385,58 @@ def generate_official_codi(
                 latent_output.hidden_states[-1][:, -1, :].unsqueeze(1)
             )
 
-        eot_ids = torch.full(
-            (len(chunk),),
-            model.eot_id,
-            dtype=torch.long,
-            device=device,
-        )
-        token_embedding = embedding(eot_ids).unsqueeze(1)
         finished = torch.zeros(len(chunk), dtype=torch.bool, device=device)
         endpoint_applied = torch.zeros(len(chunk), dtype=torch.bool, device=device)
         generated: list[list[int]] = [[] for _ in chunk]
-
-        for _ in range(max_new_tokens):
-            endpoint_mask = _new_answer_endpoint_mask(
-                generated, cue_ids, endpoint_applied
+        if force_answer_cue:
+            forced = torch.tensor(
+                [model.eot_id, *cue_ids], dtype=torch.long, device=device
+            ).unsqueeze(0).expand(len(chunk), -1)
+            endpoint_mask = torch.ones(len(chunk), dtype=torch.bool, device=device)
+            context = (
+                answer_endpoint_intervention.activate(endpoint_mask)
+                if answer_endpoint_intervention is not None
+                else nullcontext()
             )
+            with context:
+                decoded = model.codi(
+                    inputs_embeds=embedding(forced),
+                    past_key_values=cache,
+                    use_cache=True,
+                    output_hidden_states=False,
+                    output_attentions=False,
+                    return_dict=True,
+                )
+            cache = decoded.past_key_values
+            endpoint_applied |= endpoint_mask
+            next_token = decoded.logits[:, -1, : model.eot_id].argmax(dim=-1)
+            for row, token_id in enumerate(next_token.tolist()):
+                generated[row].append(int(token_id))
+                if token_id == tokenizer.eos_token_id:
+                    finished[row] = True
+            token_embedding = embedding(next_token).unsqueeze(1)
+            remaining_steps = range(1, max_new_tokens)
+        else:
+            eot_ids = torch.full(
+                (len(chunk),),
+                model.eot_id,
+                dtype=torch.long,
+                device=device,
+            )
+            token_embedding = embedding(eot_ids).unsqueeze(1)
+            remaining_steps = range(max_new_tokens)
+
+        for _ in remaining_steps:
+            if bool(finished.all()):
+                break
+            if force_answer_cue:
+                endpoint_mask = torch.zeros(
+                    len(chunk), dtype=torch.bool, device=device
+                )
+            else:
+                endpoint_mask = _new_answer_endpoint_mask(
+                    generated, cue_ids, endpoint_applied
+                )
             endpoint_applied |= endpoint_mask
             context = (
                 answer_endpoint_intervention.activate(endpoint_mask)
@@ -422,8 +460,6 @@ def generate_official_codi(
                     generated[row].append(int(token_id))
                     if token_id == tokenizer.eos_token_id:
                         finished[row] = True
-            if bool(finished.all()):
-                break
             token_embedding = embedding(next_token).unsqueeze(1)
 
         outputs.extend(
@@ -438,6 +474,7 @@ def generate_official_codi(
         return outputs, {
             "answer_cue": answer_cue,
             "answer_cue_token_ids": cue_ids,
+            "answer_cue_forced": bool(force_answer_cue),
             "endpoint_reached": endpoint_reached,
             "endpoint_reached_count": int(sum(endpoint_reached)),
             "endpoint_reached_fraction": float(sum(endpoint_reached) / len(endpoint_reached)),

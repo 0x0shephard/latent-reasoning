@@ -11,23 +11,25 @@ This experiment asks the causal question directly:
 > If a direction is removed from the already-trained CODI checkpoint at the exact
 > student answer-cue colon, does held-out GSM8K accuracy fall?
 
-No parameter is updated. Every arm loads the same official checkpoint and uses greedy
-generation. The only difference is a temporary hidden-state edit at the endpoint.
+No parameter is updated. Every arm loads the same official checkpoint, feeds the same
+fixed answer cue, and then uses greedy answer generation. The only difference is a
+temporary hidden-state edit at the endpoint.
 
 ## Exact intervention
 
-The student generates
+Native author-released decoding starts generation immediately after EOT and does not
+reliably generate the cue tokens. Therefore there is no naturally occurring colon to
+ablate in that path. The residual collectors instead used the fixed, teacher-forced cue.
+This experiment reproduces that same endpoint:
 
 ```text
-question -> BOT -> z1 ... z6 -> EOT -> "The answer is:" -> answer
+question -> BOT -> z1 ... z6 -> [fixed EOT + "The answer is:"] -> generated answer
 ```
 
-The code tracks the token IDs of `" The answer is:"`. When the current forward pass
-consumes the first exact generated colon, it edits the selected GPT-2 block output. That
-is the hidden state which produces the first answer-token logits. Every run records the
-per-question cue-reach mask; analysis rejects arms whose mask differs from baseline.
-The confirmatory analysis also stops if fewer than 95% of baseline questions reach the
-exact cue, because a mostly unapplied intervention would not answer the endpoint question.
+The code feeds EOT and the exact token IDs of `" The answer is:"` in one causal forward
+pass. It edits only the final cue position—the colon—which produces the first generated
+answer-token logits. Every run records endpoint coverage, which must be 100% by
+construction. The 95% gate remains as a guard against an implementation regression.
 
 For state `s` and orthonormal basis `U_s`, the edit is
 
@@ -70,6 +72,7 @@ rank-matched direction was removed.
 All arms evaluate the same 1,319 GSM8K questions in the same order. For each candidate,
 the analysis records:
 
+- forced-cue baseline accuracy beside the native reproduction accuracy and their delta;
 - baseline and ablated exact-match accuracy;
 - baseline-correct to ablated-wrong losses and reverse gains;
 - the paired accuracy loss and bootstrap 95% interval;
@@ -90,10 +93,12 @@ p-value below 0.05 after the standard plus-one correction.
 ## Interpretation
 
 If an answer-aware direction passes, removing that exact block/residual-PC direction
-causally harms the frozen checkpoint at the answer boundary. If none passes, the correct
-conclusion is not that the selectors are useless; it is that these low-rank residual
-directions are not individually necessary for endpoint accuracy under this intervention.
-The model may use distributed, redundant, earlier, or nonlinear information.
+causally harms the frozen checkpoint **conditional on the fixed answer cue**. This is not
+a claim about native cue-free decoding, because native decoding never visits the measured
+colon. If none passes, the correct conclusion is not that the selectors are useless; it
+is that these low-rank residual directions are not individually necessary for answer
+accuracy under the source-faithful forced-cue intervention. The model may use distributed,
+redundant, earlier, or nonlinear information.
 
 This experiment does not claim an inference speedup. Projection hooks add work, and a
 directional ablation does not shrink GPT-2's width or remove a transformer block. A speed

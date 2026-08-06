@@ -289,7 +289,8 @@ endpoint_retention:
      energy_complement, answer_conditioned_complement, parameter_aware_complement]
 
 # Frozen-checkpoint causal follow-up. Candidate directions are removed only from the
-# exact Hugging Face hidden-state entries 11/12 on the generated answer-cue colon. No
+# exact Hugging Face hidden-state entries 11/12 on the fixed answer-cue colon used by
+# the residual collectors. Native decoding does not generate this cue. No
 # weight is updated. Rank-matched random arms form the empirical accuracy-loss null.
 endpoint_inference_ablation:
   activation_calibration_examples: 1024

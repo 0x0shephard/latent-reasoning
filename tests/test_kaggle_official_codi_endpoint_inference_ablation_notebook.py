@@ -21,7 +21,8 @@ def test_notebook_is_run_all_and_contains_frozen_causal_contract():
         "run_official_codi_endpoint_inference_ablation.py",
         "analyze_official_codi_endpoint_inference_ablation.py",
         "Accuracy-critical directions/groups",
-        "official_codi_endpoint_inference_ablation_export",
+        "official_codi_endpoint_inference_ablation_forced_cue_export",
+        "Native CODI decoding does not generate the answer cue",
         "SHA256SUMS.txt",
     ]
     for value in required:

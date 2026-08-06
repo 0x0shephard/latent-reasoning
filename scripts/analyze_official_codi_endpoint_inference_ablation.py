@@ -35,6 +35,9 @@ def _load_run(summary_path: Path) -> dict:
         "arm": summary["arm"],
         "spec": summary.get("spec"),
         "intervention_diagnostics": summary.get("intervention_diagnostics"),
+        "native_reproduction_accuracy": summary.get("reproduction_gate", {}).get(
+            "gsm8k_accuracy"
+        ),
         "correctness": [bool(record["correct"]) for record in records],
         "endpoint_reached": [
             bool(record["answer_cue_endpoint_reached"]) for record in records

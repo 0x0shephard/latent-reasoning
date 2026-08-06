@@ -1,4 +1,4 @@
-"""Frozen-checkpoint causal ablations at CODI's generated answer-cue endpoint."""
+"""Frozen-checkpoint causal ablations at CODI's fixed answer-cue endpoint."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -16,8 +16,8 @@ from src.mech.endpoint_retention import (
 )
 
 
-ENDPOINT_ABLATION_SCHEMA_VERSION = 1
-ENDPOINT_ABLATION_CONTRACT = "frozen_checkpoint_answer_colon_ablation_v1"
+ENDPOINT_ABLATION_SCHEMA_VERSION = 2
+ENDPOINT_ABLATION_CONTRACT = "frozen_checkpoint_forced_answer_colon_ablation_v2"
 
 
 @dataclass(frozen=True)
@@ -192,7 +192,7 @@ def endpoint_ablation_spec_state(spec: EndpointAblationSpec) -> dict:
 
 
 class OfficialCODIEndpointHiddenAblation:
-    """Remove a centered subspace only while the generated colon is consumed."""
+    """Remove a centered subspace only while the fixed cue colon is consumed."""
 
     def __init__(
         self,
