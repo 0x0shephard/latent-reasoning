@@ -16,6 +16,8 @@ def test_notebook_is_run_all_and_contains_frozen_causal_contract():
         "RUN_COMMIT",
         "RANDOM_REPLICATES = 20",
         "collect_official_codi_endpoint_activation_stats.py",
+        "kagglehub.dataset_download",
+        "corrected-official-codi-answer-cue-endpoint-tsv-c",
         "run_official_codi_endpoint_inference_ablation.py",
         "analyze_official_codi_endpoint_inference_ablation.py",
         "Accuracy-critical directions/groups",
