@@ -21,6 +21,15 @@ from src.mech.endpoint_accuracy_localization import (
 from src.eval.official_codi_endpoint_accuracy_localization_analysis import (
     analyze_endpoint_accuracy_localization,
 )
+from src.eval.official_codi_parameter_state12_confirmation_analysis import (
+    analyze_parameter_state12_confirmation,
+)
+from src.mech.endpoint_state12_confirmation import (
+    build_state12_confirmation_specs,
+)
+from scripts.collect_official_codi_parameter_state12_confirmation_stats import (
+    sample_gsm8k_train_calibration,
+)
 from src.mech.endpoint_retention import RetentionBasis
 from src.models.official_codi import _new_answer_endpoint_mask
 
@@ -110,6 +119,111 @@ def test_complete_localization_registry_builds_method_specific_matched_nulls():
         spec = specs[f"remove_matched_random_{method}_joint_r001"]
         assert spec.matched_method == method
         assert max(value for _, value in spec.selected_overlap_by_state) < 1e-8
+
+
+def test_state12_confirmation_registry_is_single_state_and_energy_matched():
+    bases = {
+        "energy": _retention_basis("energy", 0),
+        "answer_conditioned": _retention_basis("answer_conditioned", 64),
+        "parameter_aware": _retention_basis("parameter_aware", 128),
+    }
+    covariance = torch.diag(torch.linspace(0.1, 20.0, 768))
+    specs = build_state12_confirmation_specs(
+        bases, covariance, random_replicates=2, random_seed=29
+    )
+    assert len(specs) == 3
+    assert specs["remove_parameter_aware_state12_primary"].ranks.tolist() == [
+        0
+    ] * 12 + [3]
+    random = specs["remove_matched_random_parameter_aware_state12_r001"]
+    assert random.ranks.tolist() == [0] * 12 + [3]
+    target = dict(random.calibration_target_energy_by_state)[12]
+    achieved = dict(random.calibration_achieved_energy_by_state)[12]
+    assert abs(target - achieved) / target < 2e-5
+
+
+def test_gsm8k_train_calibration_is_deterministic_unique_and_test_disjoint():
+    rows = [
+        {"question": f"Train question {index}", "answer": f"work {index} #### {index}"}
+        for index in range(12)
+    ]
+    selected, metadata = sample_gsm8k_train_calibration(
+        rows,
+        test_questions={"test question"},
+        examples=5,
+        seed=73,
+    )
+    repeated, repeated_metadata = sample_gsm8k_train_calibration(
+        rows,
+        test_questions={"test question"},
+        examples=5,
+        seed=73,
+    )
+    assert selected == repeated
+    assert metadata == repeated_metadata
+    assert len({row["question"] for row in selected}) == 5
+    assert metadata["train_test_normalized_question_overlap"] == 0
+
+
+def _confirmation_runs(*, random_rms: float):
+    baseline = [True] * 100
+    reached = [True] * 100
+    selected = [False] * 20 + [True] * 80
+    runs = [
+        {
+            "arm": "baseline",
+            "spec": None,
+            "correctness": baseline,
+            "endpoint_reached": reached,
+        },
+        {
+            "arm": "remove_parameter_aware_state12_primary",
+            "spec": {"family": "selected_primary"},
+            "correctness": selected,
+            "endpoint_reached": reached,
+            "intervention_diagnostics": {
+                "removed_projection_rms_by_state": {"11": 0.0, "12": 2.0}
+            },
+        },
+    ]
+    for replicate in range(20):
+        runs.append(
+            {
+                "arm": f"remove_matched_random_parameter_aware_state12_r{replicate:03d}",
+                "spec": {
+                    "family": "matched_random_primary",
+                    "calibration_target_energy_by_state": {"12": 4.0},
+                    "calibration_achieved_energy_by_state": {"12": 4.0},
+                    "selected_overlap_by_state": {"12": 0.0},
+                },
+                "correctness": baseline,
+                "endpoint_reached": reached,
+                "intervention_diagnostics": {
+                    "removed_projection_rms_by_state": {
+                        "11": 0.0,
+                        "12": random_rms,
+                    }
+                },
+            }
+        )
+    return runs
+
+
+def test_state12_confirmation_requires_statistics_and_rms_transport():
+    passed = analyze_parameter_state12_confirmation(
+        _confirmation_runs(random_rms=2.05),
+        bootstrap_samples=200,
+        bootstrap_seed=3,
+    )
+    assert passed["status"] == "confirmed"
+    assert passed["parameter_aware_state12_confirmed"]
+    failed = analyze_parameter_state12_confirmation(
+        _confirmation_runs(random_rms=2.5),
+        bootstrap_samples=200,
+        bootstrap_seed=3,
+    )
+    assert failed["status"] == "evaluation_magnitude_transport_failed"
+    assert not failed["parameter_aware_state12_confirmed"]
 
 
 def test_endpoint_mask_fires_once_after_exact_cue_suffix():

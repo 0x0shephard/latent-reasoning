@@ -38,6 +38,11 @@ from src.mech.endpoint_accuracy_localization import (
     MATCHING_ALGORITHM,
     build_accuracy_localization_specs,
 )
+from src.mech.endpoint_state12_confirmation import (
+    STATE12_CONFIRMATION_CONTRACT,
+    STATE12_CONFIRMATION_SCHEMA_VERSION,
+    build_state12_confirmation_specs,
+)
 from src.mech.endpoint_retention import load_retention_bases, retention_bases_state
 from src.models.official_codi import (
     build_official_codi_gpt2,
@@ -102,7 +107,22 @@ def run(args: argparse.Namespace) -> dict:
         checkpoint_sha256=load_report.checkpoint_sha256,
     )
     stats = torch.load(args.activation_stats, map_location="cpu", weights_only=False)
-    if args.accuracy_localization:
+    if args.accuracy_localization and args.state12_confirmation:
+        raise ValueError("accuracy-localization and state12-confirmation modes are exclusive")
+    if args.state12_confirmation:
+        covariance_payload = stats.get("student_covariance_by_state")
+        if not isinstance(covariance_payload, dict) or "12" not in covariance_payload:
+            raise RuntimeError("state-12 confirmation statistics lack covariance")
+        specs = build_state12_confirmation_specs(
+            bases,
+            covariance_payload["12"],
+            random_replicates=args.random_replicates,
+            random_seed=args.random_seed,
+        )
+        contract = STATE12_CONFIRMATION_CONTRACT
+        schema_version = STATE12_CONFIRMATION_SCHEMA_VERSION
+        phase = "frozen_checkpoint_gsm8k_parameter_aware_state12_confirmation"
+    elif args.accuracy_localization:
         covariance_payload = stats.get("student_covariance_by_state")
         if not isinstance(covariance_payload, dict):
             raise RuntimeError("localization activation statistics lack full covariance")
@@ -176,7 +196,7 @@ def run(args: argparse.Namespace) -> dict:
             "consumes the fixed answer-cue colon"
         ),
     }
-    if args.accuracy_localization:
+    if args.accuracy_localization or args.state12_confirmation:
         request["random_matching"] = {
             "matched_quantity": "per-state calibration E[||UU^T(h-mu)||^2]",
             "algorithm": MATCHING_ALGORITHM,
@@ -315,6 +335,11 @@ def main() -> int:
         "--accuracy-localization",
         action="store_true",
         help="Use the v1 norm-matched hierarchical localization arm registry.",
+    )
+    parser.add_argument(
+        "--state12-confirmation",
+        action="store_true",
+        help="Use the single-hypothesis parameter-aware state-12 confirmation registry.",
     )
     run(parser.parse_args())
     return 0

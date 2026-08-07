@@ -305,6 +305,14 @@ and the resumable Kaggle workflow is
 This experiment is a causal localization test at the forced answer-cue colon. It does
 not update model weights and does not claim architectural inference speedup.
 
+The single-hypothesis follow-up for the parameter-aware state-12 rank-three group is
+frozen in
+[`docs/OFFICIAL_CODI_PARAMETER_STATE12_CONFIRMATION.md`](docs/OFFICIAL_CODI_PARAMETER_STATE12_CONFIRMATION.md).
+Its
+[`Kaggle run-all notebook`](notebooks/kaggle_official_codi_parameter_state12_confirmation.ipynb)
+uses disjoint GSM8K-train calibration, 500 matched controls, and an explicit evaluation
+RMS transport gate.
+
 After the capped ablation report is saved, optionally run a full baseline evaluation from
 each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
 the capped ablation directories and report remain preserved:
