@@ -33,6 +33,13 @@ class EndpointAblationSpec:
     direction_slot: int | None
     residual_pc_index: int | None
     random_replicate: int | None
+    # Optional v3 localization metadata.  The original v2 registry leaves these
+    # fields unset, so its serialized contract and arm names remain unchanged.
+    active_direction_slots: tuple[tuple[int, tuple[int, ...]], ...] | None = None
+    matched_method: str | None = None
+    calibration_target_energy_by_state: tuple[tuple[int, float], ...] | None = None
+    calibration_achieved_energy_by_state: tuple[tuple[int, float], ...] | None = None
+    selected_overlap_by_state: tuple[tuple[int, float], ...] | None = None
 
     @property
     def total_rank(self) -> int:
@@ -178,7 +185,7 @@ def validate_endpoint_ablation_spec(spec: EndpointAblationSpec) -> None:
 
 def endpoint_ablation_spec_state(spec: EndpointAblationSpec) -> dict:
     validate_endpoint_ablation_spec(spec)
-    return {
+    state = {
         "name": spec.name,
         "family": spec.family,
         "method": spec.method,
@@ -189,6 +196,28 @@ def endpoint_ablation_spec_state(spec: EndpointAblationSpec) -> dict:
         "ranks": spec.ranks.tolist(),
         "total_rank": spec.total_rank,
     }
+    if spec.active_direction_slots is not None:
+        state["active_direction_slots"] = {
+            str(index): list(slots)
+            for index, slots in spec.active_direction_slots
+        }
+    if spec.matched_method is not None:
+        state["matched_method"] = spec.matched_method
+    if spec.calibration_target_energy_by_state is not None:
+        state["calibration_target_energy_by_state"] = {
+            str(index): value
+            for index, value in spec.calibration_target_energy_by_state
+        }
+    if spec.calibration_achieved_energy_by_state is not None:
+        state["calibration_achieved_energy_by_state"] = {
+            str(index): value
+            for index, value in spec.calibration_achieved_energy_by_state
+        }
+    if spec.selected_overlap_by_state is not None:
+        state["selected_overlap_by_state"] = {
+            str(index): value for index, value in spec.selected_overlap_by_state
+        }
+    return state
 
 
 class OfficialCODIEndpointHiddenAblation:

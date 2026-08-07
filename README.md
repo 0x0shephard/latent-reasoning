@@ -293,6 +293,18 @@ Run the position cell first, then switch to `RUN_KAVA_POSITION_SWEEP = False` an
 `RUN_MATCHED_BATCH_DID = True` for the direct comparison. Do not enable both expensive
 cells in one pass.
 
+## Localize accuracy-critical CODI endpoint directions
+
+The frozen-checkpoint follow-up to the answer-colon ablation uses 100 method-specific
+activation-energy-matched random controls and hierarchical state, single-direction, and
+joint-minus-one tests. Its complete contract is documented in
+[`docs/OFFICIAL_CODI_ENDPOINT_ACCURACY_LOCALIZATION.md`](docs/OFFICIAL_CODI_ENDPOINT_ACCURACY_LOCALIZATION.md),
+and the resumable Kaggle workflow is
+[`notebooks/kaggle_official_codi_endpoint_accuracy_localization.ipynb`](notebooks/kaggle_official_codi_endpoint_accuracy_localization.ipynb).
+
+This experiment is a causal localization test at the forced answer-cue colon. It does
+not update model weights and does not claim architectural inference speedup.
+
 After the capped ablation report is saved, optionally run a full baseline evaluation from
 each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
 the capped ablation directories and report remain preserved:

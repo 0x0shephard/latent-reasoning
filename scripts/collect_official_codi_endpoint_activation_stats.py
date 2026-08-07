@@ -34,6 +34,10 @@ from src.mech.endpoint_inference_ablation import (
     ENDPOINT_ABLATION_CONTRACT,
     ENDPOINT_ABLATION_SCHEMA_VERSION,
 )
+from src.mech.endpoint_accuracy_localization import (
+    ACCURACY_LOCALIZATION_CONTRACT,
+    ACCURACY_LOCALIZATION_SCHEMA_VERSION,
+)
 from src.mech.endpoint_retention import load_retention_bases, retention_bases_state
 from src.mech.official_codi_target_utility import OfficialCODIAnswerScorer
 from src.models.official_codi import (
@@ -147,10 +151,24 @@ def collect(args: argparse.Namespace) -> dict:
         }
         for name, state in retention_bases_state(bases).items()
     }
+    schema_version = (
+        ACCURACY_LOCALIZATION_SCHEMA_VERSION
+        if args.localization_covariance
+        else ENDPOINT_ABLATION_SCHEMA_VERSION
+    )
+    contract = (
+        ACCURACY_LOCALIZATION_CONTRACT
+        if args.localization_covariance
+        else ENDPOINT_ABLATION_CONTRACT
+    )
     request = {
-        "schema_version": ENDPOINT_ABLATION_SCHEMA_VERSION,
-        "contract": ENDPOINT_ABLATION_CONTRACT,
-        "phase": "student_endpoint_mean_calibration",
+        "schema_version": schema_version,
+        "contract": contract,
+        "phase": (
+            "student_endpoint_mean_and_covariance_calibration"
+            if args.localization_covariance
+            else "student_endpoint_mean_calibration"
+        ),
         "checkpoint_sha256": report.checkpoint_sha256,
         "official_source_revision": str(cfg.official_source.revision),
         "reproduction_gate": reproduction,
@@ -164,6 +182,8 @@ def collect(args: argparse.Namespace) -> dict:
         "states": [11, 12],
         "endpoint": "student fixed teacher-forced answer-cue colon after EOT",
     }
+    if args.localization_covariance:
+        request["full_covariance_states"] = [11, 12]
     request_sha256 = _sha256_json(request)
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,6 +204,16 @@ def collect(args: argparse.Namespace) -> dict:
     )
     total = torch.zeros(GPT2_STATE_COUNT, GPT2_HIDDEN_SIZE, dtype=torch.float64)
     square_total = torch.zeros_like(total)
+    cross_total = (
+        {
+            state: torch.zeros(
+                GPT2_HIDDEN_SIZE, GPT2_HIDDEN_SIZE, dtype=torch.float64
+            )
+            for state in (11, 12)
+        }
+        if args.localization_covariance
+        else None
+    )
     count = 0
     progress = tqdm(total=len(indices), unit="examples", desc="Student colon activation stats")
     for start in range(0, len(indices), args.batch_size):
@@ -201,18 +231,28 @@ def collect(args: argparse.Namespace) -> dict:
         values = hidden.detach().double().cpu()
         total += values.sum(dim=0)
         square_total += values.square().sum(dim=0)
+        if cross_total is not None:
+            for state in (11, 12):
+                cross_total[state] += values[:, state, :].T @ values[:, state, :]
         count += values.shape[0]
         progress.update(values.shape[0])
     progress.close()
     mean = total / count
     variance = (square_total / count - mean.square()).clamp_min(0)
+    covariance_by_state = None
+    if cross_total is not None:
+        covariance_by_state = {}
+        for state in (11, 12):
+            covariance = cross_total[state] / count - torch.outer(mean[state], mean[state])
+            covariance_by_state[str(state)] = (0.5 * (covariance + covariance.T)).float()
     payload = {
-        "schema_version": ENDPOINT_ABLATION_SCHEMA_VERSION,
-        "contract": ENDPOINT_ABLATION_CONTRACT,
+        "schema_version": schema_version,
+        "contract": contract,
         "request_sha256": request_sha256,
         "metadata": request,
         "student_mean": mean.float(),
         "student_variance": variance.float(),
+        "student_covariance_by_state": covariance_by_state,
         "count": count,
         "indices": indices,
     }
@@ -247,6 +287,11 @@ def main() -> int:
     parser.add_argument("--precision", default="float32")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument(
+        "--localization-covariance",
+        action="store_true",
+        help="Also fit state-11/12 covariance under the accuracy-localization contract.",
+    )
     collect(parser.parse_args())
     return 0
 

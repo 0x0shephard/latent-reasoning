@@ -32,6 +32,12 @@ from src.mech.endpoint_inference_ablation import (
     build_endpoint_ablation_specs,
     endpoint_ablation_spec_state,
 )
+from src.mech.endpoint_accuracy_localization import (
+    ACCURACY_LOCALIZATION_CONTRACT,
+    ACCURACY_LOCALIZATION_SCHEMA_VERSION,
+    MATCHING_ALGORITHM,
+    build_accuracy_localization_specs,
+)
 from src.mech.endpoint_retention import load_retention_bases, retention_bases_state
 from src.models.official_codi import (
     build_official_codi_gpt2,
@@ -95,17 +101,37 @@ def run(args: argparse.Namespace) -> dict:
         parameter_aware_path=args.parameter_aware_basis,
         checkpoint_sha256=load_report.checkpoint_sha256,
     )
-    specs = build_endpoint_ablation_specs(
-        bases,
-        random_replicates=args.random_replicates,
-        random_seed=args.random_seed,
-    )
+    stats = torch.load(args.activation_stats, map_location="cpu", weights_only=False)
+    if args.accuracy_localization:
+        covariance_payload = stats.get("student_covariance_by_state")
+        if not isinstance(covariance_payload, dict):
+            raise RuntimeError("localization activation statistics lack full covariance")
+        covariance_by_state = {
+            int(state): value for state, value in covariance_payload.items()
+        }
+        specs = build_accuracy_localization_specs(
+            bases,
+            covariance_by_state,
+            random_replicates=args.random_replicates,
+            random_seed=args.random_seed,
+        )
+        contract = ACCURACY_LOCALIZATION_CONTRACT
+        schema_version = ACCURACY_LOCALIZATION_SCHEMA_VERSION
+        phase = "frozen_checkpoint_gsm8k_accuracy_localization"
+    else:
+        specs = build_endpoint_ablation_specs(
+            bases,
+            random_replicates=args.random_replicates,
+            random_seed=args.random_seed,
+        )
+        contract = ENDPOINT_ABLATION_CONTRACT
+        schema_version = ENDPOINT_ABLATION_SCHEMA_VERSION
+        phase = "frozen_checkpoint_gsm8k_inference"
     if args.arm != "baseline" and args.arm not in specs:
         raise ValueError(
             f"unknown arm {args.arm!r}; use baseline or one of {sorted(specs)}"
         )
-    stats = torch.load(args.activation_stats, map_location="cpu", weights_only=False)
-    if stats.get("contract") != ENDPOINT_ABLATION_CONTRACT:
+    if stats.get("contract") != contract:
         raise RuntimeError("activation statistics use another experiment contract")
     if stats.get("metadata", {}).get("checkpoint_sha256") != load_report.checkpoint_sha256:
         raise RuntimeError("activation mean uses a different CODI checkpoint")
@@ -120,9 +146,9 @@ def run(args: argparse.Namespace) -> dict:
     }
     spec = None if args.arm == "baseline" else specs[args.arm]
     request = {
-        "schema_version": ENDPOINT_ABLATION_SCHEMA_VERSION,
-        "contract": ENDPOINT_ABLATION_CONTRACT,
-        "phase": "frozen_checkpoint_gsm8k_inference",
+        "schema_version": schema_version,
+        "contract": contract,
+        "phase": phase,
         "arm": args.arm,
         "spec": None if spec is None else endpoint_ablation_spec_state(spec),
         "checkpoint_sha256": load_report.checkpoint_sha256,
@@ -150,6 +176,13 @@ def run(args: argparse.Namespace) -> dict:
             "consumes the fixed answer-cue colon"
         ),
     }
+    if args.accuracy_localization:
+        request["random_matching"] = {
+            "matched_quantity": "per-state calibration E[||UU^T(h-mu)||^2]",
+            "algorithm": MATCHING_ALGORITHM,
+            "intervention_scaling": False,
+            "selected_overlap_ceiling": 0.20,
+        }
     request_sha256 = _sha256_json(request)
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -278,6 +311,11 @@ def main() -> int:
     parser.add_argument("--precision", default="auto")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument(
+        "--accuracy-localization",
+        action="store_true",
+        help="Use the v1 norm-matched hierarchical localization arm registry.",
+    )
     run(parser.parse_args())
     return 0
 
