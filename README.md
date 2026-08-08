@@ -313,6 +313,44 @@ Its
 uses disjoint GSM8K-train calibration, 500 matched controls, and an explicit evaluation
 RMS transport gate.
 
+That confirmation is **complete and negative**: `not_confirmed`. Five of six conditions
+passed — the selected subspace cost 1.5163 accuracy points with a positive bootstrap
+lower bound and McNemar `p = 0.00227` — but 77 of 500 energy-matched random subspaces
+were at least as damaging, so the empirical matched-random test failed at `p = 0.1557`.
+The evaluation RMS transport gate passed at ratio 1.0497, so the failure is not
+explained by a conservative null. See ledger sections 33 and 34.
+
+## Answer-colon margin geometry and effective dimensionality
+
+Before proposing another selector, a source audit asked what the state-12 design could
+detect at all. `ln_f` runs after every transformer block, so its output never enters the
+key/value cache: a state-12 edit changes one token's logits and nothing propagates.
+Combined with a binary outcome on 1,319 questions and selectors scored by first-order
+gradients but tested with finite projections, the completed experiment could only ever
+confirm a very large effect.
+
+The follow-up removes each of those limits rather than adding a heuristic. Because
+`lm_head` is bias-free and consumes the `ln_f` output, a state-12 edit is exactly
+`z' = z - (W U)(Uᵀ(h - centre))`, so one cached colon state per question makes every
+state-12 arm a matrix product instead of a full greedy decode. A parity gate checks the
+analytic first token against the released decoder before any sweep runs.
+
+The primary subspace is the closed-form maximiser of the measured objective — the top-`k`
+eigenvectors of `sym(E[c gᵀ])` — rather than a gradient heuristic, the outcome is
+per-example gold-answer NLL, retention arms sweep rank 1 → 512 for sufficiency, three
+ablation semantics are separated, and state-11 and all-position arms cover the
+propagating cases the analytic tier cannot reach.
+
+```bash
+python scripts/build_kaggle_official_codi_endpoint_margin_geometry_notebook.py
+```
+
+The frozen contract, gates, and interpretation boundary are in
+[`OFFICIAL_CODI_ENDPOINT_MARGIN_GEOMETRY.md`](docs/OFFICIAL_CODI_ENDPOINT_MARGIN_GEOMETRY.md),
+and the resumable workflow is
+[`kaggle_official_codi_endpoint_margin_geometry.ipynb`](notebooks/kaggle_official_codi_endpoint_margin_geometry.ipynb).
+No weight is updated and no inference speed is claimed.
+
 After the capped ablation report is saved, optionally run a full baseline evaluation from
 each checkpoint. This overwrites the root prediction JSONLs with the full benchmark, while
 the capped ablation directories and report remain preserved:

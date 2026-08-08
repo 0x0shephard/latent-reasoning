@@ -308,3 +308,39 @@ endpoint_inference_ablation:
   bootstrap_samples: 10000
   bootstrap_seed: 0
   familywise_alpha: 0.05
+
+# Answer-margin geometry and effective dimensionality. This experiment exists because
+# the completed state-12 confirmation could only ever detect a very large effect: ln_f
+# output never enters the KV cache, so its edit changes one token's logits and nothing
+# propagates, and binary exact match on 1,319 questions discards most of the available
+# signal. Here the outcome is continuous, the primary subspace is the closed-form
+# maximiser of the measured objective rather than a gradient heuristic, retention arms
+# ask sufficiency instead of necessity, and three ablation semantics are separated.
+# Calibration is GSM8K train and is proven disjoint from GSM8K test.
+endpoint_margin_geometry:
+  calibration_examples: 2048
+  calibration_sampling_seed: 89
+  calibration_batch_size: 16
+  parity_examples: 64
+  # The analytic evaluator is refused unless its first token matches the released
+  # greedy decoder on at least this fraction of the parity subset.
+  minimum_parity_agreement: 0.99
+  analytic_state: 12
+  propagating_state: 11
+  rank_grid: [1, 2, 3, 4, 8, 16, 32, 64, 128, 256, 512]
+  # Rank three is the rank the completed confirmation tested, so the primary gate is
+  # a like-for-like rerun with a continuous outcome and a matched selector.
+  primary_rank: 3
+  semantics_ranks: [3, 16]
+  random_replicates: 200
+  random_seed: 20260808
+  resample_seed: 20260808
+  retention_threshold: 0.90
+  maximum_calibration_relative_energy_error: 0.005
+  maximum_selected_overlap: 0.20
+  eval_dataset: gsm8k
+  eval_batch_size: 32
+  precision: auto
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  alpha: 0.05

@@ -426,10 +426,18 @@ def generate_official_codi(
             token_embedding = embedding(eot_ids).unsqueeze(1)
             remaining_steps = range(max_new_tokens)
 
+        # Opt-in flag used only by the margin-geometry all-position arms.  It
+        # defaults to False, so every completed experiment keeps intervening on
+        # the single answer-cue forward pass exactly as before.
+        intervene_everywhere = bool(
+            getattr(answer_endpoint_intervention, "applies_to_all_positions", False)
+        )
         for _ in remaining_steps:
             if bool(finished.all()):
                 break
-            if force_answer_cue:
+            if intervene_everywhere:
+                endpoint_mask = ~finished
+            elif force_answer_cue:
                 endpoint_mask = torch.zeros(
                     len(chunk), dtype=torch.bool, device=device
                 )

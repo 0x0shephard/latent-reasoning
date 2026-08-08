@@ -1,6 +1,6 @@
 # Research context ledger
 
-Last updated: 2026-07-26
+Last updated: 2026-08-08
 
 ## Purpose
 
@@ -1016,3 +1016,299 @@ Status:
 
 > Implemented. Local syntax validation is complete. Kaggle parity smoke, calibration,
 > utility execution, and the combined decision remain pending.
+
+## 30. Rank-matched endpoint retention experiment
+
+The three endpoint selectors rank residual directions differently: by residual Gram
+energy, by split-stable alignment with the gold-answer loss gradient
+(answer-conditioned), and by induced trainable-parameter-gradient alignment
+(parameter-aware). The retention experiment asked whether each rule's selected
+directions are sufficient for accuracy, and whether they beat the directions the
+same rule discards.
+
+It filters the **teacher auxiliary residual during fine-tuning**. It does not reduce
+the student's 768-dimensional inference state.
+
+Completed on Kaggle as `jonraza15/official-codi-endpoint-rank-matched-experiment`:
+24 runs, three seeds, rank three at states 11 and 12, one fresh training partition,
+all 109 exported checksums verified.
+
+| Selector | Selected accuracy | Selected − full | Selected − complement | Selected − answer-only |
+| --- | ---: | ---: | ---: | ---: |
+| Energy | 43.341% | −0.076 pp | −0.051 pp | −0.025 pp |
+| Answer-conditioned | 43.290% | −0.126 pp | −0.177 pp | −0.076 pp |
+| Parameter-aware | 43.417% | 0.000 pp | +0.025 pp | +0.051 pp |
+
+Every interval includes zero. Two separable conclusions:
+
+- **Auxiliary-target compression: yes.** Six directions preserve the full residual
+  target's accuracy within the registered one-point non-inferiority margin.
+- **Accuracy-critical directions: no.** No selection beat its own discarded
+  complement or plain answer-only training.
+
+The decisive control is `full target − answer-only = +0.051 pp`, 95% interval about
+[−0.303, +0.379]. Even the complete two-block residual target was not shown to add
+accuracy over ordinary answer training.
+
+Throughput was statistically flat at about 34 examples/second across arms, as the
+contract predicted. Top-k changed only the training target, never inference compute.
+
+## 31. Interpretation correction: marginal training utility is not causal ablation
+
+The retention result initially read as "six directions are responsible for 43%
+accuracy, and so is their complement", which is incoherent. The correction is
+recorded here because it is a reasoning error the project must not repeat.
+
+The 43% was already present in the frozen checkpoint before either arm trained.
+Every arm kept the full pretrained weights, all 12 blocks, all 768 dimensions at
+inference, and the ordinary gold-answer loss. Only the auxiliary residual term was
+filtered, and that term had no demonstrated marginal utility, so removing most of it
+changed almost nothing.
+
+Two further reasons selected and complement behaved alike:
+
+1. Orthogonality in the 768-dimensional residual space does not imply independent
+   parameter updates. With gradients `g_sel = Jᵀ P r` and `g_comp = Jᵀ (I − P) r`,
+   the model Jacobian can map orthogonal activation directions onto overlapping
+   LoRA updates.
+2. Gradient norms were matched, so a naturally weak six-direction signal was
+   inflated to full strength. That tests directional quality at equal update
+   magnitude, not how much information the directions naturally carry.
+
+No projection bug was found: the selected loss used `P r`, the complement used
+`r − P r`, synthetic reconstruction tests passed, and arms produced different
+predictions.
+
+Stated plainly:
+
+> The experiment was a marginal auxiliary-training comparison and was briefly
+> interpreted as a causal hidden-representation ablation. It answers "can six
+> residual directions replace the full residual target without losing accuracy?"
+> It does not answer "are these directions responsible for the model's accuracy?"
+
+Corrective principle:
+
+> To test whether directions contribute to accuracy, do not retrain each arm. Start
+> from the identical frozen checkpoint and intervene during inference.
+
+## 32. Frozen-checkpoint answer-colon ablation and 232-arm accuracy localization
+
+Following §31, a frozen-checkpoint inference intervention was implemented at the
+forced answer cue. No parameter is updated; the only difference between arms is a
+temporary hidden-state edit at the colon. An early smoke run failed its cue-reach
+assertion at 0% coverage and was fixed by forcing the teacher-forced cue and
+tracking which questions actually reach it.
+
+The 232-arm localization run completed as
+`jonraza15/codi-answer-colon-accuracy-localization`: 948 files SHA-256 verified,
+1,319 paired questions per arm in one order, 100% endpoint coverage, and the saved
+report reproduced from raw JSONL.
+
+| Arm | Accuracy | Loss | 95% CI | Matched-random p |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 43.290% | — | — | — |
+| Energy joint | 43.063% | 0.227 pp | −0.682 to 1.137 | negative control passes |
+| Answer-conditioned joint | 41.622% | 1.668 pp | 0.455 to 2.881 | 0.139 |
+| Parameter-aware joint | 40.637% | 2.654 pp | 1.365 to 3.942 | 0.0495 raw, 0.099 Holm |
+
+Both selected subspaces genuinely harm accuracy (McNemar Holm `p = 0.00517` and
+`p = 0.0000388`). Neither passed the stronger activation-energy-matched random gate:
+13 of 100 and 4 of 100 controls were at least as damaging.
+
+Two findings carried forward:
+
+- **Localization to state 12.** Parameter-aware state 12 lost 1.516 points
+  (Holm `p = 0.0066`); state 11 lost 0.834.
+- **Interaction, not individual necessity.** The joint effect of 2.654 points
+  greatly exceeds the 0.379-point sum of its six single-direction losses. Removing
+  state-12 PC10 alone cost 0.152 points, yet retaining it while removing the other
+  five rescued 0.986 points.
+
+Recorded caveat: calibration matching was numerically near-exact (relative energy
+error about `3.3e-16`) but did not transport to GSM8K. Random evaluation RMS
+exceeded selected RMS by about 14.2% and 9.8% (answer-conditioned, states 11/12)
+and 3.1% and 18.9% (parameter-aware). The null was therefore conservative.
+
+## 33. Completed parameter-aware state-12 confirmation
+
+One preregistered primary hypothesis, calibrated on 2,048 disjoint GSM8K **train**
+questions, 500 selected-orthogonal energy-matched controls, 502 paired full-test
+arms, no selector multiplicity correction, and an added guard withholding the result
+if median random/selected evaluation RMS differed by more than 10%.
+
+Completed as `jonraza15/confirm-parameter-aware-state-12-at-codis`.
+
+> Status: **`not_confirmed`**. `parameter_aware_state12_confirmed = false`.
+
+Five of six conditions passed:
+
+| Condition | Value | Outcome |
+| --- | --- | --- |
+| Positive in both deterministic halves | 1.5152 / 1.5175 pp | pass |
+| Bootstrap 95% lower bound above zero | CI [0.531, 2.502] pp | pass |
+| One-sided exact McNemar `p ≤ 0.05` | 0.00227 | pass |
+| Empirical matched-random `p ≤ 0.05` | **0.1557** | **fail** |
+| Calibration matching | rel. error 3.4e-16, overlap 1e-32 | pass |
+| Evaluation RMS transport within 10% | ratio 1.0497 | pass |
+
+Primary arm: 43.290% → 41.774%, a 1.5163-point loss, 33 correct-to-wrong and 13
+wrong-to-correct, 100% cue coverage, state 11 untouched.
+
+Matched-random null over 500 replicates: mean 0.576 pp, median 0.379 pp, 95th
+percentile 2.047 pp, maximum 2.502 pp. **77 of 500 controls were at least as
+damaging**, placing the selection at the 84.6th percentile.
+
+Two points of interpretation:
+
+1. **The transport confounder was eliminated and the result still failed.** The 10%
+   RMS gate was added specifically because the discovery null was conservative. Here
+   the ratio is 1.0497, comfortably inside the band. The failure cannot be blamed on
+   an unmatched null.
+2. **The 1.5163-point effect is not an independent replication.** It equals the
+   discovery value because it is the same deterministic computation: same frozen
+   checkpoint, same PCs 9/10/32, same forced cue, same 1,319 questions, greedy
+   decoding. The confirmation's novelty is entirely in the null.
+
+Bounded conclusion:
+
+> The parameter-aware state-12 rank-three subspace is causally involved in CODI's
+> answer prediction, but it is not distinguishable from energy-matched random
+> subspaces at the same state. About one in six random rank-three subspaces does as
+> much or more damage.
+
+## 34. Diagnosis of what the state-12 design could detect
+
+Before proposing another selector, a source audit asked what the confirmation was
+capable of measuring. Three properties bound it independently of the hypothesis.
+
+**The causal channel is nearly absent.** `state_module_map` records state 12 as
+`transformer.ln_f output after transformer.h[11]`. GPT-2 builds every block's
+key/value inside the block and `ln_f` runs after all twelve, so a state-12 edit
+never enters the cache. The diagnostics confirm one intervened forward pass per
+batch (`calls_by_state {12: 42}` at `eval_batch_size 32` over 1,319 questions) on
+`hidden[:, -1, :]` only. The whole pathway is
+
+```text
+Δ logits = − W_U · U Uᵀ (h − μ)      at exactly one token
+```
+
+with no propagation. Arbitrary control of the state-12 vector would drive accuracy
+to roughly zero, so about 43 points of headroom exist; the rank-three
+mean-preserving removal realised 1.52, about 3.5% of it. State 11 does reach the
+cache, which matches the observed 0.834 / 1.516 / 2.654-point pattern.
+
+**The outcome discarded most of the measurement.** Binary exact match on 1,319
+questions expresses the effect as ~20 flipped answers against a null spread of ~±9,
+and the empirical gate required beating the top 25 of 500 controls, i.e. 2.05 points.
+
+**The selection criterion did not match the test statistic.** Every selector used a
+first-order gradient score and was then tested with a finite rank-three projection.
+
+Two smaller defects: the mean-preserving edit `h − U Uᵀ(h − μ)` removes only
+variance along `U` and is blind to the constant component; and every arm asked
+necessity while "responsible for the majority of accuracy" is a sufficiency claim.
+
+One quantity is worth recording because it is not nothing: the selected subspace
+removed 4.97% **less** activation energy than the median control yet caused 2.6× the
+mean damage (1.52 pp vs 0.58 pp). A real but weak directional effect exists; the
+design simply required it to beat the extreme tail of a 500-draw null.
+
+## 35. The six-selector pattern
+
+Six independent selection criteria have now been tested against matched controls on
+paper-accuracy checkpoints, and all six failed:
+
+| Selector | Comparison it lost | Section |
+| --- | --- | --- |
+| R-KV token selection | uniform selection | §11 |
+| Boundary-aware R-KV | structured controls | §12 |
+| Learned rank-four KV spectral | energy-matched random | §13 |
+| Pooled key/value KV targets | answer-only and shuffled | §22 |
+| Sparse answer-aligned gradient mask | full, random, complement, answer-only | §24 |
+| Parameter-aware state-12 endpoint | energy-matched random | §33 |
+
+The consistent pattern is that structure which is stable, predictable, or even
+causally involved has repeatedly failed to be *specific*: matched controls do about
+as well. This is itself a substantive result and is consistent with the instructor's
+original skepticism in §5.
+
+Added to the decisions in §17:
+
+- Do not propose a seventh heuristic selector scored by a first-order criterion and
+  tested by a finite projection without first showing that the design can detect a
+  known-present effect.
+- Do not read a joint causal effect as evidence that its individual directions are
+  necessary when the joint effect greatly exceeds the sum of the singles.
+- Do not interpret a marginal auxiliary-training comparison as a causal ablation
+  (§31).
+- Report whether a matched control's energy target is attainable at all; an
+  unattainable target makes the null conservative rather than matched.
+
+## 36. Answer-colon margin geometry and effective dimensionality
+
+The next experiment does not add a selector. It removes the five diagnosed defects
+and asks whether the earlier negatives were underpowered or genuine.
+
+The enabling observation is that GPT-2's `lm_head` is bias-free and consumes the
+`ln_f` output, so a state-12 edit is exactly
+
+```text
+z' = W h' = z − (W U)(Uᵀ (h − centre))
+```
+
+Caching one colon state per question therefore turns every state-12 arm into a
+matrix product rather than a full greedy decode, which is what makes continuous
+outcomes, a full rank sweep, and hundreds of matched controls affordable. A parity
+gate checks the analytic first token against the released decoder before any sweep
+is allowed to run.
+
+Corrections, one per defect:
+
+| Defect | Correction |
+| --- | --- |
+| Outcome too coarse | Primary outcome is per-example gold-answer NLL; margin and top-1 reported alongside |
+| Selector ≠ test statistic | Primary subspace is the closed-form maximiser of the measured objective: top-`k` eigenvectors of `sym(E[c gᵀ])` |
+| Wrong basis | Adds `readout` (numeric-token unembedding) and `answer_nll` families |
+| Mean-preserving edit only | `mean`, `zero` and `resample` semantics separated |
+| Necessity only | Retention arms sweep rank 1 → 512 for sufficiency |
+| No propagation | State-11 and all-position generation arms |
+
+Two preregistered gates. **Primary 1** fixes rank three in advance, because that is
+the rank the failed confirmation tested, and asks whether the closed-form margin
+subspace beats energy-matched selected-orthogonal random subspaces on held-out
+gold-answer NLL. **Primary 2** reports the smallest rank whose retained subspace
+preserves 90% of baseline first-token accuracy, per family, with the random curve
+alongside. Primary 2 never gates Primary 1.
+
+If an explicitly optimal subspace still fails Primary 1, the negative can no longer
+be attributed to a weak heuristic or to a coarse outcome. That is the point of
+running it.
+
+Calibration is 2,048 GSM8K **train** questions at seed 89 with proven zero
+normalized-question overlap with the 1,319-question test set. No test label or test
+activation enters any fit.
+
+Implementation:
+
+- `docs/OFFICIAL_CODI_ENDPOINT_MARGIN_GEOMETRY.md`
+- `configs/official_codi_gpt2.yaml` under `endpoint_margin_geometry`
+- `src/mech/endpoint_margin_geometry.py`
+- `scripts/collect_official_codi_endpoint_margin_states.py`
+- `scripts/run_official_codi_endpoint_margin_sweep.py`
+- `scripts/run_official_codi_endpoint_margin_generation.py`
+- `src/eval/official_codi_endpoint_margin_geometry_analysis.py`
+- `scripts/analyze_official_codi_endpoint_margin_geometry.py`
+- `notebooks/kaggle_official_codi_endpoint_margin_geometry.ipynb`
+- `tests/test_endpoint_margin_geometry.py`
+
+`src/models/official_codi.py` gained one additive change: the generator honours an
+`applies_to_all_positions` attribute on an endpoint intervention, defaulting to
+absent/`False`, so completed experiments are unchanged.
+
+Status:
+
+> Implemented and locally validated: 273 tests pass, 1 skipped. Kaggle execution of
+> the parity gate, collection, sweep, generation arms, and the two gates remains.
+
+No training study is authorized by this experiment, and no inference speed claim is
+made: a directional projection does not narrow GPT-2's width or skip a block.
