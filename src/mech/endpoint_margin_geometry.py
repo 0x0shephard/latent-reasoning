@@ -705,6 +705,107 @@ class OfficialCODIEndpointSubspaceIntervention:
         }
 
 
+class OfficialCODIEndpointStateCollector:
+    """Capture, without modifying, the colon states the decoder actually uses.
+
+    An earlier version of this experiment cached colon states with the released
+    *training* encoder and then compared them against generation.  The two paths
+    disagree in at least three ways — the generator normalises the question
+    (``strip`` and double-space collapse) while the row formatter does not, the cue
+    is tokenised with a leading space in one path and not the other, and left
+    padding shifts GPT-2's absolute position ids for every row in a chunk whenever
+    the longest sequence changes.  On 64 questions that produced 89% first-token
+    agreement.
+
+    Collecting through the generation path removes the entire class of divergence:
+    the cached state *is* the state the decoder consumed. The parity gate then
+    checks the remaining claim, that ``lm_head`` is a bias-free linear map.
+
+    The interface deliberately matches the intervention classes, so
+    :func:`generate_official_codi` drives it with no special-casing.
+    """
+
+    #: Never rewrite tokens; this object only observes the answer-cue forward pass.
+    applies_to_all_positions = False
+
+    def __init__(self, model, *, states: Sequence[int] = MARGIN_GEOMETRY_STATES) -> None:
+        requested = tuple(int(state) for state in states)
+        if not requested or not set(requested).issubset(set(MARGIN_GEOMETRY_STATES)):
+            raise ValueError("state collection is defined for states 11 and 12")
+        transformer = getattr(model.codi, "base_model", model.codi)
+        transformer = getattr(transformer, "model", transformer)
+        transformer = getattr(transformer, "transformer", transformer)
+        blocks = getattr(transformer, "h", None)
+        final_layer_norm = getattr(transformer, "ln_f", None)
+        if blocks is None or final_layer_norm is None or len(blocks) != 12:
+            raise RuntimeError("unexpected GPT-2 module layout")
+        self.modules_by_state = {
+            PROPAGATING_STATE: blocks[10],
+            ANALYTIC_STATE: final_layer_norm,
+        }
+        self.states = requested
+        self.captured: dict[int, list[torch.Tensor]] = {
+            state: [] for state in requested
+        }
+        self.active_mask: torch.Tensor | None = None
+
+    def _hook(self, state: int):
+        def capture(_module, _inputs, output):
+            if self.active_mask is None or not bool(self.active_mask.any()):
+                return output
+            hidden = output[0] if isinstance(output, (tuple, list)) else output
+            if hidden.ndim != 3 or hidden.shape[-1] != GPT2_HIDDEN_SIZE:
+                raise ValueError("GPT-2 block output shape changed")
+            mask = self.active_mask.to(device=hidden.device)
+            if mask.shape != (hidden.shape[0],):
+                raise ValueError("state collector mask has the wrong batch shape")
+            self.captured[state].append(
+                hidden[:, -1, :][mask].detach().float().cpu()
+            )
+            return output
+
+        return capture
+
+    @contextmanager
+    def activate(self, mask: torch.Tensor):
+        if self.active_mask is not None:
+            raise RuntimeError("state collection cannot be nested")
+        self.active_mask = mask.detach()
+        handles = []
+        try:
+            for state in self.states:
+                handles.append(
+                    self.modules_by_state[state].register_forward_hook(self._hook(state))
+                )
+            yield self
+        finally:
+            for handle in handles:
+                handle.remove()
+            self.active_mask = None
+
+    def stacked(self, expected_rows: int) -> torch.Tensor:
+        """Return ``[N, 13, 768]`` with only the collected states populated."""
+        collected = {}
+        for state in self.states:
+            if not self.captured[state]:
+                raise RuntimeError(f"no colon state was captured for state {state}")
+            values = torch.cat(self.captured[state], dim=0)
+            if values.shape[0] != expected_rows:
+                raise RuntimeError(
+                    f"state {state} captured {values.shape[0]} rows, expected "
+                    f"{expected_rows}; the answer cue was reached more than once"
+                )
+            collected[state] = values
+        output = torch.zeros(
+            expected_rows, GPT2_STATE_COUNT, GPT2_HIDDEN_SIZE, dtype=torch.float32
+        )
+        for state, values in collected.items():
+            output[:, state, :] = values
+        if not torch.isfinite(output).all():
+            raise RuntimeError("captured colon states contain non-finite values")
+        return output
+
+
 def resolve_output_embedding(model) -> torch.Tensor:
     """Return GPT-2's bias-free ``lm_head`` weight as a ``[V, 768]`` matrix.
 

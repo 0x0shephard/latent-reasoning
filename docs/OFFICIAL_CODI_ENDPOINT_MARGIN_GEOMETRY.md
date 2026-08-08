@@ -83,11 +83,38 @@ instead of a full greedy decode.
 
 This is treated as a checked property, not an assumption.
 `scripts/collect_official_codi_endpoint_margin_states.py` runs a **parity gate**
-before anything else: for 64 evaluation questions it compares the analytically
-predicted first token with the token `generate_official_codi` actually emits
-under `max_new_tokens=1` and the forced cue. Agreement below
-`minimum_parity_agreement` (0.99) raises and blocks the sweep. `resolve_output_embedding`
-independently refuses any head carrying a bias.
+before anything else: it compares the analytically predicted first token with the
+token `generate_official_codi` actually emits under `max_new_tokens=1` and the
+forced cue. Agreement below `minimum_parity_agreement` (0.99) raises and blocks the
+sweep, and the full-evaluation agreement is recorded beside the 64-question gate.
+`resolve_output_embedding` independently refuses any head carrying a bias.
+
+### States are captured from the generation path, not re-derived
+
+The first implementation cached colon states with the released *training* encoder
+(`collate_official_codi_kv_rows` plus the answer scorer) and then compared them
+against generation. That reached only **89.06%** first-token agreement, and the gate
+correctly blocked the run. The two paths differ in at least three ways:
+
+1. the generator normalises the question (`strip`, double-space collapse) while the
+   row formatter uses it verbatim — 336 of 1,319 GSM8K test questions differ;
+2. the cue is tokenised as `" The answer is:"` in one path and as part of
+   `"The answer is: <answer>"` in the other, so the token preceding the colon differs;
+3. left padding shifts GPT-2's absolute position ids for **every** row in a chunk
+   whenever the longest sequence changes, so the disagreements were not confined to
+   the normalisation-affected questions.
+
+Chasing those individually would leave the design one undiscovered difference away
+from silently invalid results. Instead, `OfficialCODIEndpointStateCollector` attaches
+to the same hook points the intervention classes use and *observes* the answer-cue
+forward pass during real generation. The cached state is then, by construction, the
+state the decoder consumed, and parity reduces to the `lm_head` claim alone.
+
+A useful consequence: the answer never enters the model at all under
+`max_new_tokens=1` with the forced cue, so collection needs no reasoning trace, no
+released row formatting, and no eligibility filter. The two GSM8K test rows with
+negative gold answers (indices 489 and 1113) therefore need no special handling —
+only the gold *string* is used, and only to identify the token the model must emit.
 
 The identity holds only for state 12 and only for the first answer token. State
 11 and all-position arms are therefore run as real generations.
@@ -146,23 +173,12 @@ as a caveat afterwards.
 - Calibration: GSM8K **train**, 2,048 unique eligible questions, sampling seed 89,
   reusing `sample_gsm8k_train_calibration`, which proves zero normalized-question
   overlap with GSM8K test and raises otherwise.
-- Evaluation: the full 1,319-question GSM8K test set, in `load_eval_set` order.
-  That loader returns only `{question, gold}`, so each row's reasoning trace is
-  joined from the same pinned `openai/grade-school-math` revision. The join
-  preserves evaluation order, re-derives every gold answer from the pinned source
-  and compares it, and keeps the evaluation set's own question string so the cached
-  states belong to exactly the text the generation runner feeds the model.
-- **Negative-answer rows are kept.** Test rows 489 (`-10`) and 1113 (`-3`) are
-  rejected by `official_codi_answer_is_eligible`, which requires a digit-leading
-  answer. That is the released *training* filter; applying it to evaluation would
-  drop two questions and break pairing with every completed 1,319-question
-  experiment. Only the tokenised answer is sign-stripped for those two rows. The
-  true gold is retained, so the first-token outcome still scores what the model must
-  actually emit.
-  This is exact because GPT-2 is causal: tokens after the answer-cue colon cannot
-  influence the colon's hidden state. `_answer_invariance_gate` proves it on the
-  checkpoint before any state is cached, by recomputing colon states with mutated
-  answer tokens and requiring a bit-identical result.
+- Evaluation: the full 1,319-question GSM8K test set, in `load_eval_set` order,
+  which every completed full-GSM8K experiment is also paired on.
+- Because states are captured during generation, only `{question, gold}` is needed.
+  No reasoning trace, released row formatting, or answer-eligibility filter is
+  involved, so the two negative-answer test rows (489 and 1113) need no special
+  handling and no question is dropped.
 - No test label or test activation is used for any fit. The collection manifest
   records `test_labels_used_for_calibration: false` and
   `test_activations_used_for_calibration: false`.

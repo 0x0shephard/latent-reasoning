@@ -1262,6 +1262,26 @@ outcomes, a full rank sweep, and hundreds of matched controls affordable. A pari
 gate checks the analytic first token against the released decoder before any sweep
 is allowed to run.
 
+**States are captured from the generation path itself.** The first implementation
+cached colon states with the released *training* encoder and compared them against
+generation; the parity gate correctly blocked the run at 89.06% first-token
+agreement. The two paths differ in at least three ways: the generator normalises the
+question while the row formatter does not (336 of 1,319 test questions differ), the
+answer cue is tokenised with a leading space in one path only, and left padding
+shifts GPT-2's absolute position ids for every row in a chunk when the longest
+sequence changes. Rather than patch each difference and remain one undiscovered
+divergence away from silently invalid results,
+`OfficialCODIEndpointStateCollector` observes the answer-cue forward pass during
+real generation, so the cached state *is* the state the decoder consumed and parity
+reduces to the `lm_head` claim alone.
+
+A consequence worth recording: under `max_new_tokens=1` with the forced cue the
+answer never enters the model, so collection needs no reasoning trace, no released
+row formatting, and no answer-eligibility filter. That also removes an earlier
+complication — GSM8K test rows 489 (`-10`) and 1113 (`-3`) are rejected by
+`official_codi_answer_is_eligible`, which is a *training* filter; dropping them
+would have broken pairing with every completed 1,319-question experiment.
+
 Corrections, one per defect:
 
 | Defect | Correction |

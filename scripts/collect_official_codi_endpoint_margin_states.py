@@ -1,14 +1,21 @@
 """Cache answer-colon states and prove the analytic state-12 shortcut is exact.
 
-Nothing in this experiment is allowed to use the closed-form evaluator until the
-parity gate here shows that ``argmax(W h12)`` reproduces the token the released
-greedy decoder actually emits.  That gate is what converts an assumption about
-GPT-2's ``lm_head`` into a checked property of this checkpoint.
+States are captured *from the released generation path itself*, not re-derived with
+the training encoder.  An earlier version did the latter and reached only 89%
+first-token agreement, because the two paths differ in question normalisation, cue
+tokenisation, and left-padding width (which shifts GPT-2's absolute position ids for
+every row in a chunk).  Capturing during generation removes that class of divergence
+by construction.
+
+The parity gate then checks the one claim that remains: that GPT-2's ``lm_head`` is a
+bias-free linear map of the ``ln_f`` output, so ``argmax(W h12)`` reproduces the token
+the decoder actually emitted.  Nothing downstream may run until it passes.
 """
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import os
@@ -16,14 +23,12 @@ from pathlib import Path
 import sys
 
 import torch
-from tqdm.auto import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.collect_kv_subspaces import _atomic_json, _atomic_torch_save
-from scripts.collect_official_codi_endpoint_activation_stats import _amp_context
 from scripts.collect_official_codi_endpoint_tsvc import (
     _normalized_question,
     verify_full_reproduction_gate,
@@ -32,16 +37,11 @@ from scripts.collect_official_codi_parameter_state12_confirmation_stats import (
     GSM8K_EXPECTED_TRAIN_EXAMPLES,
     GSM8K_SOURCE_REVISION,
     GSM8K_TRAIN_URL,
-    _canonical_gsm8k_row,
     sample_gsm8k_train_calibration,
 )
-from src.data.answer_extract import normalize_number
 from src.data.datasets import load_eval_set
-from src.data.official_codi_training import (
-    OFFICIAL_CODI_SOURCE_REVISION,
-    collate_official_codi_kv_rows,
-    official_codi_answer_is_eligible,
-)
+from src.data.official_codi_training import OFFICIAL_CODI_SOURCE_REVISION
+from src.data.prompts import PromptStyle
 from src.eval.official_codi import select_device
 from src.mech.endpoint_answer_conditioned import GPT2_HIDDEN_SIZE, GPT2_STATE_COUNT
 from src.mech.endpoint_margin_geometry import (
@@ -49,11 +49,11 @@ from src.mech.endpoint_margin_geometry import (
     MARGIN_GEOMETRY_CONTRACT,
     MARGIN_GEOMETRY_SCHEMA_VERSION,
     MARGIN_GEOMETRY_STATES,
+    OfficialCODIEndpointStateCollector,
     gold_first_token_ids,
     numeric_answer_token_ids,
     resolve_output_embedding,
 )
-from src.mech.official_codi_target_utility import OfficialCODIAnswerScorer
 from src.models.official_codi import (
     build_official_codi_gpt2,
     download_official_checkpoint,
@@ -65,250 +65,93 @@ from src.models.official_codi import (
 from src.utils.config import load_config
 
 
-GSM8K_TEST_URL = (
-    "https://raw.githubusercontent.com/openai/grade-school-math/"
-    f"{GSM8K_SOURCE_REVISION}/grade_school_math/data/test.jsonl"
-)
-
-
 def _sha256_json(value) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
 
 
-def _canonical_evaluation_row(row: dict) -> dict | None:
-    """Canonicalise a raw GSM8K test row **without** the released training filter.
+def gold_text(value: object) -> str:
+    """Render a gold answer in the surface form the released decoder emits.
 
-    ``_canonical_gsm8k_row`` additionally applies ``official_codi_answer_is_eligible``,
-    which requires a digit-leading answer.  That filter exists to select *training*
-    rows and rejects the two GSM8K test questions with negative gold answers
-    (indices 489 and 1113).  Excluding them from evaluation would silently break
-    pairing with every completed 1,319-question experiment, so evaluation keeps them.
+    ``load_eval_set`` returns ``Decimal`` golds. GSM8K answers are integral, and an
+    integral ``Decimal`` must render as ``"18"`` rather than ``"18.0"`` or ``"1E+1"``,
+    because the first emitted token depends on the exact string.
     """
-    question = str(row.get("question", ""))
-    answer = str(row.get("answer", ""))
-    if not question.strip() or "####" not in answer:
-        return None
-    cot, final = answer.rsplit("####", 1)
-    cot, final = cot.strip(), final.strip().replace(",", "")
-    if not cot or not final:
-        return None
-    return {"question": question, "cot": cot, "gold": final}
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return str(int(value))
+        return format(value.normalize(), "f")
+    return str(value).strip()
 
 
-def canonical_gsm8k_test_rows(evaluation, raw_test) -> tuple[list[dict], dict]:
-    """Attach each evaluation question's pinned reasoning trace, in evaluation order.
-
-    ``load_eval_set`` yields only ``{"question", "gold"}``; the teacher-forced colon
-    extraction additionally needs the chain of thought in order to build teacher
-    boundaries.  The trace is therefore joined from the same pinned
-    ``openai/grade-school-math`` revision that supplies calibration.
-
-    Evaluation order is preserved exactly, and every gold answer is re-derived from
-    the pinned source and compared, so the resulting states stay paired with every
-    completed full-GSM8K experiment rather than merely assumed to be.
-    """
-    by_question: dict[str, dict] = {}
-    unusable = 0
-    for row in raw_test:
-        canonical = _canonical_evaluation_row(dict(row))
-        if canonical is None:
-            unusable += 1
-            continue
-        key = _normalized_question(canonical["question"])
-        if key in by_question:
-            raise RuntimeError("the pinned GSM8K test split has duplicate questions")
-        by_question[key] = canonical
-    ordered: list[dict] = []
-    adjusted: list[int] = []
-    for index, example in enumerate(evaluation):
-        key = _normalized_question(example["question"])
-        canonical = by_question.get(key)
-        if canonical is None:
-            raise RuntimeError(
-                f"GSM8K test row {index} has no pinned reasoning trace; "
-                "the evaluation set and the pinned source disagree"
-            )
-        gold = normalize_number(canonical["gold"])
-        if gold is None or gold != example["gold"]:
-            raise RuntimeError(
-                f"GSM8K test row {index} gold answer disagrees with the pinned source: "
-                f"{canonical['gold']!r} vs {example['gold']!r}"
-            )
-        # The released row formatter rejects answers that do not begin with a digit.
-        # Only the tokenised form is adjusted, and only for those rows: GPT-2 is
-        # causal, so tokens after the answer-cue colon cannot influence the colon's
-        # hidden state.  ``_answer_invariance_gate`` proves that on this checkpoint
-        # before any state is cached.  ``gold`` always keeps the true answer, so the
-        # first-token outcome still scores what the model must actually emit.
-        tokenization_answer = canonical["gold"]
-        if not official_codi_answer_is_eligible(tokenization_answer):
-            tokenization_answer = tokenization_answer.lstrip("+-")
-            adjusted.append(index)
-        if not official_codi_answer_is_eligible(tokenization_answer):
-            raise RuntimeError(
-                f"GSM8K test row {index} answer {canonical['gold']!r} cannot be "
-                "expressed in the released row format"
-            )
-        # Keep the evaluation set's own question string and take only the trace from
-        # the pinned source.  The two agree after normalisation but may differ in raw
-        # whitespace, and the cached colon states must belong to exactly the text the
-        # generation runner feeds the model.
-        ordered.append(
-            {
-                "question": example["question"],
-                "cot": canonical["cot"],
-                "answer": tokenization_answer,
-                "gold": canonical["gold"],
-            }
-        )
-    return ordered, {
-        "raw_test_examples": len(raw_test),
-        "unusable_rows": unusable,
-        "matched_examples": len(ordered),
-        "evaluation_order_preserved": True,
-        "gold_verified_against_pinned_source": True,
-        "training_filter_applied_to_evaluation": False,
-        "tokenization_answer_adjusted_indices": adjusted,
-        "normalized_questions_sha256": _sha256_json(
-            [_normalized_question(row["question"]) for row in ordered]
-        ),
-    }
-
-
-def _collect_colon_states(
-    scorer,
-    tokenizer,
-    rows,
-    *,
-    bot_token_id: int,
-    batch_size: int,
-    device: torch.device,
-    precision: str,
-    description: str,
-) -> torch.Tensor:
-    """Teacher-forced colon states ``[N, 13, 768]`` for the given canonical rows."""
-    collected = []
-    progress = tqdm(total=len(rows), unit="examples", desc=description)
-    for start in range(0, len(rows), batch_size):
-        batch = collate_official_codi_kv_rows(
-            tokenizer, rows[start : start + batch_size], bot_token_id=bot_token_id
-        ).to(device)
-        with torch.no_grad(), _amp_context(device, precision):
-            output = scorer(batch, return_answer_endpoint_hidden=True)
-        hidden = output.student_answer_endpoint_hidden
-        if hidden is None or hidden.shape[1:] != (GPT2_STATE_COUNT, GPT2_HIDDEN_SIZE):
-            raise RuntimeError("student answer-colon hidden-state shape changed")
-        collected.append(hidden.detach().float().cpu())
-        progress.update(hidden.shape[0])
-    progress.close()
-    states = torch.cat(collected, dim=0)
-    if states.shape[0] != len(rows):
-        raise RuntimeError("collected colon-state count does not match the row count")
-    if not torch.isfinite(states).all():
-        raise RuntimeError("collected colon states contain non-finite values")
-    return states
-
-
-def _answer_invariance_gate(
-    scorer,
-    tokenizer,
-    rows,
-    *,
-    bot_token_id: int,
-    device: torch.device,
-    precision: str,
-) -> dict:
-    """Prove the colon state does not depend on the answer tokens that follow it.
-
-    Two GSM8K test rows have negative gold answers, which the released row formatter
-    refuses, so their tokenised answer is sign-stripped.  GPT-2 is causal, so tokens
-    after the answer-cue colon cannot affect the colon's hidden state — but this
-    experiment checks that on the actual checkpoint instead of assuming it.
-    """
-    if not rows:
-        raise ValueError("the answer-invariance gate needs at least one row")
-    mutated = [
-        {**row, "answer": "9" + str(row["answer"])}
-        for row in rows
-    ]
-    original_states = _collect_colon_states(
-        scorer, tokenizer, rows, bot_token_id=bot_token_id, batch_size=len(rows),
-        device=device, precision=precision, description="Answer-invariance (original)",
-    )
-    mutated_states = _collect_colon_states(
-        scorer, tokenizer, mutated, bot_token_id=bot_token_id, batch_size=len(rows),
-        device=device, precision=precision, description="Answer-invariance (mutated)",
-    )
-    difference = float((original_states - mutated_states).abs().max())
-    passed = bool(difference == 0.0)
-    if not passed:
-        raise RuntimeError(
-            "the answer-cue colon state depends on the answer tokens that follow it "
-            f"(max absolute difference {difference:.3e}); the sign-stripped "
-            "tokenisation of negative-answer rows would not be exact"
-        )
-    return {
-        "examples": len(rows),
-        "maximum_absolute_state_difference": difference,
-        "passed": passed,
-    }
-
-
-def _parity_gate(
+def collect_colon_states(
     model,
     tokenizer,
-    rows,
-    states: torch.Tensor,
-    readout: torch.Tensor,
+    questions,
     *,
     latent_iterations: int,
     batch_size: int,
     device: torch.device,
-    minimum_agreement: float,
-) -> dict:
-    """Check the closed-form first token against the released greedy decoder.
+    answer_cue: str,
+) -> tuple[torch.Tensor, list[str], dict]:
+    """Capture the colon states the decoder itself consumes, plus its first token.
 
-    ``generate_official_codi`` with ``max_new_tokens=1`` emits exactly the token
-    the analytic evaluator predicts, so string equality here is a direct test of
-    ``logits == W @ ln_f(h)`` on this checkpoint, including its LoRA adapters.
+    ``max_new_tokens=1`` stops immediately after the forced-cue forward pass, which
+    is the only pass this experiment intervenes on.  The answer never enters the
+    model, so no reasoning trace or answer formatting is required at all.
     """
-    questions = [row["question"] for row in rows]
-    generated = generate_official_codi(
+    collector = OfficialCODIEndpointStateCollector(model)
+    generations, endpoint = generate_official_codi(
         model,
         tokenizer,
-        questions,
+        list(questions),
         latent_iterations=latent_iterations,
         max_new_tokens=1,
         batch_size=batch_size,
         device=device,
+        answer_endpoint_intervention=collector,
+        answer_cue=answer_cue,
         force_answer_cue=True,
+        return_endpoint_metadata=True,
     )
-    predicted = (states[:, ANALYTIC_STATE, :].to(readout.device) @ readout.T).argmax(dim=-1)
+    if endpoint["endpoint_reached_count"] != len(generations):
+        raise RuntimeError("the forced answer cue was not reached for every question")
+    states = collector.stacked(len(generations))
+    return states, generations, endpoint
+
+
+def parity_gate(
+    states: torch.Tensor,
+    readout: torch.Tensor,
+    generations,
+    tokenizer,
+    *,
+    minimum_agreement: float,
+) -> dict:
+    """Check ``argmax(W h12)`` against the token the decoder actually emitted."""
+    predicted = (states[:, ANALYTIC_STATE, :] @ readout.T).argmax(dim=-1)
     analytic = [
         tokenizer.decode([int(token)], skip_special_tokens=True)
         for token in predicted.tolist()
     ]
-    matches = [bool(a == b) for a, b in zip(analytic, generated)]
+    matches = [bool(a == b) for a, b in zip(analytic, generations)]
     agreement = float(sum(matches) / max(1, len(matches)))
-    passed = bool(agreement >= minimum_agreement)
     disagreements = [
-        {"index": index, "analytic": analytic[index], "generated": generated[index]}
+        {"index": index, "analytic": analytic[index], "generated": generations[index]}
         for index, match in enumerate(matches)
         if not match
     ][:8]
-    if not passed:
+    if agreement < minimum_agreement:
         raise RuntimeError(
             "analytic state-12 parity failed "
-            f"({agreement:.4f} < {minimum_agreement:.4f}); "
-            f"examples: {disagreements}"
+            f"({agreement:.4f} < {minimum_agreement:.4f}); examples: {disagreements}"
         )
     return {
         "examples": len(matches),
         "agreement": agreement,
         "minimum_agreement": minimum_agreement,
-        "passed": passed,
+        "passed": True,
         "disagreements": disagreements,
     }
 
@@ -357,6 +200,7 @@ def collect(args: argparse.Namespace) -> dict:
     if len(train) != GSM8K_EXPECTED_TRAIN_EXAMPLES:
         raise RuntimeError("GSM8K train count drifted")
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
+    style = PromptStyle.from_config(data_cfg.prompt)
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
     if len(test) != int(cfg.eval.expected_counts.gsm8k):
         raise RuntimeError("GSM8K test count drifted")
@@ -369,23 +213,16 @@ def collect(args: argparse.Namespace) -> dict:
         examples=args.calibration_examples,
         seed=args.sampling_seed,
     )
-    raw_test = load_dataset(
-        "json",
-        data_files={"test": GSM8K_TEST_URL},
-        split="test",
-        verification_mode="no_checks",
-    )
-    evaluation_rows, evaluation_join = canonical_gsm8k_test_rows(test, raw_test)
-    if len(evaluation_rows) != len(test):
-        raise RuntimeError("evaluation join dropped questions")
 
     request = {
         "schema_version": MARGIN_GEOMETRY_SCHEMA_VERSION,
         "contract": MARGIN_GEOMETRY_CONTRACT,
         "phase": "answer_colon_state_cache_and_analytic_parity",
+        "collection_path": "released forced-cue generation with a capturing hook",
         "checkpoint_sha256": load_report.checkpoint_sha256,
         "official_source_revision": str(cfg.official_source.revision),
         "reproduction_gate": reproduction,
+        "answer_cue": style.answer_prefix,
         "calibration_dataset": "openai/grade-school-math GSM8K train",
         "calibration_source_revision": GSM8K_SOURCE_REVISION,
         "calibration_source_url": GSM8K_TRAIN_URL,
@@ -393,9 +230,7 @@ def collect(args: argparse.Namespace) -> dict:
         "sampling_seed": args.sampling_seed,
         "sampling": sampling,
         "evaluation_dataset": "GSM8K test",
-        "evaluation_source_url": GSM8K_TEST_URL,
-        "evaluation_examples": len(evaluation_rows),
-        "evaluation_join": evaluation_join,
+        "evaluation_examples": len(test),
         "batch_size": args.batch_size,
         "precision": args.precision,
         "states": list(MARGIN_GEOMETRY_STATES),
@@ -421,71 +256,59 @@ def collect(args: argparse.Namespace) -> dict:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     model.to(device=device, dtype=dtype).eval()
-    scorer = OfficialCODIAnswerScorer(
-        model, latent_positions=int(cfg.eval.latent_iterations)
-    )
     # The released decoder takes its argmax over ``logits[:, :eot_id]``, so the
     # analytic tier must use exactly that restricted readout.
     eot_id = int(model.eot_id)
     readout = resolve_output_embedding(model)[:eot_id].detach().float().cpu()
 
-    invariance = _answer_invariance_gate(
-        scorer,
-        tokenizer,
-        evaluation_rows[:8],
-        bot_token_id=model.bot_id,
-        device=device,
-        precision=args.precision,
-    )
-    print(
-        "[invariance] colon state is independent of the following answer tokens "
-        f"(max |Δ| = {invariance['maximum_absolute_state_difference']:.3e})"
-    )
-
-    calibration_states = _collect_colon_states(
-        scorer,
-        tokenizer,
-        calibration_rows,
-        bot_token_id=model.bot_id,
-        batch_size=args.batch_size,
-        device=device,
-        precision=args.precision,
-        description="GSM8K-train colon states",
-    )
-    evaluation_states = _collect_colon_states(
-        scorer,
-        tokenizer,
-        evaluation_rows,
-        bot_token_id=model.bot_id,
-        batch_size=args.batch_size,
-        device=device,
-        precision=args.precision,
-        description="GSM8K-test colon states",
-    )
-    parity = _parity_gate(
+    calibration_states, _, _ = collect_colon_states(
         model,
         tokenizer,
-        evaluation_rows[: args.parity_examples],
+        [row["question"] for row in calibration_rows],
+        latent_iterations=int(cfg.eval.latent_iterations),
+        batch_size=args.batch_size,
+        device=device,
+        answer_cue=style.answer_prefix,
+    )
+    evaluation_states, evaluation_first_tokens, endpoint = collect_colon_states(
+        model,
+        tokenizer,
+        [row["question"] for row in test],
+        latent_iterations=int(cfg.eval.latent_iterations),
+        batch_size=args.batch_size,
+        device=device,
+        answer_cue=style.answer_prefix,
+    )
+    parity = parity_gate(
         evaluation_states[: args.parity_examples],
         readout,
-        latent_iterations=int(cfg.eval.latent_iterations),
-        batch_size=min(args.batch_size, args.parity_examples),
-        device=device,
+        evaluation_first_tokens[: args.parity_examples],
+        tokenizer,
         minimum_agreement=float(settings.minimum_parity_agreement),
     )
     print(
         f"[parity] analytic/decoder first-token agreement "
         f"{parity['agreement']:.4f} on {parity['examples']} examples"
     )
+    # The gate samples a prefix; the identity should hold for every question, so the
+    # full-set agreement is recorded too and must not be worse.
+    full_parity = parity_gate(
+        evaluation_states,
+        readout,
+        evaluation_first_tokens,
+        tokenizer,
+        minimum_agreement=float(settings.minimum_parity_agreement),
+    )
+    print(f"[parity] full evaluation agreement {full_parity['agreement']:.4f}")
 
     calibration_gold = torch.tensor(
-        gold_first_token_ids(tokenizer, (row["answer"] for row in calibration_rows)),
+        gold_first_token_ids(
+            tokenizer, (gold_text(row["answer"]) for row in calibration_rows)
+        ),
         dtype=torch.long,
     )
-    # The true gold, not the sign-stripped tokenisation form: the first-token
-    # outcome must score the token the model actually has to emit.
     evaluation_gold = torch.tensor(
-        gold_first_token_ids(tokenizer, (row["gold"] for row in evaluation_rows)),
+        gold_first_token_ids(tokenizer, (gold_text(row["gold"]) for row in test)),
         dtype=torch.long,
     )
     if int(calibration_gold.max()) >= eot_id or int(evaluation_gold.max()) >= eot_id:
@@ -501,7 +324,10 @@ def collect(args: argparse.Namespace) -> dict:
         "request_sha256": request_sha256,
         "metadata": request,
         "parity_gate": parity,
-        "answer_invariance_gate": invariance,
+        "full_parity_gate": full_parity,
+        "endpoint_coverage": {
+            key: value for key, value in endpoint.items() if key != "endpoint_reached"
+        },
         "eot_id": eot_id,
         "numeric_answer_token_ids": numeric_answer_token_ids(tokenizer),
         "student_mean": mean,
@@ -512,8 +338,9 @@ def collect(args: argparse.Namespace) -> dict:
         ),
         "evaluation_states": evaluation_states[:, MARGIN_GEOMETRY_STATES, :],
         "evaluation_gold_first_token": evaluation_gold,
-        "evaluation_questions": [row["question"] for row in evaluation_rows],
-        "evaluation_gold_answers": [row["gold"] for row in evaluation_rows],
+        "evaluation_questions": [row["question"] for row in test],
+        "evaluation_gold_answers": [gold_text(row["gold"]) for row in test],
+        "evaluation_first_tokens": evaluation_first_tokens,
         "state_order": list(MARGIN_GEOMETRY_STATES),
     }
     _atomic_torch_save(payload, states_path)
@@ -533,7 +360,7 @@ def collect(args: argparse.Namespace) -> dict:
             "request_sha256": request_sha256,
             "state": "complete",
             "parity_gate": parity,
-            "answer_invariance_gate": invariance,
+            "full_parity_gate": full_parity,
             "states_file": states_path.name,
             "states_sha256": sha256_file(states_path),
             "readout_file": readout_path.name,

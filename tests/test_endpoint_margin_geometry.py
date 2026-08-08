@@ -376,116 +376,94 @@ def test_effective_rank_uses_the_retention_threshold():
     assert effective["margin"] == 3
 
 
-def _evaluation_row(question: str, gold: str) -> dict:
-    """The shape ``load_eval_set`` actually returns: question and gold only."""
+def test_gold_text_renders_the_emitted_surface_form():
+    """The first gold token depends on the exact string, so rendering matters."""
     from decimal import Decimal
 
-    return {"question": question, "gold": Decimal(gold)}
+    from scripts.collect_official_codi_endpoint_margin_states import gold_text
+
+    assert gold_text(Decimal("18")) == "18"
+    # An integral Decimal must not become "18.0" or "1.8E+1".
+    assert gold_text(Decimal("18.0")) == "18"
+    assert gold_text(Decimal("70000")) == "70000"
+    # GSM8K test rows 489 and 1113 have negative answers and are kept.
+    assert gold_text(Decimal("-10")) == "-10"
+    assert gold_text(" 42 ") == "42"
 
 
-def _raw_row(question: str, cot: str, gold: str) -> dict:
-    return {"question": question, "answer": f"{cot}\n#### {gold}"}
+class _FakeBlock(torch.nn.Module):
+    def forward(self, hidden):  # GPT-2 blocks return a tuple
+        return (hidden,)
 
 
-def test_evaluation_join_attaches_traces_in_evaluation_order():
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
-
-    evaluation = [_evaluation_row("Q one?", "18"), _evaluation_row("Q two?", "7")]
-    # Deliberately reversed, to prove the join follows evaluation order rather than
-    # the source file's order; every completed experiment is paired on that order.
-    raw = [_raw_row("Q two?", "two steps", "7"), _raw_row("Q one?", "one step", "18")]
-    rows, metadata = canonical_gsm8k_test_rows(evaluation, raw)
-    assert [row["question"] for row in rows] == ["Q one?", "Q two?"]
-    assert [row["cot"] for row in rows] == ["one step", "two steps"]
-    assert metadata["matched_examples"] == 2
-    assert metadata["gold_verified_against_pinned_source"] is True
+class _FakeLayerNorm(torch.nn.Module):
+    def forward(self, hidden):
+        return hidden
 
 
-def test_evaluation_join_keeps_the_evaluation_question_text():
-    """Only the trace comes from the pinned source.
-
-    The cached colon states must belong to exactly the string the generation runner
-    feeds the model, so raw-whitespace differences cannot silently desynchronise the
-    analytic tier from the paired full-GSM8K arms.
-    """
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
-
-    evaluation = [_evaluation_row("Q one?", "18")]
-    raw = [_raw_row("  Q one?  ", "one step", "18")]
-    rows, _ = canonical_gsm8k_test_rows(evaluation, raw)
-    assert rows[0]["question"] == "Q one?"
-    assert rows[0]["cot"] == "one step"
+class _FakeCodi(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.transformer = torch.nn.Module()
+        self.transformer.h = torch.nn.ModuleList(_FakeBlock() for _ in range(12))
+        self.transformer.ln_f = _FakeLayerNorm()
 
 
-def test_evaluation_join_refuses_rows_without_a_pinned_trace():
-    """``load_eval_set`` output carries no chain of thought, so it is not a source.
-
-    Passing evaluation-shaped rows as the pinned source is exactly the mistake that
-    made the first Kaggle collection abort.
-    """
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
-
-    evaluation = [_evaluation_row("Q one?", "18")]
-    with pytest.raises(RuntimeError, match="no pinned reasoning trace"):
-        canonical_gsm8k_test_rows(evaluation, [{"question": "Q one?", "gold": "18"}])
+class _FakeModel:
+    def __init__(self) -> None:
+        self.codi = _FakeCodi()
 
 
-def test_evaluation_join_keeps_negative_answer_rows():
-    """GSM8K test rows 489 and 1113 have negative gold answers.
+def test_state_collector_captures_the_colon_row_in_order():
+    """The collector must observe, not rewrite, and must preserve batch order."""
+    from src.mech.endpoint_margin_geometry import OfficialCODIEndpointStateCollector
 
-    The released row formatter rejects non-digit-leading answers, but that is a
-    *training* filter. Dropping those questions would break pairing with every
-    completed 1,319-question experiment, so evaluation keeps them and only adjusts
-    the tokenised form.
-    """
-    from decimal import Decimal
-
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
-    from src.data.official_codi_training import format_official_codi_row
-
-    evaluation = [{"question": "Q neg?", "gold": Decimal("-10")}]
-    rows, metadata = canonical_gsm8k_test_rows(
-        evaluation, [_raw_row("Q neg?", "some steps", "-10")]
-    )
-    assert len(rows) == 1
-    # The true gold survives, so the first-token outcome still scores "-10".
-    assert rows[0]["gold"] == "-10"
-    # Only the tokenised form is sign-stripped, so the released formatter accepts it.
-    assert rows[0]["answer"] == "10"
-    format_official_codi_row(rows[0])
-    assert metadata["tokenization_answer_adjusted_indices"] == [0]
-    assert metadata["training_filter_applied_to_evaluation"] is False
+    model = _FakeModel()
+    collector = OfficialCODIEndpointStateCollector(model)
+    blocks = model.codi.transformer.h
+    layer_norm = model.codi.transformer.ln_f
+    chunks = [
+        torch.arange(2 * 3 * HIDDEN, dtype=torch.float32).reshape(2, 3, HIDDEN),
+        torch.zeros(2, 3, HIDDEN) + 7.0,
+    ]
+    for chunk in chunks:
+        with collector.activate(torch.ones(chunk.shape[0], dtype=torch.bool)):
+            returned = blocks[10](chunk)
+            assert torch.equal(returned[0], chunk)  # observation only
+            layer_norm(chunk)
+    stacked = collector.stacked(4)
+    assert stacked.shape == (4, 13, HIDDEN)
+    # Only the two endpoint states are populated.
+    assert torch.count_nonzero(stacked[:, :11, :]) == 0
+    # The captured row is the last position of each sequence, in batch order.
+    assert torch.equal(stacked[0, 12, :], chunks[0][0, -1, :])
+    assert torch.equal(stacked[3, 12, :], chunks[1][1, -1, :])
 
 
-def test_evaluation_join_does_not_adjust_ordinary_answers():
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
+def test_state_collector_rejects_a_wrong_row_count():
+    """A second answer-cue forward would silently double the cache."""
+    from src.mech.endpoint_margin_geometry import OfficialCODIEndpointStateCollector
 
-    evaluation = [_evaluation_row("Q one?", "18")]
-    rows, metadata = canonical_gsm8k_test_rows(
-        evaluation, [_raw_row("Q one?", "one step", "18")]
-    )
-    assert rows[0]["answer"] == rows[0]["gold"] == "18"
-    assert metadata["tokenization_answer_adjusted_indices"] == []
+    model = _FakeModel()
+    collector = OfficialCODIEndpointStateCollector(model)
+    hidden = torch.zeros(2, 3, HIDDEN)
+    with collector.activate(torch.ones(2, dtype=torch.bool)):
+        model.codi.transformer.h[10](hidden)
+        model.codi.transformer.ln_f(hidden)
+        model.codi.transformer.h[10](hidden)
+        model.codi.transformer.ln_f(hidden)
+    with pytest.raises(RuntimeError, match="captured 4 rows, expected 2"):
+        collector.stacked(2)
 
 
-def test_evaluation_join_refuses_a_gold_answer_mismatch():
-    from scripts.collect_official_codi_endpoint_margin_states import (
-        canonical_gsm8k_test_rows,
-    )
+def test_state_collector_cannot_nest():
+    from src.mech.endpoint_margin_geometry import OfficialCODIEndpointStateCollector
 
-    evaluation = [_evaluation_row("Q one?", "18")]
-    with pytest.raises(RuntimeError, match="disagrees with the pinned source"):
-        canonical_gsm8k_test_rows(evaluation, [_raw_row("Q one?", "one step", "19")])
+    collector = OfficialCODIEndpointStateCollector(_FakeModel())
+    with collector.activate(torch.ones(1, dtype=torch.bool)):
+        with pytest.raises(RuntimeError):
+            with collector.activate(torch.ones(1, dtype=torch.bool)):
+                pass
 
 
 def test_analysis_refuses_a_sweep_without_matched_controls():
