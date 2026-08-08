@@ -376,6 +376,76 @@ def test_effective_rank_uses_the_retention_threshold():
     assert effective["margin"] == 3
 
 
+def _evaluation_row(question: str, gold: str) -> dict:
+    """The shape ``load_eval_set`` actually returns: question and gold only."""
+    from decimal import Decimal
+
+    return {"question": question, "gold": Decimal(gold)}
+
+
+def _raw_row(question: str, cot: str, gold: str) -> dict:
+    return {"question": question, "answer": f"{cot}\n#### {gold}"}
+
+
+def test_evaluation_join_attaches_traces_in_evaluation_order():
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+
+    evaluation = [_evaluation_row("Q one?", "18"), _evaluation_row("Q two?", "7")]
+    # Deliberately reversed, to prove the join follows evaluation order rather than
+    # the source file's order; every completed experiment is paired on that order.
+    raw = [_raw_row("Q two?", "two steps", "7"), _raw_row("Q one?", "one step", "18")]
+    rows, metadata = canonical_gsm8k_test_rows(evaluation, raw)
+    assert [row["question"] for row in rows] == ["Q one?", "Q two?"]
+    assert [row["cot"] for row in rows] == ["one step", "two steps"]
+    assert metadata["matched_examples"] == 2
+    assert metadata["gold_verified_against_pinned_source"] is True
+
+
+def test_evaluation_join_keeps_the_evaluation_question_text():
+    """Only the trace comes from the pinned source.
+
+    The cached colon states must belong to exactly the string the generation runner
+    feeds the model, so raw-whitespace differences cannot silently desynchronise the
+    analytic tier from the paired full-GSM8K arms.
+    """
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+
+    evaluation = [_evaluation_row("Q one?", "18")]
+    raw = [_raw_row("  Q one?  ", "one step", "18")]
+    rows, _ = canonical_gsm8k_test_rows(evaluation, raw)
+    assert rows[0]["question"] == "Q one?"
+    assert rows[0]["cot"] == "one step"
+
+
+def test_evaluation_join_refuses_rows_without_a_pinned_trace():
+    """``load_eval_set`` output carries no chain of thought, so it is not a source.
+
+    Passing evaluation-shaped rows as the pinned source is exactly the mistake that
+    made the first Kaggle collection abort.
+    """
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+
+    evaluation = [_evaluation_row("Q one?", "18")]
+    with pytest.raises(RuntimeError, match="no pinned reasoning trace"):
+        canonical_gsm8k_test_rows(evaluation, [{"question": "Q one?", "gold": "18"}])
+
+
+def test_evaluation_join_refuses_a_gold_answer_mismatch():
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+
+    evaluation = [_evaluation_row("Q one?", "18")]
+    with pytest.raises(RuntimeError, match="disagrees with the pinned source"):
+        canonical_gsm8k_test_rows(evaluation, [_raw_row("Q one?", "one step", "19")])
+
+
 def test_analysis_refuses_a_sweep_without_matched_controls():
     sweep = _synthetic_sweep(effect=0.5, seed=34)
     sweep["arms"] = {

@@ -35,6 +35,7 @@ from scripts.collect_official_codi_parameter_state12_confirmation_stats import (
     _canonical_gsm8k_row,
     sample_gsm8k_train_calibration,
 )
+from src.data.answer_extract import normalize_number
 from src.data.datasets import load_eval_set
 from src.data.official_codi_training import (
     OFFICIAL_CODI_SOURCE_REVISION,
@@ -63,10 +64,77 @@ from src.models.official_codi import (
 from src.utils.config import load_config
 
 
+GSM8K_TEST_URL = (
+    "https://raw.githubusercontent.com/openai/grade-school-math/"
+    f"{GSM8K_SOURCE_REVISION}/grade_school_math/data/test.jsonl"
+)
+
+
 def _sha256_json(value) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def canonical_gsm8k_test_rows(evaluation, raw_test) -> tuple[list[dict], dict]:
+    """Attach each evaluation question's pinned reasoning trace, in evaluation order.
+
+    ``load_eval_set`` yields only ``{"question", "gold"}``; the teacher-forced colon
+    extraction additionally needs the chain of thought in order to build teacher
+    boundaries.  The trace is therefore joined from the same pinned
+    ``openai/grade-school-math`` revision that supplies calibration.
+
+    Evaluation order is preserved exactly, and every gold answer is re-derived from
+    the pinned source and compared, so the resulting states stay paired with every
+    completed full-GSM8K experiment rather than merely assumed to be.
+    """
+    by_question: dict[str, dict] = {}
+    ineligible = 0
+    for row in raw_test:
+        canonical = _canonical_gsm8k_row(dict(row))
+        if canonical is None:
+            ineligible += 1
+            continue
+        key = _normalized_question(canonical["question"])
+        if key in by_question:
+            raise RuntimeError("the pinned GSM8K test split has duplicate questions")
+        by_question[key] = canonical
+    ordered: list[dict] = []
+    for index, example in enumerate(evaluation):
+        key = _normalized_question(example["question"])
+        canonical = by_question.get(key)
+        if canonical is None:
+            raise RuntimeError(
+                f"GSM8K test row {index} has no pinned reasoning trace; "
+                "the evaluation set and the pinned source disagree"
+            )
+        gold = normalize_number(canonical["answer"])
+        if gold is None or gold != example["gold"]:
+            raise RuntimeError(
+                f"GSM8K test row {index} gold answer disagrees with the pinned source: "
+                f"{canonical['answer']!r} vs {example['gold']!r}"
+            )
+        # Keep the evaluation set's own question string and take only the trace from
+        # the pinned source.  The two agree after normalisation but may differ in raw
+        # whitespace, and the cached colon states must belong to exactly the text the
+        # generation runner feeds the model.
+        ordered.append(
+            {
+                "question": example["question"],
+                "cot": canonical["cot"],
+                "answer": canonical["answer"],
+            }
+        )
+    return ordered, {
+        "raw_test_examples": len(raw_test),
+        "ineligible_rows": ineligible,
+        "matched_examples": len(ordered),
+        "evaluation_order_preserved": True,
+        "gold_verified_against_pinned_source": True,
+        "normalized_questions_sha256": _sha256_json(
+            [_normalized_question(row["question"]) for row in ordered]
+        ),
+    }
 
 
 def _collect_colon_states(
@@ -216,14 +284,15 @@ def collect(args: argparse.Namespace) -> dict:
         examples=args.calibration_examples,
         seed=args.sampling_seed,
     )
-    evaluation_rows = []
-    for row in test:
-        canonical = _canonical_gsm8k_row(dict(row))
-        if canonical is None:
-            raise RuntimeError(
-                "every GSM8K test row must be canonicalisable for paired evaluation"
-            )
-        evaluation_rows.append(canonical)
+    raw_test = load_dataset(
+        "json",
+        data_files={"test": GSM8K_TEST_URL},
+        split="test",
+        verification_mode="no_checks",
+    )
+    evaluation_rows, evaluation_join = canonical_gsm8k_test_rows(test, raw_test)
+    if len(evaluation_rows) != len(test):
+        raise RuntimeError("evaluation join dropped questions")
 
     request = {
         "schema_version": MARGIN_GEOMETRY_SCHEMA_VERSION,
@@ -239,7 +308,9 @@ def collect(args: argparse.Namespace) -> dict:
         "sampling_seed": args.sampling_seed,
         "sampling": sampling,
         "evaluation_dataset": "GSM8K test",
+        "evaluation_source_url": GSM8K_TEST_URL,
         "evaluation_examples": len(evaluation_rows),
+        "evaluation_join": evaluation_join,
         "batch_size": args.batch_size,
         "precision": args.precision,
         "states": list(MARGIN_GEOMETRY_STATES),
