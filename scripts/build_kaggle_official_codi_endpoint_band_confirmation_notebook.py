@@ -204,6 +204,24 @@ LOG_ROOT = pathlib.Path("/kaggle/working/latent-reasoning/logs/official_codi_end
 for path in (OUTPUT_ROOT, REPORT_ROOT, LOG_ROOT):
     path.mkdir(parents=True, exist_ok=True)
 
+# Restore a previous session's outputs when one is attached. Every arm and the
+# reproduction gate are keyed by request hash, so restored work is skipped and only
+# the missing steps run.
+if RESUME_INPUT:
+    import shutil
+    restored = 0
+    for source in pathlib.Path(RESUME_INPUT).rglob("official_codi_endpoint_band_confirmation"):
+        if not source.is_dir():
+            continue
+        for item in source.rglob("*"):
+            if item.is_file():
+                target = OUTPUT_ROOT / item.relative_to(source)
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(item, target)
+                    restored += 1
+    print("restored files from RESUME_INPUT:", restored)
+
 
 def _discover(explicit, pattern):
     if explicit:
@@ -278,17 +296,14 @@ fresh = json.loads(FRESH_REPRODUCTION_SUMMARY.read_text())
 attached = json.loads(pathlib.Path(REPRODUCTION_SUMMARY).read_text())
 
 
-def _gsm8k_accuracy(payload):
-    """The eval summary stores datasets[name] as a bare float."""
-    value = (payload.get("datasets") or {}).get("gsm8k")
-    if isinstance(value, dict):
-        value = value.get("accuracy")
-    if value is None:
-        value = payload.get("gsm8k_accuracy", payload.get("accuracy"))
-    return float(value)
+# One shared reader, so the notebook and the analysis CLI cannot disagree about
+# the summary schema.
+from src.eval.official_codi_endpoint_band_confirmation_analysis import (
+    gsm8k_accuracy_from_summary,
+)
 
-
-fresh_acc, attached_acc = _gsm8k_accuracy(fresh), _gsm8k_accuracy(attached)
+fresh_acc = gsm8k_accuracy_from_summary(fresh)
+attached_acc = gsm8k_accuracy_from_summary(attached)
 print(f"native GSM8K accuracy on THIS image : {fresh_acc}")
 print(f"native GSM8K accuracy when recorded : {attached_acc}")
 print(f"drift: {abs(float(fresh_acc) - float(attached_acc)):.6f}")

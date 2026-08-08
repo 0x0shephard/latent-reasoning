@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.collect_kv_subspaces import _atomic_json
 from src.eval.official_codi_endpoint_band_confirmation_analysis import (
     analyze_band_confirmation,
+    gsm8k_accuracy_from_summary,
 )
 from src.utils.config import load_config
 
@@ -60,12 +61,8 @@ def main() -> int:
     settings = cfg.endpoint_band_confirmation
     reproduction_accuracy = None
     if args.reproduction_summary and args.reproduction_summary.is_file():
-        payload = json.loads(args.reproduction_summary.read_text(encoding="utf-8"))
-        datasets = payload.get("datasets") or {}
-        reproduction_accuracy = (
-            payload.get("gsm8k_accuracy")
-            or (datasets.get("gsm8k") or {}).get("accuracy")
-            or payload.get("accuracy")
+        reproduction_accuracy = gsm8k_accuracy_from_summary(
+            json.loads(args.reproduction_summary.read_text(encoding="utf-8"))
         )
 
     report = analyze_band_confirmation(

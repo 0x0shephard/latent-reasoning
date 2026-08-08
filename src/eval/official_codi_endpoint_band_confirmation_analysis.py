@@ -27,6 +27,24 @@ from typing import Sequence
 import numpy as np
 
 
+def gsm8k_accuracy_from_summary(payload: dict) -> float:
+    """Read GSM8K accuracy from an official-CODI evaluation summary.
+
+    ``evaluate_official_codi`` writes ``datasets[name]`` as a bare float. Other
+    summaries in the project carry a nested dict or a flat ``gsm8k_accuracy``, so
+    all three shapes are accepted. This lives in one place because writing the
+    lookup twice is what produced the float/dict crash it now handles.
+    """
+    value = (payload.get("datasets") or {}).get("gsm8k")
+    if isinstance(value, dict):
+        value = value.get("accuracy")
+    if value is None:
+        value = payload.get("gsm8k_accuracy", payload.get("accuracy"))
+    if value is None:
+        raise ValueError("summary has no GSM8K accuracy")
+    return float(value)
+
+
 def _paired_accuracy_bootstrap(
     left: np.ndarray,
     right: np.ndarray,

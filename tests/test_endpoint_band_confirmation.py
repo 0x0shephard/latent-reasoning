@@ -218,6 +218,39 @@ def test_missing_required_arm_is_refused():
         _analyze([run for run in runs if run["mode"] != "remove" or run["arm"] == "baseline"])
 
 
+def test_gsm8k_accuracy_reader_accepts_every_summary_schema():
+    """``evaluate_official_codi`` stores a bare float; other summaries nest a dict.
+
+    Writing this lookup twice is what crashed the first analysis run, so it now
+    lives in one place and is pinned here.
+    """
+    from src.eval.official_codi_endpoint_band_confirmation_analysis import (
+        gsm8k_accuracy_from_summary,
+    )
+
+    assert gsm8k_accuracy_from_summary({"datasets": {"gsm8k": 0.3723}}) == 0.3723
+    assert gsm8k_accuracy_from_summary(
+        {"datasets": {"gsm8k": {"accuracy": 0.43669}}}
+    ) == 0.43669
+    assert gsm8k_accuracy_from_summary({"gsm8k_accuracy": 0.43594}) == 0.43594
+    assert gsm8k_accuracy_from_summary({"accuracy": 0.4056}) == 0.4056
+    with pytest.raises(ValueError):
+        gsm8k_accuracy_from_summary({"datasets": {}})
+
+
+def test_analysis_cli_uses_the_shared_accuracy_reader():
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "analyze_official_codi_endpoint_band_confirmation.py"
+    ).read_text(encoding="utf-8")
+    assert "gsm8k_accuracy_from_summary" in source
+    # The crash came from re-implementing the reproduction-summary schema probe.
+    # Reading an arm's own ``summary["accuracy"]`` is a different, valid lookup.
+    for duplicated in ('datasets.get("gsm8k")', 'payload.get("gsm8k_accuracy")'):
+        assert duplicated not in source, f"the duplicated schema lookup is back: {duplicated}"
+
+
 def test_notebook_pins_precision_and_freezes_the_arm_count():
     payload = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
     for cell in payload["cells"]:
