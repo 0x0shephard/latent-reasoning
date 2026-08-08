@@ -339,8 +339,41 @@ endpoint_margin_geometry:
   maximum_calibration_relative_energy_error: 0.005
   maximum_selected_overlap: 0.20
   eval_dataset: gsm8k
+  # Pinned, never "auto". On T4-class GPUs recent PyTorch reports bf16 as supported
+  # through emulation, so "auto" silently selects bfloat16 (8 mantissa bits, worse
+  # than fp16's 10) and the forced-cue baseline drops from 43.29% to 40.41%. The
+  # analytic tier is collected in float32, so the generation arms must match it.
+  precision: float32
+  # The forced-cue baseline must land within this many points of the reproduction
+  # gate, otherwise the arms are not comparable to any completed experiment.
+  maximum_baseline_accuracy_drift: 0.015
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  alpha: 0.05
+  # Principal-component bands of the student colon state. The analytic tier found
+  # PCs 0-3 carry 82.3% of the variance but only 6.7% of first-token accuracy,
+  # while PCs 4-31 carry 11.3% of the variance and 85.9% of accuracy. These bands
+  # are appended after every existing registry target, so the completed sweep's
+  # arm names and bases are unchanged.
+  confirmation_bands: [[0, 4], [4, 16], [4, 32], [0, 32], [32, 768]]
+  band_random_replicates: 4
+
+# Exact-match confirmation of the accuracy-bearing principal-component band. The
+# discovery above is first-token accuracy from the analytic tier; this re-tests it
+# with real greedy decoding and numeric exact match, at pinned float32.
+endpoint_band_confirmation:
+  primary_band: [4, 32]
+  control_band: [0, 4]
+  majority_band: [4, 16]
+  # Preregistered before any exact-match outcome is read. Discovery values on
+  # first-token accuracy were 0.859 (primary retention), 0.067 (control retention)
+  # and 32.2 points (primary removal); the thresholds allow for exact match being
+  # harder than the first token alone.
+  minimum_primary_retention: 0.70
+  maximum_control_retention: 0.20
+  minimum_primary_removal_points: 0.20
   eval_batch_size: 32
-  precision: auto
+  precision: float32
   bootstrap_samples: 10000
   bootstrap_seed: 0
   alpha: 0.05

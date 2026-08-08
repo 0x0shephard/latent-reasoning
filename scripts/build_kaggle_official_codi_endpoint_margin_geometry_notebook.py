@@ -82,6 +82,10 @@ PRIMARY_RANK = 3
 RANDOM_REPLICATES = 200
 RETENTION_THRESHOLD = 0.90
 EVAL_BATCH_SIZE = 32
+# Never "auto": recent PyTorch reports bf16 as supported through emulation on
+# T4-class GPUs, which silently selects bfloat16 and drops the forced-cue baseline
+# from 43.29% to 40.41%. The analytic tier is float32, so generation must match.
+GENERATION_PRECISION = "float32"
 
 import os, pathlib, subprocess, sys, json
 
@@ -316,6 +320,7 @@ if RUN_GENERATION:
             "--mode", mode,
             "--semantics", semantics,
             "--eval-batch-size", str(EVAL_BATCH_SIZE),
+            "--precision", GENERATION_PRECISION,
             "--device", "cuda",
         ]
         if all_positions:
@@ -323,6 +328,17 @@ if RUN_GENERATION:
         run_persisted(command, f"generation_{tag}.log")
 completed = sorted(RUNS_ROOT.rglob("summary.json"))
 print("completed generation arms:", len(completed), "/", len(GENERATION_ARMS))
+
+# The forced-cue baseline must reproduce the established accuracy, or none of the
+# arms are comparable to a completed experiment. The reproduction gate cannot catch
+# this on its own because it reads a previously attached summary.
+baseline = [json.loads(p.read_text()) for p in completed]
+baseline = [s for s in baseline if s["arm"] == "baseline"]
+assert baseline, "the baseline generation arm is required"
+print("baseline exact match:", baseline[0]["accuracy"],
+      "drift:", baseline[0].get("baseline_accuracy_drift"),
+      "passed:", baseline[0].get("baseline_drift_passed"))
+assert baseline[0].get("baseline_drift_passed") is True, baseline[0]
 '''
 )
 

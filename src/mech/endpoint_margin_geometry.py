@@ -173,6 +173,63 @@ def subspace_energy(covariance: torch.Tensor, basis: torch.Tensor) -> float:
     return float(torch.diagonal(projected).sum())
 
 
+#: Principal-component bands of the student colon state, discovered analytically:
+#: PCs 0-3 hold 82% of the variance but 6.7% of the accuracy, while PCs 4-31 hold
+#: 11% of the variance and 86% of the accuracy.  These are the arms the exact-match
+#: confirmation evaluates.
+DEFAULT_CONFIRMATION_BANDS = ((0, 4), (4, 16), (4, 32), (0, 32), (32, 768))
+PRIMARY_BAND = (4, 32)
+CONTROL_BAND = (0, 4)
+
+
+def band_name(start: int, stop: int, state: int = ANALYTIC_STATE) -> str:
+    return f"band_p{start:03d}_{stop:03d}_s{state}"
+
+
+def build_band_subspace(
+    *,
+    covariance: torch.Tensor,
+    start: int,
+    stop: int,
+    state: int = ANALYTIC_STATE,
+) -> MarginSubspace:
+    """Principal components ``[start, stop)`` of the colon-state covariance.
+
+    The ``energy`` family only ever takes a prefix ``[0, k)``.  A band is needed
+    because variance rank and answer contribution are close to unrelated here: the
+    leading components dominate the spectrum while contributing almost nothing to
+    the answer, so the accuracy-bearing directions can only be named as an interior
+    slice.
+    """
+    if not 0 <= start < stop <= GPT2_HIDDEN_SIZE:
+        raise ValueError("band bounds must satisfy 0 <= start < stop <= 768")
+    symmetric = 0.5 * (covariance.double() + covariance.double().T)
+    values, vectors = torch.linalg.eigh(symmetric)
+    order = torch.argsort(values, descending=True)
+    basis = vectors[:, order[start:stop]].contiguous().float()
+    subspace = MarginSubspace(
+        name=band_name(start, stop, state),
+        family="band",
+        state=state,
+        basis=basis,
+        rank=stop - start,
+        calibration_achieved_energy=subspace_energy(covariance, basis),
+    )
+    validate_margin_subspace(subspace)
+    return subspace
+
+
+def band_variance_share(covariance: torch.Tensor, start: int, stop: int) -> float:
+    """Fraction of total calibration variance carried by a PC band."""
+    symmetric = 0.5 * (covariance.double() + covariance.double().T)
+    values = torch.linalg.eigvalsh(symmetric)
+    ordered = torch.sort(values, descending=True).values
+    total = float(ordered.sum())
+    if total <= 0:
+        raise ValueError("calibration covariance has no positive variance")
+    return float(ordered[start:stop].sum() / total)
+
+
 def readout_family_capacity(readout_matrix: torch.Tensor) -> int:
     """How many directions the numeric-answer readout can span.
 
@@ -963,6 +1020,8 @@ def build_margin_arm_registry(
     random_seed: int,
     primary_rank: int = 3,
     state: int = ANALYTIC_STATE,
+    bands: Sequence[tuple[int, int]] = (),
+    band_random_replicates: int = 0,
 ) -> dict[str, MarginSubspace]:
     """Every state-12 subspace this experiment evaluates analytically.
 
@@ -1007,4 +1066,21 @@ def build_margin_arm_registry(
         )
         for control in controls:
             registry[control.name] = control
+
+    # Bands are appended last and seeded past every existing target, so adding them
+    # leaves the names and bases of the already-exported arms bit-identical.
+    for offset, (start, stop) in enumerate(bands):
+        band = build_band_subspace(
+            covariance=covariance, start=start, stop=stop, state=state
+        )
+        registry[band.name] = band
+        if band_random_replicates:
+            controls = build_matched_random_subspaces(
+                selected=band,
+                covariance=covariance,
+                replicates=band_random_replicates,
+                seed=random_seed + 1013 * (len(matched_targets) + offset),
+            )
+            for control in controls:
+                registry[control.name] = control
     return registry

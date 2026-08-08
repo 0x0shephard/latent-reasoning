@@ -282,6 +282,23 @@ def run(args: argparse.Namespace) -> dict:
         "predictions_file": predictions_path.name,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
     }
+    # A drifting baseline makes every arm incomparable to the completed
+    # experiments, and the reproduction gate cannot catch it because it reads a
+    # previously attached summary rather than re-decoding.  The usual cause is an
+    # unpinned precision resolving to emulated bfloat16 on T4-class hardware.
+    if args.arm == "baseline":
+        drift = abs(summary["accuracy"] - float(reproduction["gsm8k_accuracy"]))
+        allowed = float(settings.maximum_baseline_accuracy_drift)
+        summary["baseline_accuracy_drift"] = drift
+        summary["maximum_baseline_accuracy_drift"] = allowed
+        summary["baseline_drift_passed"] = bool(drift <= allowed)
+        if drift > allowed:
+            raise RuntimeError(
+                f"forced-cue baseline accuracy {summary['accuracy']:.6f} differs from "
+                f"the reproduction gate {float(reproduction['gsm8k_accuracy']):.6f} by "
+                f"{drift:.6f} > {allowed:.6f}; check that --precision is pinned "
+                f"(resolved dtype was {dtype})"
+            )
     _atomic_json(summary, summary_path)
     _atomic_json(summary, output_dir / "run_manifest.json")
     print(
@@ -313,7 +330,8 @@ def main() -> int:
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--eval-limit", type=int, default=0)
     parser.add_argument("--eval-batch-size", type=int, default=32)
-    parser.add_argument("--precision", default="auto")
+    # Pinned by default; "auto" resolves to emulated bfloat16 on T4-class GPUs.
+    parser.add_argument("--precision", default="float32")
     parser.add_argument("--device", default="cuda")
     run(parser.parse_args())
     return 0

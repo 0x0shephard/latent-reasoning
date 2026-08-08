@@ -198,6 +198,8 @@ def prepare_registry(
         ),
         random_seed=int(settings.random_seed),
         primary_rank=int(settings.primary_rank),
+        bands=[tuple(int(v) for v in band) for band in getattr(settings, "confirmation_bands", [])],
+        band_random_replicates=int(getattr(settings, "band_random_replicates", 0)),
     )
     return {
         "registry": registry,

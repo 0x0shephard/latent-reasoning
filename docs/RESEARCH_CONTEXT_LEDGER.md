@@ -1,6 +1,6 @@
 # Research context ledger
 
-Last updated: 2026-08-08
+Last updated: 2026-08-08 (rev 2)
 
 ## Purpose
 
@@ -1332,3 +1332,100 @@ Status:
 
 No training study is authorized by this experiment, and no inference speed claim is
 made: a directional projection does not narrow GPT-2's width or skip a block.
+
+
+## 37. Completed margin-geometry run and the accuracy-bearing PC band
+
+The margin-geometry experiment executed on Kaggle
+(`jonraza15/codi-answer-colon-margin-geometry`, 6,912 analytic arms, 14 generation
+arms). The parity gate returned **1.0 on all 1,319 questions**, confirming that
+capturing colon states from the generation path makes the closed-form state-12
+evaluator exact.
+
+### Primary 1 passed, and is a positive control rather than a discovery
+
+Removing the closed-form rank-three margin subspace raised held-out gold-answer NLL
+by +21.215 (95% CI [+19.764, +22.728]), beating all 200 energy-matched controls
+(empirical `p = 0.00498`, random mean +9.65). Matching was clean: maximum relative
+energy error 9.9e-4, maximum selected overlap 6.1e-16.
+
+This is close to tautological — the subspace is fit with gold labels to maximise the
+quantity then measured — and its value is as a **positive control**. It establishes
+that the design can detect a real effect, so the six previous negatives were not the
+product of a test too weak to find anything.
+
+### The substantive result: variance rank and answer contribution are near-orthogonal
+
+Retaining only principal components of the *student colon state's own* covariance
+(fit on 2,048 GSM8K-train questions, applied to held-out GSM8K test), scored on
+first-token accuracy against a 0.4208 baseline:
+
+| subspace | dims | % of variance | retain → frac. | remove → Δ |
+| --- | ---: | ---: | ---: | ---: |
+| PC 0 | 1 | 66.25% | 0.063 | 0.15 pp |
+| PC 0–3 | 4 | 82.31% | 0.067 | 1.74 pp |
+| PC 4–15 | 12 | 7.49% | **0.506** | 13.57 pp |
+| PC 4–31 | 28 | 11.31% | **0.859** | **32.22 pp** |
+| PC 32–767 | 736 | 6.38% | 0.222 | 3.11 pp |
+
+Twelve of 768 dimensions carry the majority of the accuracy; 28 carry 86% and their
+removal collapses accuracy from 42.1% to 9.9%. The leading component holds two thirds
+of all variance and 6% of the accuracy.
+
+This plausibly explains the six-selector pattern of §35. Every prior selector searched
+the teacher-minus-student **residual** basis or a gradient-alignment criterion, and any
+variance-ranked method lands on PC 0–3, which do almost nothing for the answer. For
+scale, the `answer_conditioned` and `parameter_aware` rank-three subspaces cost 1.7 and
+2.4 points; this band costs 32.
+
+Robustness: filling the complement from a different question rather than the
+calibration mean still retains 0.728 of baseline; PCs fit on disjoint calibration
+halves retain 0.834 and 0.852 with mean principal-angle cosine 0.979 and 0.968.
+
+### Necessity and sufficiency dissociate
+
+The margin subspace is devastating to remove (34.95 points) yet saturates at 0.41 of
+baseline when retained at any rank. Energy PCs are the reverse. "Most damaging to
+delete" and "carries the computation" are different objects, which is why both arm
+types exist.
+
+### Two defects found in this run
+
+1. **Generation arms used the wrong precision.** Collection pinned float32 but the
+   generation runner defaulted to `auto`, which on T4-class GPUs resolves through
+   `torch.cuda.is_bf16_supported()` to emulated bfloat16 and moved the forced-cue
+   baseline from 43.29% to 40.41%. Every configuration was otherwise identical. The
+   analytic tier is unaffected. Precision is now pinned in the config, the runner
+   default and the notebook, and the baseline arm asserts its own accuracy against
+   the reproduction gate.
+2. **The reference selectors reversed their earlier verdict, and this is not yet
+   settled.** `parameter_aware` and `answer_conditioned` both beat their matched-random
+   nulls here (`p = 0.00498` on first-token accuracy), against the `not_confirmed` of
+   §33. But this run's null is 26 times weaker than the confirmation's (mean +0.022 pp
+   versus +0.576 pp; maximum +0.758 versus +2.502) at comparable removed energy. Two
+   explanations remain live: §33 fit its centering mean and matching covariance with
+   the training encoder, whose colon states are now known to differ from the
+   generation states; or this run's sampler is weak at low energy targets. **Do not
+   cite the reversal until that is resolved.**
+
+## 38. Exact-match confirmation of the PC band
+
+The §37 band result is first-token accuracy. The confirmation re-tests it with full
+greedy decoding and numeric exact match at pinned float32, with three gates frozen in
+advance: sufficiency (retain PC 4–31 ≥ 0.70 of baseline), dissociation (retain PC 0–3
+≤ 0.20, with a positive paired advantage for the primary band) and necessity (remove
+PC 4–31 ≥ 20 points, positive bootstrap lower bound, exact McNemar `p ≤ 0.05`), plus a
+baseline-drift guard.
+
+Twelve arms: baseline, five retention bands, two removals, four descriptive random
+rank-28 retention controls. Band targets are appended after every existing registry
+target so the completed margin-geometry arms remain bit-identical.
+
+Implementation is listed in `docs/OFFICIAL_CODI_ENDPOINT_BAND_CONFIRMATION.md`.
+
+Status:
+
+> Implemented and locally validated; the production band path reproduces the
+> analytic numbers exactly. Kaggle execution remains.
+
+No training study is authorized and no inference-speed claim is made.
