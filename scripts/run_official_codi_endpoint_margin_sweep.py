@@ -30,7 +30,6 @@ from src.mech.endpoint_margin_geometry import (
     ANALYTIC_STATE,
     MARGIN_GEOMETRY_CONTRACT,
     MARGIN_GEOMETRY_SCHEMA_VERSION,
-    MARGIN_GEOMETRY_STATES,
     MarginSubspace,
     build_margin_arm_registry,
     deterministic_derangement,
@@ -206,6 +205,7 @@ def prepare_registry(
         "mean": mean,
         "readout": readout,
         "reference_basis_state": reference_state,
+        "calibration_examples": int(calibration.shape[0]),
     }
 
 
@@ -242,7 +242,7 @@ def run(args: argparse.Namespace) -> dict:
         "random_seed": int(settings.random_seed),
         "primary_rank": int(settings.primary_rank),
         "resample_seed": int(settings.resample_seed),
-        "calibration_examples": int(calibration.shape[0]),
+        "calibration_examples": int(prepared["calibration_examples"]),
         "evaluation_examples": int(evaluation.shape[0]),
         "reference_basis_sources": {
             name: {
