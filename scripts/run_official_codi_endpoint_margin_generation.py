@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 
@@ -59,6 +60,16 @@ def _sha256_json(value) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def required_random_replicates(arm: str) -> int:
+    """How many control replicates must be drawn before ``arm`` is reachable.
+
+    Controls are drawn sequentially from one seeded generator, so replicate ``r`` is
+    bit-identical whether the registry stops at ``r+1`` or continues to 200.
+    """
+    match = re.search(r"_r(\d+)$", arm)
+    return int(match.group(1)) + 1 if match else 1
 
 
 def resolve_arm_subspace(
@@ -128,8 +139,17 @@ def run(args: argparse.Namespace) -> dict:
     if student_mean.shape != (GPT2_STATE_COUNT, GPT2_HIDDEN_SIZE):
         raise RuntimeError("cached student mean has the wrong shape")
     if args.arm != "baseline":
+        # Replicates are drawn in order from one seeded generator, so replicate ``r``
+        # is identical whether the registry holds ``r+1`` or all 200 of them.
+        # Building only as many as this arm needs turns a ~3-minute rebuild per arm
+        # into a few seconds without changing any basis.
         prepared = prepare_registry(
-            cache, readout_payload, settings, args, torch.device("cpu")
+            cache,
+            readout_payload,
+            settings,
+            args,
+            torch.device("cpu"),
+            random_replicates=required_random_replicates(args.arm),
         )
         subspace = resolve_arm_subspace(
             prepared["registry"], arm=args.arm, state=args.state

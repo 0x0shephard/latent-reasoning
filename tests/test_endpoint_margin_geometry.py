@@ -174,6 +174,64 @@ def test_top_energy_selection_reports_an_unattainable_match():
     assert matching["attainable_maximum"] < target
 
 
+def test_high_rank_controls_drop_the_infeasible_disjointness_constraint():
+    """Above rank 384 two subspaces of that rank must intersect in 768 dimensions.
+
+    Requiring selected-orthogonality there is not merely inconvenient, it is
+    impossible, so the constraint is dropped and reported rather than approximated.
+    The retention curve is descriptive; every gated comparison happens at rank 3.
+    """
+    states = _random_states(600, 60)
+    covariance = state_covariance(states - states.mean(dim=0))
+    selected = build_fitted_subspaces(
+        family="energy", rank=512, state=ANALYTIC_STATE, covariance=covariance
+    )
+    controls = build_matched_random_subspaces(
+        selected=selected, covariance=covariance, replicates=1, seed=61
+    )
+    control = controls[0]
+    assert control.rank == 512
+    assert control.selected_orthogonal is False
+    validate_margin_subspace(control)
+
+
+def test_low_rank_controls_keep_the_disjointness_constraint():
+    states = _random_states(600, 62)
+    covariance = state_covariance(states - states.mean(dim=0))
+    selected = build_fitted_subspaces(
+        family="energy", rank=3, state=ANALYTIC_STATE, covariance=covariance
+    )
+    control = build_matched_random_subspaces(
+        selected=selected, covariance=covariance, replicates=1, seed=63
+    )[0]
+    assert control.selected_orthogonal is True
+    assert control.selected_overlap < 1e-6
+
+
+def test_attainable_range_uses_an_exact_complement_basis():
+    """The complement must come from the projector's spectrum, not bare QR.
+
+    Unpivoted QR gives no guarantee about where the null directions land, so a
+    QR-derived complement can silently mix selected directions back in.
+    """
+    from src.mech.endpoint_margin_geometry import attainable_energy_range
+
+    # More samples than dimensions, so the covariance is full rank, matching the
+    # 2,048-example calibration the contract requires.
+    states = _random_states(1024, 64)
+    covariance = state_covariance(states - states.mean(dim=0))
+    selected = build_fitted_subspaces(
+        family="energy", rank=3, state=ANALYTIC_STATE, covariance=covariance
+    )
+    minimum, maximum = attainable_energy_range(covariance, 3, selected.basis)
+    top = subspace_energy(covariance, selected.basis)
+    # The complement excludes the three highest-variance directions by construction.
+    assert maximum < top
+    assert 0 < minimum <= maximum
+    with pytest.raises(ValueError, match="complement dimension"):
+        attainable_energy_range(covariance, 766, selected.basis)
+
+
 def test_matched_random_controls_share_one_calibration_target():
     states = _random_states(256, 14)
     covariance = state_covariance(states - states.mean(dim=0))
@@ -190,6 +248,38 @@ def test_matched_random_controls_share_one_calibration_target():
         validate_margin_subspace(control)
         assert control.rank == selected.rank
         assert control.matched_family == "energy"
+
+
+def test_truncated_replicate_draws_match_the_full_sequence():
+    """The generation runner builds only as many controls as an arm needs.
+
+    That is only sound because replicates come from one seeded generator in order,
+    so replicate ``r`` must be bit-identical whether the registry stops at ``r+1``
+    or continues to the configured 200.
+    """
+    from scripts.run_official_codi_endpoint_margin_generation import (
+        required_random_replicates,
+    )
+
+    states = _random_states(1024, 70)
+    covariance = state_covariance(states - states.mean(dim=0))
+    selected = build_fitted_subspaces(
+        family="energy", rank=3, state=ANALYTIC_STATE, covariance=covariance
+    )
+    full = build_matched_random_subspaces(
+        selected=selected, covariance=covariance, replicates=4, seed=71
+    )
+    for count in (1, 2, 4):
+        partial = build_matched_random_subspaces(
+            selected=selected, covariance=covariance, replicates=count, seed=71
+        )
+        assert len(partial) == count
+        for index in range(count):
+            assert torch.equal(partial[index].basis, full[index].basis)
+
+    assert required_random_replicates("random_matched_margin_k003_s12_r000") == 1
+    assert required_random_replicates("random_matched_margin_k003_s12_r007") == 8
+    assert required_random_replicates("margin_k016_s12") == 1
 
 
 def test_analytic_outcomes_are_paired_and_finite():

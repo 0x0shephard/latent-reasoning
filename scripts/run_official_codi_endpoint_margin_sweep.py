@@ -153,6 +153,7 @@ def prepare_registry(
     device: torch.device,
     *,
     chunk_size: int = 64,
+    random_replicates: int | None = None,
 ) -> dict:
     """Rebuild every subspace deterministically from the cached colon states.
 
@@ -164,6 +165,14 @@ def prepare_registry(
     calibration = cache["calibration_states"][:, state_index, :].to(device)
     readout = readout_payload["readout"].to(device)
     mean = cache["student_mean"][ANALYTIC_STATE].to(device)
+    if calibration.shape[0] <= GPT2_HIDDEN_SIZE:
+        # A rank-deficient calibration covariance has near-zero eigenvalues, which
+        # the covariance-shaped random sampler raises to a negative power while
+        # matching energy.  Refuse rather than emit unstable control bases.
+        raise RuntimeError(
+            f"calibration needs more than {GPT2_HIDDEN_SIZE} examples for a "
+            f"full-rank covariance, found {calibration.shape[0]}"
+        )
     centered = calibration - mean.unsqueeze(0)
     covariance = state_covariance(centered.cpu())
     gradients = calibration_gradients(
@@ -183,7 +192,11 @@ def prepare_registry(
         readout_matrix=readout[numeric_ids.to(device)].cpu(),
         reference_subspaces=references,
         rank_grid=[int(value) for value in settings.rank_grid],
-        random_replicates=int(settings.random_replicates),
+        random_replicates=(
+            int(settings.random_replicates)
+            if random_replicates is None
+            else int(random_replicates)
+        ),
         random_seed=int(settings.random_seed),
         primary_rank=int(settings.primary_rank),
     )

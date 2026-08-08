@@ -179,6 +179,7 @@ def analyze_margin_geometry(
     energy_errors = []
     overlaps = []
     attainable = []
+    orthogonal = []
     for control in controls:
         spec = control["subspace"]
         target = float(spec.get("calibration_target_energy", 0.0))
@@ -187,12 +188,16 @@ def analyze_margin_geometry(
             energy_errors.append(abs(achieved - target) / target)
         overlaps.append(float(spec.get("selected_overlap", 0.0)))
         attainable.append(spec.get("target_attainable") is not False)
+        orthogonal.append(spec.get("selected_orthogonal") is not False)
     # A control that could not reach the selection's own calibration energy is
     # inadmissible: that is precisely the transport asymmetry that made the
-    # completed state-12 null conservative.
+    # completed state-12 null conservative.  Disjointness from the selection is
+    # also required here; it is achievable at every gated rank, and only the
+    # descriptive high-rank retention curve relaxes it.
     matching_passed = bool(
         energy_errors
         and all(attainable)
+        and all(orthogonal)
         and max(energy_errors) <= maximum_calibration_relative_energy_error
         and max(overlaps) <= maximum_selected_overlap
     )

@@ -79,6 +79,9 @@ class MarginSubspace:
     #: False when no selected-orthogonal subspace of this rank could reach the
     #: selection's own calibration energy, which makes the control inadmissible.
     target_attainable: bool | None = None
+    #: False above rank ``hidden / 2``, where subspaces of that rank must intersect
+    #: and the disjointness constraint is therefore dropped, not approximated.
+    selected_orthogonal: bool | None = None
 
     def state_dict(self) -> dict:
         payload = {
@@ -89,6 +92,7 @@ class MarginSubspace:
             "random_replicate": self.random_replicate,
             "matched_family": self.matched_family,
             "target_attainable": self.target_attainable,
+            "selected_orthogonal": self.selected_orthogonal,
         }
         for key in (
             "calibration_target_energy",
@@ -169,6 +173,18 @@ def subspace_energy(covariance: torch.Tensor, basis: torch.Tensor) -> float:
     return float(torch.diagonal(projected).sum())
 
 
+def readout_family_capacity(readout_matrix: torch.Tensor) -> int:
+    """How many directions the numeric-answer readout can span.
+
+    GPT-2 has 1,694 all-digit tokens, so this is the full 768 in practice; the
+    check exists so a tokenizer with fewer numeric tokens fails with a statement
+    of the cause rather than an orthonormality error.
+    """
+    if readout_matrix.ndim != 2 or readout_matrix.shape[1] != GPT2_HIDDEN_SIZE:
+        raise ValueError("readout matrix must be [tokens, 768]")
+    return int(min(readout_matrix.shape[0], GPT2_HIDDEN_SIZE))
+
+
 def build_fitted_subspaces(
     *,
     family: str,
@@ -190,6 +206,13 @@ def build_fitted_subspaces(
     else:
         if readout_matrix is None:
             raise ValueError("readout family requires the answer-token readout matrix")
+        capacity = readout_family_capacity(readout_matrix)
+        if rank > capacity:
+            raise ValueError(
+                f"the readout family spans only {capacity} directions "
+                f"({readout_matrix.shape[0]} numeric answer tokens); rank {rank} "
+                "is not defined"
+            )
         # Right singular vectors of the numeric-answer unembedding rows: the
         # directions the model actually reads when it scores digit tokens.
         _, _, vh = torch.linalg.svd(readout_matrix.double(), full_matrices=False)
@@ -212,12 +235,50 @@ def _orthonormalize(matrix: torch.Tensor) -> torch.Tensor:
     return (q * signs.unsqueeze(0)).float()
 
 
-def _shaped_random_basis(
+def _matching_context(
     covariance: torch.Tensor,
     rank: int,
+    selected_basis: torch.Tensor | None,
+) -> dict:
+    """Precompute everything that is constant across replicates of one target.
+
+    The covariance eigendecomposition and the complement projector do not depend on
+    the draw, so computing them once per target rather than once per bisection step
+    is the difference between seconds and tens of minutes for a full control set.
+    """
+    values, vectors = torch.linalg.eigh(covariance.double())
+    # Selected-orthogonality is only achievable while the complement is at least as
+    # large as the rank.  Above ``hidden / 2`` any two subspaces of that rank must
+    # intersect, so the constraint is dropped rather than approximated, and the
+    # realised overlap is reported instead.  Every gated comparison happens at the
+    # primary rank, where the constraint does hold.
+    complement_dimension = GPT2_HIDDEN_SIZE - (
+        selected_basis.shape[1] if selected_basis is not None else 0
+    )
+    selected_orthogonal = selected_basis is not None and rank <= complement_dimension
+    constraint = selected_basis if selected_orthogonal else None
+    projector = None
+    if constraint is not None:
+        selected = constraint.double()
+        projector = torch.eye(GPT2_HIDDEN_SIZE, dtype=torch.float64) - selected @ selected.T
+    minimum, maximum = attainable_energy_range(covariance, rank, constraint)
+    return {
+        "eigenvalues": values.clamp_min(1e-12),
+        "eigenvectors": vectors,
+        "covariance": covariance,
+        "projector": projector,
+        "rank": rank,
+        "selected_orthogonal": bool(selected_orthogonal),
+        "complement_dimension": int(complement_dimension),
+        "attainable_minimum": minimum,
+        "attainable_maximum": maximum,
+    }
+
+
+def _shaped_random_basis(
+    context: dict,
     generator: torch.Generator,
     exponent: float,
-    complement_projector: torch.Tensor | None,
 ) -> torch.Tensor:
     """Random subspace tilted toward high- or low-variance directions.
 
@@ -226,15 +287,14 @@ def _shaped_random_basis(
     handle for matching a prescribed calibration energy without abandoning
     orthonormality.
     """
-    values, vectors = torch.linalg.eigh(covariance.double())
-    values = values.clamp_min(1e-12)
-    scale = values.pow(0.5 * exponent)
+    vectors = context["eigenvectors"]
+    scale = context["eigenvalues"].pow(0.5 * exponent)
     gaussian = torch.randn(
-        GPT2_HIDDEN_SIZE, rank, generator=generator, dtype=torch.float64
+        GPT2_HIDDEN_SIZE, context["rank"], generator=generator, dtype=torch.float64
     )
     shaped = vectors @ (scale.unsqueeze(1) * (vectors.T @ gaussian))
-    if complement_projector is not None:
-        shaped = complement_projector.double() @ shaped
+    if context["projector"] is not None:
+        shaped = context["projector"] @ shaped
     return _orthonormalize(shaped)
 
 
@@ -255,14 +315,18 @@ def attainable_energy_range(
     if selected_basis is not None:
         selected = selected_basis.double()
         projector = torch.eye(GPT2_HIDDEN_SIZE, dtype=torch.float64) - selected @ selected.T
-        basis = torch.linalg.qr(projector, mode="reduced")[0]
-        keep = basis.shape[1] - selected.shape[1]
-        # ``qr`` of a rank-deficient projector puts the null directions last.
-        basis = basis[:, :keep] if keep > 0 else basis
+        # The projector's spectrum is exactly {1 (complement), 0 (selection)}, so an
+        # eigendecomposition recovers the complement basis deterministically.  A bare
+        # ``qr`` would not, because unpivoted QR gives no guarantee about where the
+        # null directions land.
+        values, vectors = torch.linalg.eigh(projector)
+        basis = vectors[:, values > 0.5]
+        if rank > basis.shape[1]:
+            raise ValueError("requested rank exceeds the available complement dimension")
         matrix = basis.T @ matrix @ basis
     eigenvalues = torch.linalg.eigvalsh(0.5 * (matrix + matrix.T))
     if rank > eigenvalues.numel():
-        raise ValueError("requested rank exceeds the available complement dimension")
+        raise ValueError("requested rank exceeds the available space dimension")
     ordered = torch.sort(eigenvalues, descending=True).values
     return float(ordered[-rank:].sum()), float(ordered[:rank].sum())
 
@@ -292,23 +356,34 @@ def energy_matched_random_subspace(
         raise ValueError("random subspace rank is out of range")
     if not target_energy > 0:
         raise ValueError("target calibration energy must be positive")
-    complement = None
-    if selected_basis is not None:
-        selected = selected_basis.double()
-        complement = (
-            torch.eye(GPT2_HIDDEN_SIZE, dtype=torch.float64)
-            - selected @ selected.T
-        ).float()
-    minimum, maximum = attainable_energy_range(covariance, rank, selected_basis)
+    context = _matching_context(covariance, rank, selected_basis)
+    return _draw_matched_subspace(
+        context,
+        target_energy=target_energy,
+        generator=generator,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+    )
+
+
+def _draw_matched_subspace(
+    context: dict,
+    *,
+    target_energy: float,
+    generator: torch.Generator,
+    tolerance: float,
+    max_iterations: int,
+) -> tuple[torch.Tensor, dict]:
+    covariance = context["covariance"]
     low, high = -6.0, 6.0
-    best_basis = _shaped_random_basis(covariance, rank, generator, 0.0, complement)
+    best_basis = _shaped_random_basis(context, generator, 0.0)
     best_energy = subspace_energy(covariance, best_basis)
     best_error = abs(best_energy - target_energy)
     state = generator.get_state()
     for _ in range(max_iterations):
         middle = 0.5 * (low + high)
         generator.set_state(state)
-        basis = _shaped_random_basis(covariance, rank, generator, middle, complement)
+        basis = _shaped_random_basis(context, generator, middle)
         energy = subspace_energy(covariance, basis)
         error = abs(energy - target_energy)
         if error < best_error:
@@ -324,9 +399,13 @@ def energy_matched_random_subspace(
         "achieved_energy": float(best_energy),
         "target_energy": float(target_energy),
         "relative_error": float(best_error / target_energy),
-        "attainable_minimum": minimum,
-        "attainable_maximum": maximum,
-        "target_attainable": bool(minimum <= target_energy <= maximum),
+        "attainable_minimum": context["attainable_minimum"],
+        "attainable_maximum": context["attainable_maximum"],
+        "target_attainable": bool(
+            context["attainable_minimum"] <= target_energy <= context["attainable_maximum"]
+        ),
+        "selected_orthogonal": context["selected_orthogonal"],
+        "complement_dimension": context["complement_dimension"],
     }
 
 
@@ -345,14 +424,16 @@ def build_matched_random_subspaces(
         target = subspace_energy(covariance, selected.basis)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(int(seed))
+    # One eigendecomposition and one complement projector for the whole target.
+    context = _matching_context(covariance, selected.rank, selected.basis)
     controls: list[MarginSubspace] = []
     for replicate in range(replicates):
-        basis, matching = energy_matched_random_subspace(
-            covariance=covariance,
-            rank=selected.rank,
+        basis, matching = _draw_matched_subspace(
+            context,
             target_energy=float(target),
             generator=generator,
-            selected_basis=selected.basis,
+            tolerance=1e-3,
+            max_iterations=60,
         )
         overlap = float(
             (selected.basis.double().T @ basis.double()).square().sum()
@@ -371,6 +452,7 @@ def build_matched_random_subspaces(
             selected_overlap=overlap,
             matched_family=selected.family,
             target_attainable=bool(matching["target_attainable"]),
+            selected_orthogonal=bool(matching["selected_orthogonal"]),
         )
         validate_margin_subspace(control)
         controls.append(control)
@@ -891,8 +973,13 @@ def build_margin_arm_registry(
     if random_replicates <= 0:
         raise ValueError("at least one random replicate is required")
     registry: dict[str, MarginSubspace] = {}
+    capacity = readout_family_capacity(readout_matrix)
     for family in FITTED_FAMILIES:
         for rank in rank_grid:
+            if family == "readout" and rank > capacity:
+                # Descriptive family only; higher ranks simply do not exist for it
+                # and no gate depends on them.
+                continue
             subspace = build_fitted_subspaces(
                 family=family,
                 rank=rank,
