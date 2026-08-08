@@ -99,6 +99,45 @@ print(subprocess.run(["git", "-C", REPO_DIR, "rev-parse", "HEAD"],
 )
 
 markdown(
+    "## Repair the peft/torchao environment\n\n"
+    "`peft`'s LoRA dispatcher calls `is_torchao_available()`, which **raises** rather "
+    "than returning `False` when torchao is installed below its minimum. The current "
+    "Kaggle image ships torchao 0.10.0 with a peft requiring >= 0.16, so "
+    "`get_peft_model` fails before any CODI code runs.\n\n"
+    "torchao is optional here — no adapter is quantized — and `is_torchao_available` "
+    "returns `False` cleanly when the package is absent. The probe runs in a "
+    "subprocess because the guard is `lru_cache`d, and the cell is a no-op when "
+    "torchao is missing or already compatible."
+)
+code(
+    '''
+def _peft_torchao_state():
+    """Probe peft's torchao guard in a fresh interpreter (the guard is cached)."""
+    probe = (
+        "from peft.import_utils import is_torchao_available\\n"
+        "try:\\n"
+        "    print('ok' if is_torchao_available() else 'absent')\\n"
+        "except ImportError as error:\\n"
+        "    print('incompatible:' + str(error))\\n"
+    )
+    result = subprocess.run([sys.executable, "-c", probe],
+                            capture_output=True, text=True)
+    return (result.stdout + result.stderr).strip()
+
+
+state = _peft_torchao_state()
+print("before:", state)
+if state.startswith("incompatible"):
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "torchao"], check=True)
+    state = _peft_torchao_state()
+    print("after:", state)
+assert not state.startswith("incompatible"), (
+    f"peft still cannot dispatch LoRA: {state}"
+)
+'''
+)
+
+markdown(
     "## Source tests\n\n"
     "The contract is executable. If these fail, nothing downstream is trustworthy."
 )

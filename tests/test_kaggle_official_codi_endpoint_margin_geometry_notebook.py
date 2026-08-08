@@ -48,6 +48,31 @@ def test_notebook_freezes_the_margin_geometry_contract():
         assert value in source, value
 
 
+def test_notebook_repairs_the_peft_torchao_guard_before_loading_the_model():
+    """Kaggle ships torchao 0.10.0 with a peft requiring >= 0.16.
+
+    ``is_torchao_available`` raises instead of returning False in that case, so
+    ``get_peft_model`` fails before any CODI code runs.  The repair must appear
+    before the first cell that builds the model, and must assert its own success.
+    """
+    payload = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    sources = ["".join(cell.get("source", [])) for cell in payload["cells"]]
+    repair_index = next(
+        index for index, text in enumerate(sources) if "_peft_torchao_state" in text
+    )
+    collect_index = next(
+        index
+        for index, text in enumerate(sources)
+        if "collect_official_codi_endpoint_margin_states.py" in text
+    )
+    assert repair_index < collect_index
+    repair = sources[repair_index]
+    assert "pip" in repair and "uninstall" in repair and "torchao" in repair
+    assert 'assert not state.startswith("incompatible")' in repair
+    # The guard is lru_cached, so the probe has to run in a fresh interpreter.
+    assert "subprocess.run([sys.executable" in repair
+
+
 def test_notebook_blocks_the_sweep_on_a_failed_parity_gate():
     source = _source()
     # The analytic tier is only admissible if its first token matches the released
