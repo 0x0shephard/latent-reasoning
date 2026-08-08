@@ -1451,3 +1451,49 @@ Status:
 > remains.
 
 No training study is authorized and no inference-speed claim is made.
+
+
+## 39. The execution environment stopped reproducing the checkpoint
+
+The band-confirmation run re-decoded the native full-GSM8K reproduction gate on the
+current Kaggle image rather than trusting the attached summary. It failed:
+
+| quantity | recorded (2026-08-03) | current image |
+| --- | ---: | ---: |
+| native GSM8K accuracy | 0.43669 | **0.37225** (491 / 1,319) |
+| forced-cue baseline | 0.43290 | 0.40561 |
+| accuracy gate | passed | **failed** |
+
+The eval manifest beside the original summary records the environment that
+reproduced the published number:
+
+```text
+transformers 4.52.4   peft 0.15.2   datasets 3.6.0
+huggingface_hub 0.32.4   torch 2.10.0+cu128
+```
+
+Torch is unchanged on the current image; transformers and peft are much newer, which
+is also what broke peft/torchao. `src/models/official_codi.py` documents that its
+cache handling is written against Transformers 4.52 legacy-tuple semantics, and the
+CODI latent loop threads `past_key_values` through six hand-rolled forward passes, so
+a change there degrades the model silently instead of raising.
+
+Corrective principle:
+
+> Pin transformers, peft, datasets and huggingface_hub when reproducing any
+> official-checkpoint result, and re-decode the reproduction gate in the environment
+> actually in use. A stored gate summary certifies the image it was computed on, not
+> the one currently running.
+
+### Consequence for the completed margin-geometry run
+
+Section 37's results were produced on this non-reproducing environment. They remain
+internally consistent — states captured from that image's own generation, parity 1.0
+against its own decoder — but the model instance scores 0.3723 natively rather than
+0.4367, so **its absolute numbers are not comparable to any earlier experiment** and
+the PC-band geometry needs re-deriving under the pinned environment before it is
+treated as established. This also supplies a third candidate explanation for the
+§37 reference-selector reversal, alongside the two already recorded.
+
+The confirmation notebook now installs the pinned versions before anything runs,
+asserts them in a fresh subprocess, and only then re-decodes the gate.

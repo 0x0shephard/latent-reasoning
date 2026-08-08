@@ -97,6 +97,59 @@ print(subprocess.run(["git", "-C", REPO_DIR, "rev-parse", "HEAD"],
 )
 
 markdown(
+    "## Pin the environment that reproduces the checkpoint\n\n"
+    "The run that established the 43.669% GSM8K gate recorded its packages in the "
+    "eval manifest: transformers 4.52.4, peft 0.15.2, datasets 3.6.0, "
+    "huggingface_hub 0.32.4, torch 2.10.0+cu128. The current Kaggle image keeps the "
+    "same torch but ships much newer transformers and peft, and on it the native gate "
+    "scores **0.3723** instead of 0.4367.\n\n"
+    "`src/models/official_codi.py` states outright that its cache handling is written "
+    "against Transformers 4.52 legacy-tuple semantics, which later versions changed. "
+    "The CODI latent loop threads `past_key_values` through six hand-rolled forward "
+    "passes, so a change there degrades it silently rather than raising.\n\n"
+    "The pins are installed before any script runs. Scripts execute as subprocesses "
+    "and import fresh, so no kernel restart is needed."
+)
+code(
+    '''
+PINNED_PACKAGES = {
+    "transformers": "4.52.4",
+    "peft": "0.15.2",
+    "datasets": "3.6.0",
+    "huggingface_hub": "0.32.4",
+}
+
+import importlib.metadata as _md
+
+
+def _installed(name):
+    try:
+        return _md.version(name)
+    except _md.PackageNotFoundError:
+        return None
+
+
+before = {name: _installed(name) for name in PINNED_PACKAGES}
+print("before:", before)
+missing = [f"{n}=={v}" for n, v in PINNED_PACKAGES.items() if before.get(n) != v]
+if missing:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", *missing], check=True)
+
+probe = (
+    "import importlib.metadata as m;"
+    "print({n: m.version(n) for n in "
+    f"{list(PINNED_PACKAGES)!r}" "})"
+)
+after = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+print("after :", after.stdout.strip() or after.stderr.strip())
+for name, wanted in PINNED_PACKAGES.items():
+    assert f"'{name}': '{wanted}'" in after.stdout, (name, wanted, after.stdout)
+import torch as _torch
+print("torch  :", _torch.__version__, "(unchanged from the reproducing run)")
+'''
+)
+
+markdown(
     "## Repair the peft/torchao environment\n\n"
     "`peft`'s LoRA dispatcher raises instead of returning `False` when torchao is "
     "installed below its minimum. torchao is optional here, so removing an "
@@ -226,10 +279,13 @@ attached = json.loads(pathlib.Path(REPRODUCTION_SUMMARY).read_text())
 
 
 def _gsm8k_accuracy(payload):
-    datasets = payload.get("datasets") or {}
-    return (payload.get("gsm8k_accuracy")
-            or (datasets.get("gsm8k") or {}).get("accuracy")
-            or payload.get("accuracy"))
+    """The eval summary stores datasets[name] as a bare float."""
+    value = (payload.get("datasets") or {}).get("gsm8k")
+    if isinstance(value, dict):
+        value = value.get("accuracy")
+    if value is None:
+        value = payload.get("gsm8k_accuracy", payload.get("accuracy"))
+    return float(value)
 
 
 fresh_acc, attached_acc = _gsm8k_accuracy(fresh), _gsm8k_accuracy(attached)

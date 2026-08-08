@@ -1,5 +1,11 @@
 # Core deep learning stack
 torch>=2.1,<3
+# The official CODI reproduction (43.669% GSM8K) was established with
+# transformers 4.52.4, peft 0.15.2, datasets 3.6.0, huggingface_hub 0.32.4 on
+# torch 2.10.0+cu128. src/models/official_codi.py threads legacy tuple caches
+# through the latent loop against Transformers 4.52 semantics; on a newer
+# transformers the same checkpoint scores 0.3723 natively, with no error raised.
+# Pin these when reproducing any official-checkpoint result.
 transformers>=4.44,<6
 datasets>=2.20,<6
 peft>=0.12,<1
