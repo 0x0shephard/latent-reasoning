@@ -1391,7 +1391,25 @@ types exist.
 
 ### Two defects found in this run
 
-1. **Generation arms used the wrong precision.** Collection pinned float32 but the
+1. **The forced-cue baseline no longer reproduces, and precision is NOT the cause.**
+   The completed run's generation arms defaulted to `--precision auto`, and the
+   baseline came out at 40.41% against a historical 43.29%. That was initially
+   attributed to `auto` resolving through `torch.cuda.is_bf16_supported()` to
+   emulated bfloat16 on T4-class hardware. **That diagnosis was wrong.** Re-running
+   with `--precision float32` explicitly resolved gives 40.56% - two answers away
+   from the `auto` value. Every configuration input is identical between the two
+   runs (checkpoint SHA, answer cue and its token ids, batch size, example count,
+   max_new_tokens), so the remaining variable is the execution environment; the
+   Kaggle image demonstrably changed, since it also broke peft/torchao. The
+   reproduction gate cannot detect this because it reads a summary computed on the
+   older image. The next run therefore re-decodes the native full-GSM8K gate on the
+   current environment and references that fresh value. Note that 40.56% falls just
+   below the preregistered 0.437 +/- 0.03 band, so the fresh gate may itself fail -
+   which would be the finding. Precision is still pinned to float32 for
+   reproducibility, but it is not the explanation.
+
+   Superseded text kept for the record: the original entry read as follows.
+   **Generation arms used the wrong precision.** Collection pinned float32 but the
    generation runner defaulted to `auto`, which on T4-class GPUs resolves through
    `torch.cuda.is_bf16_supported()` to emulated bfloat16 and moved the forced-cue
    baseline from 43.29% to 40.41%. Every configuration was otherwise identical. The
@@ -1426,6 +1444,10 @@ Implementation is listed in `docs/OFFICIAL_CODI_ENDPOINT_BAND_CONFIRMATION.md`.
 Status:
 
 > Implemented and locally validated; the production band path reproduces the
-> analytic numbers exactly. Kaggle execution remains.
+> analytic numbers exactly. A first Kaggle attempt stopped at the baseline-drift
+> guard (0.4056 versus the historical 0.4359), which is the guard working as
+> intended. The notebook now re-establishes the reproduction gate on the current
+> image before any arm runs, and every arm references that fresh value. Execution
+> remains.
 
 No training study is authorized and no inference-speed claim is made.
