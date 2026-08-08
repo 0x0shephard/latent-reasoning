@@ -1490,10 +1490,106 @@ Corrective principle:
 Section 37's results were produced on this non-reproducing environment. They remain
 internally consistent — states captured from that image's own generation, parity 1.0
 against its own decoder — but the model instance scores 0.3723 natively rather than
-0.4367, so **its absolute numbers are not comparable to any earlier experiment** and
-the PC-band geometry needs re-deriving under the pinned environment before it is
-treated as established. This also supplies a third candidate explanation for the
+0.4367, so **its absolute numbers are not comparable to any earlier experiment**.
+
+Partially resolved by §40: the PC-band bases fitted on that image's colon states were
+applied on the pinned, reproducing environment and behaved as predicted, so the band
+*geometry* transfers across the environment change. Only the §37 absolute figures
+remain tied to the degraded instance. This also supplies a third candidate explanation for the
 §37 reference-selector reversal, alongside the two already recorded.
 
 The confirmation notebook now installs the pinned versions before anything runs,
 asserts them in a fresh subprocess, and only then re-decodes the gate.
+
+
+## 40. Confirmed: a 28-dimensional band carries CODI's answer accuracy
+
+The exact-match confirmation completed on the pinned, reproducing environment
+(`jonraza15/exact-match-confirmation-of-codis-pc-band`).
+
+Environment and gate, both re-established in-run:
+
+```text
+transformers 4.52.4   peft 0.15.2   datasets 3.6.0
+huggingface_hub 0.32.4   torch 2.10.0+cu128
+native GSM8K 0.435936   accuracy gate: passed
+forced-cue baseline 0.433662 (572 / 1,319), drift 0.0023
+```
+
+The pins restored the checkpoint from 0.3723 to 0.4359, confirming §39.
+
+### Result: `band_confirmed`
+
+All three preregistered gates passed on numeric exact match.
+
+| Gate | Requirement | Observed |
+| --- | --- | ---: |
+| Sufficiency | retain PC 4–31 ≥ 0.70 of baseline | **0.878** |
+| Dissociation | retain PC 0–3 ≤ 0.20; primary − control lower bound > 0 | **0.061**; +35.41 pp, CI [+32.75, +38.13] |
+| Necessity | remove PC 4–31 ≥ 20 pts, lower bound > 0, McNemar ≤ 0.05 | **30.48 pp**, CI [+27.90, +33.13], p = 5.7e-101 |
+
+Full arm set, against a 0.4337 baseline:
+
+| arm | dims | % variance | accuracy | retained |
+| --- | ---: | ---: | ---: | ---: |
+| retain PC 0–3 | 4 | 82.31 | 0.0265 | 0.061 |
+| retain PC 4–15 | 12 | 7.49 | 0.2191 | 0.505 |
+| retain PC 4–31 | 28 | 11.31 | 0.3806 | **0.878** |
+| retain PC 0–31 | 32 | 93.62 | 0.4094 | 0.944 |
+| retain PC 32–767 | 736 | 6.38 | 0.1130 | 0.260 |
+| remove PC 4–31 | 28 | 11.31 | 0.1289 | 0.297 |
+| remove PC 0–3 | 4 | 82.31 | 0.4185 | 0.965 |
+| random rank-28 retention x4 | 28 | matched | 0.0281–0.0379 | 0.065–0.087 |
+
+### The analytic tier predicted exact match closely
+
+| arm | analytic (first token) | exact match |
+| --- | ---: | ---: |
+| retain PC 0–3 | 0.067 | 0.061 |
+| retain PC 4–15 | 0.506 | 0.505 |
+| retain PC 4–31 | 0.859 | 0.878 |
+| retain PC 0–31 | 0.926 | 0.944 |
+| retain PC 32–767 | 0.222 | 0.260 |
+| remove PC 4–31 | 32.22 pp | 30.48 pp |
+| remove PC 0–3 | 1.74 pp | 1.52 pp |
+
+Every arm agrees within about two points, which validates the closed-form state-12
+evaluator as a cheap and faithful proxy: it made 6,912 arms affordable and its
+predictions held under real greedy decoding.
+
+### Bounded conclusion
+
+> At the frozen official CODI GPT-2 checkpoint's forced answer cue, 28 of the 768
+> principal components of the student colon state — carrying 11.3% of its variance —
+> are sufficient to preserve 87.8% of numeric exact-match accuracy and necessary in
+> the sense that removing them costs 30.5 points. Twelve components preserve the
+> majority. The leading four components hold 82.3% of the variance and 6.1% of the
+> accuracy, and removing them costs 1.5 points.
+
+Verification: 12 arms, one checkpoint, identical question order, 100% cue coverage,
+all float32, 54 of 54 SHA-256 checksums intact, and every reported figure recomputed
+from the raw prediction files.
+
+### Why this matters for §35
+
+Variance rank and answer contribution are close to unrelated at this endpoint. Every
+one of the six selectors in §35 searched the teacher-minus-student residual basis or a
+gradient-alignment criterion; a variance-ranked method lands on PC 0–3, which are
+nearly irrelevant. For scale, the `answer_conditioned` and `parameter_aware`
+rank-three subspaces cost 1.7 and 2.4 points, while this band costs 30.5.
+
+This is the project's first positive, preregistered, exact-match result.
+
+### Remaining limits
+
+- The band bases were fitted on colon states cached on the §39 non-reproducing image.
+  They transfer, but a clean re-derivation on pinned-environment states would remove
+  the last dependency on that run.
+- Retention replaces the complement with the calibration mean, an off-manifold
+  intervention. Under the stricter donor control the analytic tier retained 0.728
+  rather than 0.859; that control has not been repeated on exact match.
+- The random rank-28 arms are descriptive (four replicates). The specificity null
+  rests on the analytic tier's 200 energy-matched replicates.
+- Bounded to official CODI GPT-2, state 12, the forced answer cue, linear subspaces,
+  and GSM8K. No distillation target is authorized and no inference-speed claim is
+  made: a projection hook adds work and does not narrow the model.

@@ -7,7 +7,8 @@
 | Analytic discovery (first-token) | complete |
 | Band construction and registry arms | implemented |
 | Preregistered exact-match gates | frozen |
-| Kaggle execution | pending |
+| Kaggle execution | complete |
+| Result | **`band_confirmed`** — all three gates passed |
 
 Writes to `outputs/official_codi_endpoint_band_confirmation`. The completed
 margin-geometry artifacts are read-only inputs and are never modified.
