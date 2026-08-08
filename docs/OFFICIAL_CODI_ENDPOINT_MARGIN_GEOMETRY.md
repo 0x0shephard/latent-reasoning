@@ -146,7 +146,23 @@ as a caveat afterwards.
 - Calibration: GSM8K **train**, 2,048 unique eligible questions, sampling seed 89,
   reusing `sample_gsm8k_train_calibration`, which proves zero normalized-question
   overlap with GSM8K test and raises otherwise.
-- Evaluation: the full 1,319-question GSM8K test set, in fixed order.
+- Evaluation: the full 1,319-question GSM8K test set, in `load_eval_set` order.
+  That loader returns only `{question, gold}`, so each row's reasoning trace is
+  joined from the same pinned `openai/grade-school-math` revision. The join
+  preserves evaluation order, re-derives every gold answer from the pinned source
+  and compares it, and keeps the evaluation set's own question string so the cached
+  states belong to exactly the text the generation runner feeds the model.
+- **Negative-answer rows are kept.** Test rows 489 (`-10`) and 1113 (`-3`) are
+  rejected by `official_codi_answer_is_eligible`, which requires a digit-leading
+  answer. That is the released *training* filter; applying it to evaluation would
+  drop two questions and break pairing with every completed 1,319-question
+  experiment. Only the tokenised answer is sign-stripped for those two rows. The
+  true gold is retained, so the first-token outcome still scores what the model must
+  actually emit.
+  This is exact because GPT-2 is causal: tokens after the answer-cue colon cannot
+  influence the colon's hidden state. `_answer_invariance_gate` proves it on the
+  checkpoint before any state is cached, by recomputing colon states with mutated
+  answer tokens and requiring a bit-identical result.
 - No test label or test activation is used for any fit. The collection manifest
   records `test_labels_used_for_calibration: false` and
   `test_activations_used_for_calibration: false`.

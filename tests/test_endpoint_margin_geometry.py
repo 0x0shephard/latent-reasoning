@@ -436,6 +436,48 @@ def test_evaluation_join_refuses_rows_without_a_pinned_trace():
         canonical_gsm8k_test_rows(evaluation, [{"question": "Q one?", "gold": "18"}])
 
 
+def test_evaluation_join_keeps_negative_answer_rows():
+    """GSM8K test rows 489 and 1113 have negative gold answers.
+
+    The released row formatter rejects non-digit-leading answers, but that is a
+    *training* filter. Dropping those questions would break pairing with every
+    completed 1,319-question experiment, so evaluation keeps them and only adjusts
+    the tokenised form.
+    """
+    from decimal import Decimal
+
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+    from src.data.official_codi_training import format_official_codi_row
+
+    evaluation = [{"question": "Q neg?", "gold": Decimal("-10")}]
+    rows, metadata = canonical_gsm8k_test_rows(
+        evaluation, [_raw_row("Q neg?", "some steps", "-10")]
+    )
+    assert len(rows) == 1
+    # The true gold survives, so the first-token outcome still scores "-10".
+    assert rows[0]["gold"] == "-10"
+    # Only the tokenised form is sign-stripped, so the released formatter accepts it.
+    assert rows[0]["answer"] == "10"
+    format_official_codi_row(rows[0])
+    assert metadata["tokenization_answer_adjusted_indices"] == [0]
+    assert metadata["training_filter_applied_to_evaluation"] is False
+
+
+def test_evaluation_join_does_not_adjust_ordinary_answers():
+    from scripts.collect_official_codi_endpoint_margin_states import (
+        canonical_gsm8k_test_rows,
+    )
+
+    evaluation = [_evaluation_row("Q one?", "18")]
+    rows, metadata = canonical_gsm8k_test_rows(
+        evaluation, [_raw_row("Q one?", "one step", "18")]
+    )
+    assert rows[0]["answer"] == rows[0]["gold"] == "18"
+    assert metadata["tokenization_answer_adjusted_indices"] == []
+
+
 def test_evaluation_join_refuses_a_gold_answer_mismatch():
     from scripts.collect_official_codi_endpoint_margin_states import (
         canonical_gsm8k_test_rows,
