@@ -1593,3 +1593,169 @@ This is the project's first positive, preregistered, exact-match result.
 - Bounded to official CODI GPT-2, state 12, the forced answer cue, linear subspaces,
   and GSM8K. No distillation target is authorized and no inference-speed claim is
   made: a projection hook adds work and does not narrow the model.
+
+## 41. Exploratory: the correctness split is nearly orthogonal to the accuracy band
+
+§40 established which directions *determine* the answer. A natural follow-up asks a
+different question of the same colon states: the covariance was built class-blind, so
+it mixes questions the model got right with ones it got wrong. What happens if the 768
+dimensions are split by correctness instead?
+
+Everything in this section is **exploratory** — computed on cached states, with no
+preregistration, and reported here so the preregistered version in §42 can be read as a
+confirmation rather than as discovery. Figures are first-token accuracy at the forced
+cue unless stated.
+
+### The class geometry
+
+Writing `d = mean(correct) − mean(incorrect)` over 2,048 calibration states:
+
+| quantity | value |
+|---|---:|
+| `‖d‖` | 26.22 |
+| between-class variance | 152.26 |
+| total variance | 3,828 |
+| **between-class share** | **3.98%** |
+| share of `d` inside PCs 0–3 | **97.13%** (PC1 alone 57.12%) |
+| share of `d` inside PCs 4–31 | ~2% |
+
+96.02% of the variation at the answer cue is *within* class. Right and wrong answers
+are not two separated clouds; they are one cloud with a slight offset.
+
+Against a 200-replicate random-split null with the same class sizes: median leading-band
+share 70.56%, **0/200 replicates reach 97.13%**, and `‖d‖` is **11.7×** the random
+median. So the direction is real and it is genuinely concentrated — but concentrated in
+PCs 0–3, which §40 showed carry 82.3% of the variance and 6.1% of the accuracy.
+
+**The correctness signal lives almost entirely in the directions that cannot change an
+answer.** PC1 shifts all 50,257 logits by roughly +27.1 with a spread of 0.46; a
+near-uniform lift cannot move an argmax.
+
+### Three uses of the resulting subspace, tested
+
+**Detect.** Held-out AUC for predicting correctness from the state:
+
+| detector | AUC |
+|---|---:|
+| projection on `d̂` | 0.700 |
+| distance from a correct-only subspace, k = 4 / 28 / 64 | 0.237 / 0.293 / 0.306 |
+| **the model's own margin** (top logit − runner-up) | **0.874** |
+
+The projection carries real signal, and the model's own confidence carries more of it,
+for free. The reconstruction-error rows are *inverted* — being further from the
+"correct" subspace predicts being right. Flipped they reach 0.763, but that sign means
+they are not measuring membership of a correct region; they should not be reported as a
+detector without an account of what they are actually tracking.
+
+**Steer.** `h + α·d̂`, evaluated on the 1,319-question test set:
+
+| α | 0.25 | 0.5 | 1 | 2 | 4 |
+|---|---:|---:|---:|---:|---:|
+| change (points) | +0.38 | +0.30 | −0.68 | −3.34 | −18.65 |
+
+The best case is five questions out of 1,319. This outcome was **predicted in advance**
+from the band mechanism and is the section's main evidential value: `d̂` is 97% inside
+the uniform-lift subspace, so it can raise confidence but not change a decision.
+
+**Project.** Retention using a subspace built only from correct examples:
+
+| k | 4 | 12 | 28 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|
+| fraction of baseline retained | 0.079 | 0.382 | 0.890 | 0.924 | 0.966 | 0.991 |
+
+Indistinguishable from the class-blind band. Principal-angle cosines between the two
+bases: k = 4 mean 0.9826 (min 0.9328); k = 28 mean 0.9921 (min 0.9066); k = 64 mean
+0.9855 (min 0.7283). **They are nearly the same subspace**, which follows directly from
+96% of the variance being within-class.
+
+### The distinction this establishes
+
+> A direction that **predicts** correctness is not a direction that **produces**
+> correctness.
+
+`d̂` reports that the model is in a confident regime. Fixing a wrong answer requires
+knowing *which* answer is right, and that lives in the band, not in a class-mean
+difference. Predictive and causal structure come apart here, and land in nearly
+orthogonal parts of the space.
+
+### What this does not settle
+
+- A single global class-mean direction is the bluntest possible steering vector. It says
+  nothing about a per-example or learned steering map.
+- Steering was never tried *inside* the band. Steering in PCs 0–3 is provably wasted, so
+  the informative experiment has not yet been run.
+- All figures are first-token accuracy on cached states. None has been confirmed by
+  decoding.
+- Band boundaries (4, 32) still come from §37's test-set curves.
+
+§42 addresses all four.
+
+## 42. Preregistered three-track correctness experiment
+
+Turns §41 into a design that can be run and read without an asterisk.
+
+### Split discipline
+
+The 2,048-question calibration pool is partitioned **fit (1,024) / select (1,024)**, and
+GSM8K test (1,319) is read once per arm. Every direction, probe and steering vector is
+estimated on fit; every hyperparameter — ridge strength, Fisher shrinkage, steering step
+α, rank — is chosen on select. **Nothing is chosen on test.** This also removes the
+standing §37/§40 caveat for every quantity this experiment reports.
+
+### Preregistered gates
+
+| track | primary arm | passes if |
+|---|---|---|
+| detect | `fisher_plus_margin` | ΔAUC over margin-only ≥ 0.01 with a positive paired-bootstrap lower bound |
+| steer | `margin_band` | gain ≥ 1.0 point, positive lower bound, **and** above the best matched random direction drawn in the same band |
+| project | `correct_only` at rank 28 | advantage over class-blind ≥ 1.0 point with a positive lower bound |
+
+Each gate is framed against the thing that would otherwise explain the result — the
+model's own margin, a random direction in the same band, and the class-blind subspace —
+rather than against chance.
+
+**The steer gate is expected to fail.** Stating that in advance is what makes either
+outcome informative: a failure sharpens §40's claim from "the band is where the answer
+is read" to "the band is a location, not a handle a constant offset can push", and a
+pass would be the project's first accuracy-improving intervention.
+
+### What is new relative to §41
+
+- **`margin_band`**: the average margin-widening direction `E[w_gold − w_runner-up]`
+  confined to PCs 4–31. This is the steering vector §41 never tried — the only one with
+  somewhere to act. Its exact-gradient property is that with the runner-up fixed the
+  margin is linear in the state, so this is the derivative, not an approximation.
+- **Fisher direction**: `C_within⁻¹ d`, which discounts high-variance nuisance
+  directions and so is not forced into PCs 0–3 the way the raw mean difference is. At
+  768 dimensions against 1,024 examples the within-class covariance is near singular, so
+  the shrinkage is *selected on the select split* rather than fixed.
+- **Generation tier**: the steer track is confirmed on full GSM8K by real greedy decoding
+  and numeric exact match, using `OfficialCODIEndpointSteerIntervention` — an additive
+  edit at `ln_f`, deliberately a separate class from the frozen §40 projection hook.
+  α is taken from the analytic export and never re-tuned at this tier.
+
+### Implementation notes
+
+- Reuses §37's colon-state cache, so every direction lives in the space §40 measured.
+- Steering is a constant translation and the readout is linear, so
+  `(h + αv)Wᵀ = hWᵀ + α(Wv)`. That turns ~150 [1319×768]×[768×50257] float64 products
+  into two, and is exact. Retention uses the matching low-rank form
+  `μWᵀ + ((h−μ)U)(UᵀWᵀ)`. Both are tested against the dense computation for bit-identical
+  outcomes. Full-scale synthetic run: 26 s sweep, 14 s analysis.
+- `roc_auc` uses midranks. A plain double `argsort` breaks ties by position and scores a
+  fully tied probe at whatever the question order dictates rather than 0.5; the
+  bootstrap resamples with replacement, so ties are the normal case there.
+- Files: `src/mech/endpoint_correctness_geometry.py`,
+  `src/eval/official_codi_correctness_tracks_analysis.py`,
+  `scripts/run_official_codi_correctness_tracks.py`,
+  `scripts/analyze_official_codi_correctness_tracks.py`,
+  `scripts/run_official_codi_correctness_steer_generation.py`,
+  `configs/official_codi_gpt2.yaml` (`endpoint_correctness_tracks`),
+  `notebooks/kaggle_official_codi_correctness_tracks.ipynb`,
+  `tests/test_endpoint_correctness_geometry.py`,
+  `tests/test_correctness_tracks_integration.py`.
+
+### Scope
+
+Bounded exactly as §40: official CODI GPT-2, state 12, forced answer cue, linear
+subspaces, GSM8K, frozen weights. No distillation target and no inference-speed claim.

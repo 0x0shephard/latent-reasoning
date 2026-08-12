@@ -377,3 +377,51 @@ endpoint_band_confirmation:
   bootstrap_samples: 10000
   bootstrap_seed: 0
   alpha: 0.05
+
+# Correctness geometry at the answer cue: does the part of the state that
+# *predicts* being right have anything to do with the part that *produces* the
+# right answer? Reuses the margin-geometry colon-state cache, so the whole sweep
+# is model-free. The calibration pool is split fit/select, and no hyperparameter
+# ever touches GSM8K test -- which is also the standing caveat on the band
+# experiment, whose boundaries were read off test-set curves.
+endpoint_correctness_tracks:
+  fit_examples: 1024
+  split_seed: 20260812
+  random_seed: 20260812
+  # Directions the exact-match run confirmed carry the accuracy, and the leading
+  # near-uniform-lift directions the correctness signal was found in.
+  accuracy_band: [4, 32]
+  fisher_shrinkage_grid: [0.01, 0.05, 0.2, 0.5, 0.9]
+  null_replicates: 200
+
+  # --- track 1: detect ---
+  ridge_grid: [0.0001, 0.001, 0.01, 0.1, 1.0]
+  probe_steps: 700
+  # The margin-only probe is the thing to beat, not chance. Exploratory work put
+  # the raw correctness direction at AUC 0.700 and the model's own margin at
+  # 0.874, so an arm that ignores the margin cannot pass however well it scores.
+  detect_primary_probe: fisher_plus_margin
+  minimum_detect_delta_auc: 0.01
+
+  # --- track 2: steer ---
+  alpha_grid: [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+  steer_random_replicates: 8
+  # Global steering along the class-mean difference already failed (+0.38 points
+  # at best, harmful past one step) because that direction is 97% inside PCs 0-3,
+  # where a shift moves all 50257 logits together and cannot change an argmax.
+  # This arm confines the average margin-widening direction to the band the
+  # readout is actually sensitive to, which is the only version with somewhere to
+  # act.
+  steer_primary_arm: margin_band
+  minimum_steer_gain_points: 1.0
+
+  # --- track 3: project ---
+  rank_grid: [4, 12, 28, 32, 64, 128]
+  project_primary_rank: 28
+  # Exploratory principal angles between the class-blind and correct-only bases
+  # averaged 0.99, so this is a preregistered replication of an expected null.
+  minimum_project_advantage_points: 1.0
+
+  bootstrap_samples: 10000
+  bootstrap_seed: 0
+  alpha: 0.05
