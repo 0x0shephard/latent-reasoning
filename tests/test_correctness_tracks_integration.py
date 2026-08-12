@@ -371,3 +371,75 @@ def test_notebook_uses_the_shared_readout_reader():
     source = "\n".join("".join(cell.get("source", [])) for cell in payload["cells"])
     assert "readout_matrix(" in source
     assert "output_embedding" not in source
+
+
+# --------------------------------------------------------------------------
+# device discipline
+# --------------------------------------------------------------------------
+
+TENSOR_FACTORIES = {
+    "eye", "zeros", "ones", "randn", "rand", "arange", "empty", "full",
+    "randperm", "linspace", "eye_like",
+}
+
+
+def _factory_calls(path: Path):
+    """Every ``torch.<factory>(...)`` call in a file, with its keyword names."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "torch"
+            and func.attr in TENSOR_FACTORIES
+        ):
+            yield func.attr, node.lineno, {kw.arg for kw in node.keywords}
+
+
+def test_every_tensor_factory_names_its_device():
+    """A CPU-created tensor meeting a CUDA one is the whole failure mode.
+
+    The sweep is model-free and was developed on CPU, so nothing in the test
+    suite exercises a second device; ``torch.eye`` without ``device=`` ran green
+    locally and died on the first GPU call. A static check is what actually
+    covers this, since there is no GPU here to run against.
+    """
+    offenders = []
+    for name in (
+        "src/mech/endpoint_correctness_geometry.py",
+        "scripts/run_official_codi_correctness_tracks.py",
+    ):
+        path = REPO_ROOT / name
+        for factory, line, keywords in _factory_calls(path):
+            if "device" not in keywords:
+                offenders.append(f"{name}:{line}: torch.{factory}() has no device=")
+    assert not offenders, "device-implicit tensor creation:\n" + "\n".join(offenders)
+
+
+def test_seeded_draws_are_taken_on_the_cpu_so_arms_are_device_independent():
+    """A CUDA generator would make ``random_band_r00`` a different direction.
+
+    Control arms are compared against the primary arm by name across tiers, so a
+    draw that depends on where the sweep ran would silently break the comparison
+    rather than fail.
+    """
+    source = (
+        REPO_ROOT / "src" / "mech" / "endpoint_correctness_geometry.py"
+    ).read_text(encoding="utf-8")
+    assert 'torch.Generator(device="cpu")' in source
+    for factory, _line, keywords in _factory_calls(
+        REPO_ROOT / "src" / "mech" / "endpoint_correctness_geometry.py"
+    ):
+        if "generator" in keywords:
+            assert "device" in keywords, factory
+
+
+def test_random_split_null_moves_its_mask_to_the_state_device():
+    """Boolean masks, unlike index tensors, must share the tensor's device."""
+    source = (
+        REPO_ROOT / "src" / "mech" / "endpoint_correctness_geometry.py"
+    ).read_text(encoding="utf-8")
+    assert "mask = mask.to(states.device)" in source

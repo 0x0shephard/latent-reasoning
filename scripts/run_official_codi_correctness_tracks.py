@@ -59,7 +59,11 @@ from src.utils.config import load_config
 def split_calibration(count: int, seed: int, fit_size: int) -> tuple[torch.Tensor, torch.Tensor]:
     if not 0 < fit_size < count:
         raise ValueError("fit split must be a strict, non-empty subset")
-    order = torch.randperm(count, generator=torch.Generator().manual_seed(int(seed)))
+    # Kept on the CPU deliberately: the split must not depend on where the sweep
+    # runs, and a CPU index tensor indexes a CUDA tensor fine.
+    order = torch.randperm(
+        count, generator=torch.Generator().manual_seed(int(seed)), device="cpu"
+    )
     return order[:fit_size], order[fit_size:]
 
 
@@ -279,7 +283,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--readout", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--vectors-output", type=Path, default=None)
-    parser.add_argument("--device", default=None)
+    # Defaults to the CPU deliberately. This sweep is model-free and runs in
+    # float64, where a T4 is throttled to 1/32 of its float32 rate; the whole run
+    # is ~175 GFLOP, so both devices finish in seconds and the GPU buys nothing.
+    # "cuda" still works and is device-correct -- it is simply not worth the risk
+    # on a path no local test can exercise.
+    parser.add_argument("--device", default="cpu")
     return parser.parse_args(argv)
 
 

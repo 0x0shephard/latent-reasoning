@@ -177,7 +177,7 @@ def fit_correctness_directions(
     within = centred.T @ centred / centred.shape[0]
     trace = float(torch.diagonal(within).mean())
     within = (1 - shrinkage) * within + shrinkage * trace * torch.eye(
-        dimension, dtype=torch.float64
+        dimension, dtype=torch.float64, device=values.device
     )
     fisher = torch.linalg.solve(within, difference)
 
@@ -206,7 +206,9 @@ def midranks(scores: torch.Tensor) -> torch.Tensor:
     values = scores.double().flatten()
     order = torch.argsort(values)
     ranks = torch.empty_like(values)
-    ranks[order] = torch.arange(1, values.numel() + 1, dtype=torch.float64)
+    ranks[order] = torch.arange(
+        1, values.numel() + 1, dtype=torch.float64, device=values.device
+    )
     sorted_values = values[order]
     start = 0
     for index in range(1, sorted_values.numel() + 1):
@@ -286,8 +288,13 @@ def fit_logistic(
     standard = (values - mean) / scale
     target = labels.double().flatten()
 
-    weight = torch.zeros(standard.shape[1], dtype=torch.float64, requires_grad=True)
-    bias = torch.zeros(1, dtype=torch.float64, requires_grad=True)
+    weight = torch.zeros(
+        standard.shape[1], dtype=torch.float64, device=standard.device,
+        requires_grad=True,
+    )
+    bias = torch.zeros(
+        1, dtype=torch.float64, device=standard.device, requires_grad=True
+    )
     optimiser = torch.optim.Adam([weight, bias], lr=learning_rate)
     for _ in range(steps):
         optimiser.zero_grad()
@@ -320,7 +327,7 @@ def margin_gradient(
     the exact gradient rather than a first-order approximation.
     """
     logits = states.double() @ readout.double().T
-    rows = torch.arange(logits.shape[0])
+    rows = torch.arange(logits.shape[0], device=logits.device)
     target = gold.to(logits.device).long()
     masked = logits.clone()
     masked[rows, target] = torch.finfo(logits.dtype).min
@@ -358,9 +365,14 @@ def build_steering_vectors(
         "margin_global": average,
         "margin_band": projector @ average,
     }
+    # Drawn on the CPU and moved, never seeded per device: a CUDA generator would
+    # produce a different control set from a CPU one, so the same arm name would
+    # denote a different direction depending on where the sweep happened to run.
     generator = torch.Generator(device="cpu").manual_seed(int(random_seed))
     for replicate in range(random_replicates):
-        raw = torch.randn(GPT2_HIDDEN_SIZE, generator=generator, dtype=torch.float64)
+        raw = torch.randn(
+            GPT2_HIDDEN_SIZE, generator=generator, dtype=torch.float64, device="cpu"
+        ).to(projector.device)
         vectors[f"random_band_r{replicate:02d}"] = projector @ raw
         vectors[f"random_global_r{replicate:02d}"] = raw
     return {
@@ -584,9 +596,10 @@ def random_split_null(
     positives = int(correct.sum())
     norms, shares = [], []
     for _ in range(replicates):
-        order = torch.randperm(states.shape[0], generator=generator)
-        mask = torch.zeros(states.shape[0], dtype=torch.bool)
+        order = torch.randperm(states.shape[0], generator=generator, device="cpu")
+        mask = torch.zeros(states.shape[0], dtype=torch.bool, device="cpu")
         mask[order[:positives]] = True
+        mask = mask.to(states.device)
         difference = states.double()[mask].mean(0) - states.double()[~mask].mean(0)
         norms.append(float(difference.norm()))
         shares.append(direction_band_profile(difference, eigenvectors, (band,))[

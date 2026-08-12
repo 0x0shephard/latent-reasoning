@@ -355,8 +355,7 @@ if not SWEEP.is_file():
         [sys.executable, "-u", "scripts/run_official_codi_correctness_tracks.py",
          "--config", "configs/official_codi_gpt2.yaml",
          "--states", COLON_STATES, "--readout", READOUT,
-         "--output", str(SWEEP), "--vectors-output", str(VECTORS),
-         "--device", "cuda"],
+         "--output", str(SWEEP), "--vectors-output", str(VECTORS)],
         "correctness_tracks_sweep.log",
     )
 sweep = json.loads(SWEEP.read_text())
