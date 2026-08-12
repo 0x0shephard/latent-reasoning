@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -21,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import scripts.analyze_official_codi_correctness_tracks as analyze
 import scripts.run_official_codi_correctness_tracks as tracks
+from src.mech.endpoint_correctness_geometry import READOUT_KEY, readout_matrix
 from src.mech.endpoint_margin_geometry import (
     MARGIN_GEOMETRY_CONTRACT,
     MARGIN_GEOMETRY_SCHEMA_VERSION,
@@ -101,7 +103,7 @@ def cache_paths(tmp_path, monkeypatch):
     readout_path = tmp_path / "readout.pt"
     torch.save(cache, states_path)
     torch.save(
-        {"request_sha256": "abc123", "output_embedding": readout}, readout_path
+        {"request_sha256": "abc123", READOUT_KEY: readout}, readout_path
     )
     monkeypatch.setattr(tracks, "load_config", lambda _path: _Config())
     monkeypatch.setattr(analyze, "load_config", lambda _path: _Config())
@@ -222,7 +224,7 @@ def test_runner_refuses_a_one_sided_split(tmp_path, cache_paths, monkeypatch):
     states_path, readout_path = cache_paths
     cache = torch.load(states_path, weights_only=False)
     index = list(cache["state_order"]).index(12)
-    readout = torch.load(readout_path, weights_only=False)["output_embedding"]
+    readout = torch.load(readout_path, weights_only=False)[READOUT_KEY]
     cache["calibration_gold_first_token"] = (
         cache["calibration_states"][:, index, :] @ readout.T
     ).argmax(dim=-1)
@@ -333,3 +335,39 @@ def test_notebook_reports_all_three_tracks():
     assert 'report["steer"]["random_controls"]' in source or (
         's["random_controls"]' in source
     )
+
+
+def test_readout_key_matches_what_the_collector_actually_writes():
+    """Producer/consumer contract on the readout export.
+
+    A synthetic fixture proves nothing if it invents the same wrong key the
+    reader uses -- which is exactly how a KeyError on 'output_embedding' reached
+    a Kaggle run despite a green integration test. So read the key out of the
+    collector's source rather than trusting either side.
+    """
+    source = (
+        REPO_ROOT / "scripts" / "collect_official_codi_endpoint_margin_states.py"
+    ).read_text(encoding="utf-8")
+    written = re.findall(r'"(\w+)": readout,', source)
+    assert written, "the collector no longer writes a bare readout entry"
+    assert READOUT_KEY in written, (READOUT_KEY, written)
+    # And the shared reader is the only path the runner uses to reach it.
+    runner = (
+        REPO_ROOT / "scripts" / "run_official_codi_correctness_tracks.py"
+    ).read_text(encoding="utf-8")
+    assert "readout_matrix(readout_payload)" in runner
+    assert "output_embedding" not in runner
+
+
+def test_readout_matrix_reports_a_missing_or_misshaped_export():
+    with pytest.raises(KeyError, match="readout"):
+        readout_matrix({"request_sha256": "x"})
+    with pytest.raises(ValueError, match=r"\[V, 768\]"):
+        readout_matrix({READOUT_KEY: torch.zeros(50257, 512)})
+
+
+def test_notebook_uses_the_shared_readout_reader():
+    payload = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    source = "\n".join("".join(cell.get("source", [])) for cell in payload["cells"])
+    assert "readout_matrix(" in source
+    assert "output_embedding" not in source

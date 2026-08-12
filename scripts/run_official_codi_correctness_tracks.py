@@ -45,6 +45,7 @@ from src.mech.endpoint_correctness_geometry import (
     fit_logistic,
     principal_angle_cosines,
     random_split_null,
+    readout_matrix,
     retained_accuracy,
     roc_auc,
     select_fisher_shrinkage,
@@ -288,7 +289,7 @@ def main(argv=None) -> int:
     device = torch.device(args.device) if args.device else select_device()
 
     cache, readout_payload = load_margin_cache(args.states, args.readout)
-    readout = readout_payload["output_embedding"].to(device).double()
+    readout = readout_matrix(readout_payload).to(device).double()
     index = list(cache["state_order"]).index(ANALYTIC_STATE)
     calibration = cache["calibration_states"][:, index, :].to(device).double()
     evaluation = cache["evaluation_states"][:, index, :].to(device).double()

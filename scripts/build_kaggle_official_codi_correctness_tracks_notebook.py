@@ -290,13 +290,15 @@ code(
 from src.mech.endpoint_correctness_geometry import (
     ACCURACY_BAND, LIFT_BAND, answer_margin, direction_band_profile,
     first_token_correct, fit_correctness_directions, random_split_null,
-    roc_auc, sorted_eigenbasis,
+    readout_matrix, roc_auc, sorted_eigenbasis,
 )
 from src.mech.endpoint_margin_geometry import ANALYTIC_STATE
 
 si = list(cache["state_order"]).index(ANALYTIC_STATE)
 calib = cache["calibration_states"][:, si, :].double()
-readout = torch.load(READOUT, map_location="cpu", weights_only=False)["output_embedding"].double()
+readout = readout_matrix(
+    torch.load(READOUT, map_location="cpu", weights_only=False)
+).double()
 correct = first_token_correct(calib, readout, cache["calibration_gold_first_token"])
 print(f"calibration first-token accuracy: {float(correct.double().mean()):.4f}")
 

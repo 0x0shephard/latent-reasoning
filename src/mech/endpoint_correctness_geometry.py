@@ -84,6 +84,26 @@ def answer_margin(
     return top2[:, 0] - top2[:, 1]
 
 
+#: The key ``collect_official_codi_endpoint_margin_states.py`` writes the output
+#: embedding under. Named once here so a reader cannot quietly disagree with the
+#: producer; ``tests/test_correctness_tracks_integration.py`` asserts the two match.
+READOUT_KEY = "readout"
+
+
+def readout_matrix(payload: dict) -> torch.Tensor:
+    """Pull the output embedding out of a readout export, or say what is wrong."""
+    if READOUT_KEY not in payload:
+        raise KeyError(
+            f"readout export has no {READOUT_KEY!r} entry; found {sorted(payload)}. "
+            "Attach the export written by "
+            "scripts/collect_official_codi_endpoint_margin_states.py."
+        )
+    matrix = payload[READOUT_KEY]
+    if matrix.ndim != 2 or matrix.shape[1] != GPT2_HIDDEN_SIZE:
+        raise ValueError(f"readout must be [V, 768], got {tuple(matrix.shape)}")
+    return matrix
+
+
 def sorted_eigenbasis(covariance: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     symmetric = 0.5 * (covariance.double() + covariance.double().T)
     values, vectors = torch.linalg.eigh(symmetric)
