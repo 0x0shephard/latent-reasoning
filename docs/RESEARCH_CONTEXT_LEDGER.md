@@ -1759,3 +1759,117 @@ pass would be the project's first accuracy-improving intervention.
 
 Bounded exactly as §40: official CODI GPT-2, state 12, forced answer cue, linear
 subspaces, GSM8K, frozen weights. No distillation target and no inference-speed claim.
+
+## 43. Completed three-track correctness run
+
+Kaggle export `codi-that-predicts-the-right-answer`, 376 files. Both tiers ran.
+Every number below is from the preregistered §42 gates, applied once.
+
+### The environment reproduces again
+
+Forced-cue baseline exact match **0.43366** against a freshly re-decoded gate of
+**0.43594** — drift 0.0023, inside the 0.015 allowance, 100% answer-cue coverage,
+float32 pinned. §39's non-reproducing image is resolved: the transformers/peft pins
+are what restore it, as §37 concluded.
+
+### Confirmatory geometry
+
+Fitted on the 1,024-question fit split alone, and it reproduces §40 exactly:
+
+| band | variance share |
+|---|---:|
+| PC 0–3 | 82.18% |
+| PC 4–31 | 11.54% |
+| PC 32–767 | 6.28% |
+
+The §41 exploratory class geometry replicates with slightly softer effect sizes, as
+expected when the fitting pool halves from 2,048 to 1,024:
+
+| quantity | §41 (exploratory) | §43 (preregistered) |
+|---|---:|---:|
+| between-class variance share | 3.98% | **3.46%** |
+| mean difference inside PC 0–3 | 97.13% | **96.52%** |
+| random-split null exceedances | 0/200 | **2/200** |
+| ‖d‖ vs null median | 11.7× | **7.65×** |
+
+The Fisher direction does exactly what it was introduced to do: **0.93%** of it lies
+in PC 0–3 and **30.4%** in the accuracy band, against the raw mean difference's 96.5%
+in PC 0–3. Whitening moves the correctness direction out of the lift band.
+
+### Track 1 — detect: PASSED, at the edge
+
+| probe | test AUC |
+|---|---:|
+| **fisher_plus_margin** (primary) | **0.8859** |
+| margin only (baseline to beat) | 0.8736 |
+| accuracy_band_plus_margin | 0.8744 |
+| full_state_plus_margin | 0.8673 |
+| fisher alone | 0.8668 |
+| full_state | 0.8641 |
+| lift_band | 0.7622 |
+| accuracy_band | 0.7461 |
+| mean_difference | 0.7086 |
+
+ΔAUC = **+0.0123** (threshold 0.01) with CI **[0.0000325, 0.0249]**.
+
+Both gate conditions hold, so this passes as preregistered — but the lower bound is
+3×10⁻⁵. This is the weakest possible pass and should be reported as "the state adds a
+small amount over the margin, right at the edge of detectability", never as a clean
+positive. Two further cautions: `accuracy_band_plus_margin` adds +0.0008 and
+`full_state_plus_margin` is *worse* than margin alone, so the increment is specific to
+the Fisher direction rather than a general property of the state; and the preregistration
+is the only thing separating that from a lucky pick among nine probes.
+
+`mean_difference` at 0.7086 replicates §41's 0.700 closely.
+
+### Track 2 — steer: FAILED, decisively, as predicted
+
+Analytic (first token): `margin_band` 0.42305 vs baseline 0.42077, gain **+0.227
+points**, CI [−0.076, +0.607], McNemar p = 0.969. The best matched **random** direction
+inside the same band scored 0.42456 — **better than the principled arm** (margin
+−0.152 points).
+
+Exact match, full GSM8K greedy decoding:
+
+| arm | α | exact match | vs baseline |
+|---|---:|---:|---:|
+| baseline | — | 0.43366 | — |
+| **margin_band** | 0.25 | **0.43366** | **0.00** |
+| random_band_r00 | 0.5 | 0.43442 | +0.08 (one question) |
+
+The steering vector confined to the accuracy band changed **nothing at all** on the
+outcome the project reports. Three of the five steering arms selected α = 0 on the
+select split, i.e. the no-op won outright.
+
+This is the informative failure §42 preregistered. The band is **where the answer is
+read, not a handle a constant offset can push.** Confining the vector to the sensitive
+directions was the strongest form of the idea available, and it did nothing.
+
+### Track 3 — project: FAILED, as predicted
+
+Correct-only rank-28 retention 0.37301 vs class-blind 0.37377 — advantage **−0.076
+points**, CI [−1.14, +0.91]. Mean principal-angle cosine **0.9826** (§41: 0.9921). The
+two subspaces are the same subspace; building from correct examples only buys nothing,
+because 96.5% of the variance is within-class.
+
+### A limitation this run exposed, not previously recorded
+
+The split base rates are **fit 67.5% / select 66.3% / test 42.1% correct**.
+
+Calibration is drawn from GSM8K *train*, which CODI was trained on, so the model is
+**25 points more accurate there than on test**. Every direction, probe and steering
+vector in this experiment was therefore fitted on a population in which the model
+behaves measurably differently from the one it is evaluated on.
+
+This does not invalidate the two nulls — a direction that does nothing on test did
+nothing regardless of where it was fitted — but it is a live threat to the detect
+result, which is the one that passed and passed narrowly. A detect replication should
+fit on held-out *test-like* questions before the +0.0123 is treated as real.
+
+### Standing
+
+- detect: passed at the boundary; not yet a usable error detector, since the margin
+  alone gives 0.8736 for free and the increment is 0.0123.
+- steer: the project's cleanest preregistered null. Predicted in advance from the
+  §40 mechanism, and confirmed on exact match.
+- project: replicates §41's expected null.

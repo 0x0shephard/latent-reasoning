@@ -108,3 +108,30 @@ and would score a fully tied probe at whatever the question order dictates inste
 
 Official CODI GPT-2, state 12, forced answer cue, linear subspaces, GSM8K, frozen
 weights throughout. No distillation target and no inference-speed claim.
+
+---
+
+## Results (completed run)
+
+Kaggle export `codi-that-predicts-the-right-answer`. Both tiers ran. Full detail in
+[`RESEARCH_CONTEXT_LEDGER.md`](RESEARCH_CONTEXT_LEDGER.md) §43.
+
+| track | verdict | headline |
+|---|---|---|
+| detect | **PASS**, at the edge | ΔAUC +0.0123 over margin-only, CI lower bound 3×10⁻⁵ |
+| steer | **FAIL**, decisively | exact match unchanged: 0.43366 both; a random band direction did better |
+| project | **FAIL**, as predicted | −0.076 pts; mean principal-angle cosine 0.9826 |
+
+The environment reproduces the checkpoint again: baseline exact match 0.43366 against
+a re-decoded gate of 0.43594 (drift 0.0023, 100% cue coverage, float32).
+
+**The steer null is the substantive result.** Confining the steering vector to PC 4–31
+was the strongest available form of the idea, and on full GSM8K greedy decoding it
+changed nothing at all — while a matched random direction in the same band scored
+marginally higher. The band is where the answer is *read*, not a handle a constant
+offset can push.
+
+**Known limitation.** Split base rates are fit 67.5% / select 66.3% / test 42.1%
+correct: calibration comes from GSM8K train, which CODI was trained on. The nulls are
+robust to this; the narrow detect pass is not, and should be replicated with directions
+fitted on held-out test-like questions.
