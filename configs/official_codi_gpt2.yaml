@@ -529,3 +529,27 @@ latent_trajectory_detect:
   bootstrap_samples: 10000
   bootstrap_seed: 20260901
   alpha: 0.05
+
+# Latent-workspace confirmation (ledger 53/54). Frozen thresholds were set from the
+# fit/select observations before the single final-test read: fit/select recovery was
+# 33 vs a 5-point null, even-thought hits were 0.4% of all hits, odd-slot hit rates
+# were ~0.6, the correct/wrong gap was ~16 points, and wrong answers' own tokens
+# appeared at 19.5% vs the gold's 11.0%. Alignment is preregistered as descriptive
+# only: the fit/select observation is that step order is NOT preserved.
+latent_workspace:
+  expected_examples: 1319
+  workspace_state: 12
+  top_k: 5
+  value_slots: [1, 3, 5]
+  # Pinned openai/grade-school-math test.jsonl at revision 3101c7d5.
+  solutions_sha256: 3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14
+  solutions_url: https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl
+  null_seed: 20260902
+  minimum_content_points: 10.0
+  maximum_even_hit_share: 0.10
+  minimum_odd_hit_rate: 0.30
+  minimum_gap_points: 5.0
+  minimum_tracing_points: 4.0
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260902
+  alpha: 0.05

@@ -2334,3 +2334,20 @@ paired interval, thought-to-step alignment, and — on wrong questions — wheth
 model's *own* wrong answer is traceable to its decoded wrong intermediates. All
 tiers are CPU-only on the existing export. The final 439 rows entered today's
 aggregates, so the confirmation is corrective-lineage, §42-style, not pristine.
+
+## 54. Preregistered latent-workspace confirmation
+
+Freezes §53 into four gates before one read of the frozen 439-question final split.
+The instrument stays the model's own vocabulary projection (top-5 logit lens at each
+thought's state 12, exact match against the pinned solutions' `<<…=v>>` values), so
+no probe fitting can overfit and multi-token values undercount conservatively.
+Thresholds were frozen from the fit/select observations: content ≥ 10 points over a
+seeded derangement null (observed ≈ 28), even-slot hit share ≤ 10% with every odd
+slot ≥ 0.30 (observed 0.4% and ≈ 0.6), correct-versus-wrong recovery gap ≥ 5 points
+(observed ≈ 16), and own-versus-gold answer-token tracing on wrong questions ≥ 4
+points (observed 19.5% vs 11.0%). Thought-to-step alignment is preregistered as
+descriptive only: fit/select shows step order is NOT preserved. Because §53's
+aggregates touched the test rows, this is a §42-style corrective-lineage
+confirmation, not a pristine preregistration. All tiers are CPU-only on the
+completed §52 export. The contract is
+[`OFFICIAL_CODI_LATENT_WORKSPACE.md`](OFFICIAL_CODI_LATENT_WORKSPACE.md).
