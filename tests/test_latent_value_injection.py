@@ -208,3 +208,14 @@ def test_analysis_gates_pass_and_fail_branches():
 
     with pytest.raises(RuntimeError):
         analyze_value_injection({**summary, "contract": "other"}, outcomes, settings)
+
+
+def test_numeric_pool_skips_undecodable_added_tokens():
+    class _PartialTokenizer(_FakeTokenizer):
+        def decode(self, tokens):
+            if tokens[0] >= 55:  # added-token slots the tokenizer cannot decode
+                raise TypeError("sequence item 0: expected str instance")
+            return super().decode(tokens)
+
+    pool = numeric_token_pool(_PartialTokenizer(), 60)
+    assert pool == list(range(50))

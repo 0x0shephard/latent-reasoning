@@ -48,12 +48,19 @@ def value_token_id(tokenizer, value: str) -> int:
 
 
 def numeric_token_pool(tokenizer, vocabulary_size: int) -> list[int]:
-    """All single tokens that decode to a bare integer string."""
-    pool = [
-        token
-        for token in range(vocabulary_size)
-        if _NUMERIC_TOKEN.match(tokenizer.decode([token]).strip())
-    ]
+    """All single tokens that decode to a bare integer string.
+
+    Ids the tokenizer cannot decode (e.g. CODI's added ``<bot>``/``<eot>`` slots,
+    which sit past the base GPT-2 vocabulary) are skipped rather than fatal.
+    """
+    pool = []
+    for token in range(vocabulary_size):
+        try:
+            text = tokenizer.decode([token]).strip()
+        except (TypeError, KeyError, IndexError):
+            continue
+        if _NUMERIC_TOKEN.match(text):
+            pool.append(token)
     if not pool:
         raise RuntimeError("no numeric tokens found in the vocabulary")
     return pool
