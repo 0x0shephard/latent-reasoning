@@ -516,9 +516,12 @@ latent_trajectory_detect:
   # superset of exact match, so the healthy band sits at or slightly above zero.
   reproduction_accuracy_band: [-0.01, 0.05]
   cache_state_relative_tolerance: 0.001
-  correctness_ridge_grid: [0.0001, 0.01, 1.0]
+  # 1e-4 is excluded: with 769 near-separable features on 440 rows the
+  # strong-convexity certificate (gap <= ||g||^2 / (2*l2)) is unattainable
+  # there, and the runner treats any non-converged candidate as a hard error.
+  correctness_ridge_grid: [0.01, 1.0, 100.0]
   identity_ridge_grid: [0.001, 0.01, 0.1, 1.0]
-  solver_max_iterations: 300
+  solver_max_iterations: 1000
   solver_gradient_tolerance: 1.0e-7
   solver_objective_gap_tolerance: 1.0e-8
   minimum_delta_auc: 0.02
