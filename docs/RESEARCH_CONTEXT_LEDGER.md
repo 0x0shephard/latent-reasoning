@@ -1938,9 +1938,7 @@ preregistration, and its 439-example test interval will be wider. The implementa
 tests, run commands and interpretation boundary are in
 [`OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md`](OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md).
 
-Status: implementation complete and synthetically validated. The real colon-state and
-readout exports are not stored in the repository, so the result is pending execution
-against the completed Kaggle cache.
+Status: complete — see §49. The gate did not pass.
 
 ## 46. Correct-versus-wrong contrastive covariance experiment
 
@@ -2057,3 +2055,53 @@ test population, so a positive is exploratory rather than a pristine confirmatio
 Status: implementation and run-all Kaggle notebook complete; real GPU execution is
 pending. The contract is in
 [`OFFICIAL_CODI_PAIRED_CORRECTION.md`](OFFICIAL_CODI_PAIRED_CORRECTION.md).
+
+## 49. Completed detect replication: `test_like_detect_not_supported`
+
+Kaggle export `jonraza15/replication-of-codis-correctness-detector` (2026-08-27).
+Verified locally: all SHA-256 checksums intact and the gate report recomputes
+**bit-identically** from the raw sweep export with
+`scripts/analyze_official_codi_correctness_detect_replication.py`. The partition SHA
+equals the frozen §45 split (`c8316e46…`), the same one used by §47, so fit/select/
+test are 440/440/439 GSM8K-test questions with correct shares 44.1% / 42.0% / 40.1%.
+Both §44 repairs held: no GSM8K-train state entered any fit, and every probe exports a
+convergence certificate (L-BFGS strong-Wolfe, gradient norms ≤ 7e-8, objective-gap
+bounds ≤ 8e-15, all ridge candidates converged).
+
+### Result: the gate did not pass
+
+| probe | test AUC |
+|---|---:|
+| **fisher_plus_margin** (primary) | **0.8942** |
+| margin (baseline to beat) | 0.8795 |
+| full_state_plus_margin | 0.8753 |
+| full_state | 0.8709 |
+| fisher alone | 0.8664 |
+| mean_difference | 0.7216 |
+
+ΔAUC = **+0.0147**, above the frozen 0.01 magnitude threshold and consistent with
+§43's +0.0123 — but the paired-bootstrap CI is **[−0.0080, +0.0389]**, so the positive
+lower-bound requirement fails. Under the frozen §45 decision rule the §43 detect pass
+is **retired as not established**.
+
+Two things this settles beyond the headline:
+
+- **§44.4 is closed.** The 768-feature probe again scores below the two-feature probe
+  (0.8709 vs 0.8942) with a machine-precision convergence certificate, so that gap is
+  a genuine generalization property, not failed optimization.
+- **The ordering replicated.** Fisher-direction structure (fisher 0.8664,
+  mean_difference 0.7216, the primary above both full-state probes) reproduced on a
+  disjoint fitting population, which is why the retirement is phrased as
+  "not established at this sample size" rather than "shown to be absent": the point
+  estimate replicated in sign and size, but 439 test examples give an interval about
+  ±0.023 wide, and an increment of ~0.013 cannot clear it.
+
+### Corrected standing of the three-track experiment
+
+detect: **not supported** on a test-like population (this section). steer: null
+(§43). project: null (§43, replicated by §47). Combined with §47, no fixed linear
+state-12 quantity — direction, subspace, or probe increment — has survived its
+preregistered gate beyond the model's own margin. The only open branch remains the
+§48 same-question paired conditioned correction, whose GPU run is pending. No larger
+detect replication is planned; establishing a ~0.013 AUC increment would need a
+substantially larger test-like population than GSM8K test provides under this split.

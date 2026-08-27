@@ -87,5 +87,38 @@ project nulls.
 
 ## Status
 
-Implementation and synthetic end-to-end validation are complete. The real cached
-states are not stored in this repository, so the 439-example result remains pending.
+Complete. The run is recorded in ledger §49 and its export is
+`jonraza15/replication-of-codis-correctness-detector`.
+
+## Completed result (2026-08-27): `test_like_detect_not_supported`
+
+All checksums intact, and the gate report recomputes bit-identically from the raw
+sweep export with the local analyzer. The partition SHA matches the frozen test-like
+split shared with the contrastive covariance run (fit 44.1% / select 42.0% / test
+40.1% correct), so no GSM8K-train state entered any fit.
+
+| probe | features | select AUC | test AUC |
+|---|---:|---:|---:|
+| **fisher_plus_margin** (primary) | 2 | 0.8664 | **0.8942** |
+| margin (baseline to beat) | 1 | 0.8589 | 0.8795 |
+| full_state_plus_margin | 769 | 0.8493 | 0.8753 |
+| full_state | 768 | 0.8455 | 0.8709 |
+| fisher alone | 1 | 0.8288 | 0.8664 |
+| mean_difference | 1 | 0.6537 | 0.7216 |
+
+ΔAUC over the margin is **+0.0147** — above the 0.01 magnitude threshold and close to
+the original +0.0123 — but the paired-bootstrap CI is **[−0.0080, +0.0389]**, so the
+required positive lower bound fails and the gate does not pass.
+
+The second §44 repair is conclusive in the other direction: every probe carries a full
+convergence certificate (L-BFGS with strong Wolfe line search, gradient norms at or
+below 7×10⁻⁸, strong-convexity objective-gap bounds at or below 8×10⁻¹⁵, every ridge
+candidate converged). Probe under-optimization does not explain any reported AUC.
+
+Interpretation under the frozen decision rule: the §43 detect pass is **retired as not
+established**. The honest nuance is that this is a power-limited null, not evidence of
+zero effect — the point estimate replicated in sign and size on a population where the
+model behaves like it does at evaluation, but 439 test examples cannot bound an
+increment this small away from zero. Any future attempt to establish it would need a
+larger held-out test-like population, and no such attempt is currently planned. The
+model's own margin remains the only confirmed correctness signal at the answer cue.

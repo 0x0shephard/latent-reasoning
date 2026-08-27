@@ -11,14 +11,20 @@ Before extending the study, read the
 question, instructor criticism, TSV-inspired pivot, completed gates, negative
 spectral-causality result, and current decision point.
 
-The current corrective follow-up is the
-[test-like correctness detector replication](docs/OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md).
-The [correct-versus-wrong covariance intervention](docs/OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md)
-is **complete and `not_confirmed`** (ledger §47): the 28 correct-specific directions of
+Both corrective follow-ups are complete and negative. The
+[test-like detector replication](docs/OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md)
+(ledger §49) reproduced the +0.013 AUC point estimate with convergence-certified
+probes, but its bootstrap interval crosses zero on 439 test-like questions, so the §43
+detect pass is retired as not established; the model's own margin remains the only
+confirmed correctness signal at the answer cue. The
+[correct-versus-wrong covariance intervention](docs/OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md)
+(ledger §47) found that the 28 correct-specific directions of
 `C_correct v = λ C_wrong v` are genuinely class-specific but retain only 0.121 accuracy
 against the PCA controls' 0.321, and removing the 28 wrong-specific directions changes
-exactly nothing. Correctness-conditioned covariance is descriptive, not a correction
-channel. Neither follow-up changes the completed steer and project results.
+exactly nothing. Neither result changes the completed steer and project nulls. The one
+open branch is the
+[same-question paired conditioned correction](docs/OFFICIAL_CODI_PAIRED_CORRECTION.md)
+(ledger §48), whose GPU run is pending.
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
