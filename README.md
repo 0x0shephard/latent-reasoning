@@ -11,6 +11,16 @@ Before extending the study, read the
 question, instructor criticism, TSV-inspired pivot, completed gates, negative
 spectral-causality result, and current decision point.
 
+The current corrective follow-ups are the
+[test-like correctness detector replication](docs/OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md)
+and the new
+[correct-versus-wrong covariance intervention](docs/OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md).
+The latter separates 28 correct-specific and wrong-specific directions at state 12,
+then tests projection against correct-only PCA, the established class-blind PCs 4–31,
+and matched-random controls in a dedicated
+[Kaggle notebook](notebooks/kaggle_official_codi_correctness_contrastive_covariance.ipynb).
+Neither changes the completed steer and project results.
+
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
 

@@ -253,6 +253,8 @@ def test_experiment_scripts_parse():
         "run_official_codi_correctness_tracks.py",
         "analyze_official_codi_correctness_tracks.py",
         "run_official_codi_correctness_steer_generation.py",
+        "run_official_codi_correctness_detect_replication.py",
+        "analyze_official_codi_correctness_detect_replication.py",
     ):
         path = REPO_ROOT / "scripts" / name
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -260,15 +262,19 @@ def test_experiment_scripts_parse():
 
 def test_correctness_scripts_have_no_unused_or_undefined_names():
     """Unused imports are how the last refactor's dead paths hid; reject both."""
-    pyflakes = pytest.importorskip("pyflakes")
+    pytest.importorskip("pyflakes")
     targets = [
         "src/mech/endpoint_correctness_geometry.py",
         "src/eval/official_codi_correctness_tracks_analysis.py",
+        "src/eval/official_codi_correctness_detect_replication_analysis.py",
         "scripts/run_official_codi_correctness_tracks.py",
         "scripts/analyze_official_codi_correctness_tracks.py",
         "scripts/run_official_codi_correctness_steer_generation.py",
+        "scripts/run_official_codi_correctness_detect_replication.py",
+        "scripts/analyze_official_codi_correctness_detect_replication.py",
         "tests/test_endpoint_correctness_geometry.py",
         "tests/test_correctness_tracks_integration.py",
+        "tests/test_correctness_detect_replication.py",
     ]
     result = subprocess.run(
         [sys.executable, "-m", "pyflakes", *targets],

@@ -9,8 +9,9 @@ and exploratory work found the two answers are nearly disjoint:
   PCs 0-3, which carry only 6% of the accuracy;
 - PCs 0-3 are the near-uniform logit-lift directions, so a constant shift along
   them cannot change an argmax;
-- consistent with that, steering along ``d`` moved held-out accuracy by at most
-  0.38 points and was harmful beyond one class-mean step.
+- an exploratory constant-shift run moved held-out accuracy by at most 0.38
+  points, but its vector normalization was not preserved, so its alpha values
+  are not comparable with this module's explicitly unit-normalized vectors.
 
 This module implements the three preregistered follow-up tracks:
 
@@ -20,9 +21,9 @@ This module implements the three preregistered follow-up tracks:
     scores better, so every gate here is stated as an increment over margin-only.
 
 ``steer``
-    Is the band a handle or only a location? Steering is confined to the
-    directions the readout is actually sensitive to, which is where the earlier
-    global attempt provably could not work.
+    Can one fitted global offset inside the band improve answers? Steering is
+    confined to directions the readout is sensitive to. This does not test a
+    question-conditioned or learned correction map.
 
 ``project``
     Does building the retention subspace from correct examples only beat the
@@ -306,6 +307,117 @@ def fit_logistic(
     return weight.detach(), bias.detach(), {"mean": mean, "scale": scale}
 
 
+def fit_logistic_checked(
+    features: torch.Tensor,
+    labels: torch.Tensor,
+    *,
+    l2: float,
+    max_iterations: int = 300,
+    gradient_tolerance: float = 1e-7,
+    objective_gap_tolerance: float = 1e-8,
+) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    """Fit a convex ridge-logistic probe with an auditable convergence bound.
+
+    This is deliberately separate from :func:`fit_logistic`: changing the solver
+    used by the completed preregistered run would make that export impossible to
+    reproduce. The test-like detect replication uses this checked solver instead.
+
+    The intercept is ridge-regularised along with the feature weights. Therefore
+    the complete objective is ``l2``-strongly convex, and the standard bound
+
+    ``objective(theta) - objective(optimum) <= ||gradient||^2 / (2*l2)``
+
+    gives a real optimization certificate rather than an iteration-count proxy.
+    Features are standardized using the fitting split only.
+    """
+    if features.ndim != 2 or features.shape[0] != labels.shape[0]:
+        raise ValueError("features and labels must be paired")
+    if l2 <= 0.0:
+        raise ValueError("checked logistic regression requires positive l2")
+    if max_iterations <= 0:
+        raise ValueError("max_iterations must be positive")
+    if gradient_tolerance <= 0.0 or objective_gap_tolerance <= 0.0:
+        raise ValueError("convergence tolerances must be positive")
+
+    values = features.double()
+    mean, scale = values.mean(0), values.std(0).clamp_min(1e-8)
+    standard = (values - mean) / scale
+    target = labels.double().flatten()
+    if target.min() == target.max():
+        raise ValueError("checked logistic regression needs both classes")
+
+    weight = torch.zeros(
+        standard.shape[1],
+        dtype=torch.float64,
+        device=standard.device,
+        requires_grad=True,
+    )
+    bias = torch.zeros(
+        1, dtype=torch.float64, device=standard.device, requires_grad=True
+    )
+
+    def objective() -> torch.Tensor:
+        logits = standard @ weight + bias
+        data_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+            logits, target
+        )
+        ridge = 0.5 * float(l2) * (
+            weight.square().sum() + bias.square().sum()
+        )
+        return data_loss + ridge
+
+    optimiser = torch.optim.LBFGS(
+        [weight, bias],
+        lr=1.0,
+        max_iter=int(max_iterations),
+        max_eval=int(max_iterations) * 2,
+        tolerance_grad=min(float(gradient_tolerance), 1e-12),
+        tolerance_change=1e-15,
+        history_size=100,
+        line_search_fn="strong_wolfe",
+    )
+
+    def closure() -> torch.Tensor:
+        optimiser.zero_grad()
+        loss = objective()
+        loss.backward()
+        return loss
+
+    optimiser.step(closure)
+    final_objective = objective()
+    gradients = torch.autograd.grad(final_objective, (weight, bias))
+    flat_gradient = torch.cat([value.flatten() for value in gradients])
+    gradient_l2 = float(flat_gradient.norm())
+    gradient_inf = float(flat_gradient.abs().max())
+    objective_gap_bound = gradient_l2**2 / (2.0 * float(l2))
+    state = optimiser.state.get(weight, {})
+    converged = bool(
+        torch.isfinite(final_objective)
+        and torch.isfinite(flat_gradient).all()
+        and gradient_inf <= float(gradient_tolerance)
+        and objective_gap_bound <= float(objective_gap_tolerance)
+    )
+    diagnostics = {
+        "solver": "torch_lbfgs_strong_wolfe",
+        "l2": float(l2),
+        "max_iterations": int(max_iterations),
+        "iterations": int(state.get("n_iter", 0)),
+        "function_evaluations": int(state.get("func_evals", 0)),
+        "final_objective": float(final_objective.detach()),
+        "gradient_l2_norm": gradient_l2,
+        "gradient_inf_norm": gradient_inf,
+        "objective_gap_upper_bound": objective_gap_bound,
+        "gradient_tolerance": float(gradient_tolerance),
+        "objective_gap_tolerance": float(objective_gap_tolerance),
+        "converged": converged,
+    }
+    return weight.detach(), bias.detach(), {
+        "mean": mean,
+        "scale": scale,
+        "optimization": diagnostics,
+    }
+
+
 def apply_logistic(
     features: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, stats: dict
 ) -> torch.Tensor:
@@ -349,10 +461,9 @@ def build_steering_vectors(
     """Candidate steering vectors, all fitted on the supplied split only.
 
     ``margin_band`` is the interesting one: the average margin-widening direction
-    confined to the accuracy band. A global steering vector can only help if the
-    model carries a systematic bias, and the earlier attempt failed because it
-    pointed almost entirely into directions the readout ignores. Restricting it to
-    the band is the version that has somewhere to act.
+    confined to the accuracy band. It tests for a systematic global correction.
+    Because gold answers differ across questions, averaging can cancel
+    answer-specific directions; this arm does not test a per-question map.
     """
     projector = band_projector(eigenvectors, *band)
     gradients = margin_gradient(states, readout, gold)

@@ -406,12 +406,11 @@ endpoint_correctness_tracks:
   # --- track 2: steer ---
   alpha_grid: [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
   steer_random_replicates: 8
-  # Global steering along the class-mean difference already failed (+0.38 points
-  # at best, harmful past one step) because that direction is 97% inside PCs 0-3,
-  # where a shift moves all 50257 logits together and cannot change an argmax.
-  # This arm confines the average margin-widening direction to the band the
-  # readout is actually sensitive to, which is the only version with somewhere to
-  # act.
+  # A historical global-steering run reported +0.38 points at best, but did not
+  # preserve vector-scale metadata, so its alpha values are not comparable here.
+  # This arm confines one explicitly unit-normalized average margin-widening
+  # direction to the band the readout is sensitive to. It tests a constant global
+  # correction, not a question-conditioned steering map.
   steer_primary_arm: margin_band
   minimum_steer_gain_points: 1.0
 
@@ -424,4 +423,52 @@ endpoint_correctness_tracks:
 
   bootstrap_samples: 10000
   bootstrap_seed: 0
+  alpha: 0.05
+
+# Corrective replication of the only provisional track. Unlike the completed
+# three-track experiment, all three partitions come from cached GSM8K test states,
+# so the detector is not fitted on CODI's GSM8K-train population. This is a new
+# contract and never overwrites the completed export.
+endpoint_correctness_detect_replication:
+  expected_examples: 1319
+  fit_examples: 440
+  select_examples: 440
+  split_seed: 20260827
+  fisher_shrinkage_grid: [0.01, 0.05, 0.2, 0.5, 0.9]
+  probes:
+    - margin
+    - mean_difference
+    - fisher
+    - full_state
+    - fisher_plus_margin
+    - full_state_plus_margin
+  ridge_grid: [0.0001, 0.001, 0.01, 0.1, 1.0]
+  solver_max_iterations: 300
+  solver_gradient_tolerance: 1.0e-7
+  solver_objective_gap_tolerance: 1.0e-8
+  baseline_probe: margin
+  primary_probe: fisher_plus_margin
+  minimum_delta_auc: 0.01
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260827
+
+# New experiment: separate state-12 covariance by observed correctness and solve
+# C_correct v = lambda C_wrong v. The fixed 28-D top/bottom eigenspaces are tested
+# against correct-only PCA, class-blind PCA, and class-energy-matched random bases.
+# The 1,319 cached GSM8K-test examples are partitioned once; no final-test metric
+# participates in fitting or shrinkage selection.
+endpoint_correctness_contrastive_covariance:
+  expected_examples: 1319
+  fit_examples: 440
+  select_examples: 440
+  split_seed: 20260827
+  rank: 28
+  accuracy_band: [4, 32]
+  shrinkage_grid: [0.01, 0.05, 0.2, 0.5, 0.9]
+  random_replicates: 8
+  random_seed: 20260827
+  minimum_advantage_points: 1.0
+  minimum_wrong_removal_gain_points: 1.0
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260827
   alpha: 0.05

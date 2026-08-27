@@ -1,6 +1,6 @@
 # Research context ledger
 
-Last updated: 2026-08-08 (rev 2)
+Last updated: 2026-08-27 (rev 3)
 
 ## Purpose
 
@@ -1647,15 +1647,20 @@ for free. The reconstruction-error rows are *inverted* — being further from th
 they are not measuring membership of a correct region; they should not be reported as a
 detector without an account of what they are actually tracking.
 
-**Steer.** `h + α·d̂`, evaluated on the 1,319-question test set:
+**Steer.** A historical constant shift along the class-mean direction, evaluated on
+the 1,319-question test set:
 
 | α | 0.25 | 0.5 | 1 | 2 | 4 |
 |---|---:|---:|---:|---:|---:|
 | change (points) | +0.38 | +0.30 | −0.68 | −3.34 | −18.65 |
 
-The best case is five questions out of 1,319. This outcome was **predicted in advance**
-from the band mechanism and is the section's main evidential value: `d̂` is 97% inside
-the uniform-lift subspace, so it can raise confidence but not change a decision.
+The best case is five questions out of 1,319. **Scale correction (2026-08-27):** the
+exploratory export did not preserve the steering vector or normalization metadata. The
+earlier text labelled this vector `d̂`, but the later preregistered implementation uses
+explicitly unit-normalized vectors and does not reproduce the old alpha curve. The
+alpha values in this table therefore cannot be compared numerically with §42/§43 and
+must be treated only as a qualitative exploratory result. The raw `d` had norm 26.22,
+so confusing `d` with `d̂` would change the physical intervention size by that factor.
 
 **Project.** Retention using a subspace built only from correct examples:
 
@@ -1688,7 +1693,9 @@ orthogonal parts of the space.
   decoding.
 - Band boundaries (4, 32) still come from §37's test-set curves.
 
-§42 addresses all four.
+§42 addresses test-set tuning, in-band steering, and exact-match decoding. Its steer
+arm remains a **single constant vector**, so it does not test a question-conditioned or
+learned correction map.
 
 ## 42. Preregistered three-track correctness experiment
 
@@ -1715,9 +1722,9 @@ model's own margin, a random direction in the same band, and the class-blind sub
 rather than against chance.
 
 **The steer gate is expected to fail.** Stating that in advance is what makes either
-outcome informative: a failure sharpens §40's claim from "the band is where the answer
-is read" to "the band is a location, not a handle a constant offset can push", and a
-pass would be the project's first accuracy-improving intervention.
+outcome informative: a failure would show that the fitted **constant offset** is not an
+accuracy-improving intervention. It cannot establish that the band is unusable by a
+question-conditioned correction map.
 
 ### What is new relative to §41
 
@@ -1841,9 +1848,12 @@ The steering vector confined to the accuracy band changed **nothing at all** on 
 outcome the project reports. Three of the five steering arms selected α = 0 on the
 select split, i.e. the no-op won outright.
 
-This is the informative failure §42 preregistered. The band is **where the answer is
-read, not a handle a constant offset can push.** Confining the vector to the sensitive
-directions was the strongest form of the idea available, and it did nothing.
+This is the informative failure §42 preregistered. Confining the vector to the
+sensitive directions was the strongest form of a **single global translation** tested,
+and it did nothing. It does not show that the band cannot be used by a
+question-conditioned or learned intervention: averaging
+`w_gold - w_runner-up` across questions with different gold answers can cancel the
+answer-specific directions that such an intervention would need.
 
 ### Track 3 — project: FAILED, as predicted
 
@@ -1868,8 +1878,98 @@ fit on held-out *test-like* questions before the +0.0123 is treated as real.
 
 ### Standing
 
-- detect: passed at the boundary; not yet a usable error detector, since the margin
-  alone gives 0.8736 for free and the increment is 0.0123.
-- steer: the project's cleanest preregistered null. Predicted in advance from the
-  §40 mechanism, and confirmed on exact match.
+- detect: passed its preregistered gate at the boundary, but is provisional rather
+  than a confirmed scientific positive because its fitting population is not
+  test-like. The margin alone gives 0.8736 and the increment is 0.0123.
+- steer: a clean preregistered null for a single constant translation, confirmed on
+  exact match. It is not evidence against question-conditioned steering.
 - project: replicates §41's expected null.
+
+## 44. Post-run audit and corrections
+
+The completed export and source were re-audited after the apparent contradiction
+between §41's alpha curve and the unit-normalized §43 curve.
+
+1. **The old steering scale is not recoverable from the repository.** The §41 record
+   contains the outcomes but no saved vector or normalization metadata. Calling it
+   `d̂` was unsupported and has been corrected above. The current implementation
+   explicitly normalizes every steering arm in
+   `build_steering_vectors`, tests unit norm, and interprets alpha in state units.
+2. **The population shift is confirmed in source.** The colon-state collector labels
+   the calibration source as GSM8K train and the evaluation source as GSM8K test.
+   Because CODI trained on GSM8K train, 67.5/66.3% calibration correctness versus
+   42.1% test correctness is a central validity threat to the narrow detect result,
+   not a minor footnote.
+3. **The steer conclusion was too broad.** `margin_band` is the normalized projection
+   of the *average* per-question `w_gold - w_runner-up` vector. It tests whether one
+   global offset helps all questions. Its exact-match null is valid for that arm, but
+   cannot answer whether a per-question or learned map can use PCs 4-31.
+4. **Probe under-convergence is possible but not established by the reported AUCs.**
+   The completed probe used 700 Adam steps and did not export an objective gap or
+   gradient norm. However, a 768-feature model scoring worse than a one-feature model
+   on held-out AUC is not proof of failed optimization: nested models can generalize
+   differently and AUC is not the ridge-logistic training objective. A detector rerun
+   should use a convergence-checked solver and record optimization diagnostics, but
+   the existing numbers alone do not license declaring the primary two-feature Fisher
+   probe underfit.
+
+Corrected standing: the project has a valid null for **constant global steering**, a
+valid null for correct-only rank-28 projection, and a preregistered but scientifically
+provisional detect pass. A defensible detect replication must use a held-out test-like
+fitting population and a convergence-audited probe before the +0.0123 increment is
+treated as real.
+
+## 45. Test-like, convergence-audited detect replication
+
+The corrective follow-up freezes the two repairs identified in §44 into a separate
+contract. It partitions the 1,319 cached GSM8K test states into fit/select/test counts
+440/440/439 with seed 20260827. Every direction and logistic weight is fitted on fit;
+Fisher shrinkage and ridge are chosen on select; the remaining 439 questions are read
+once. No GSM8K-train calibration state is eligible.
+
+The primary gate is unchanged: `fisher_plus_margin` must improve over `margin` by at
+least 0.01 AUC with a positive paired-bootstrap lower bound. A third requirement now
+blocks the gate unless both selected fits have convergence certificates. The new
+full-batch L-BFGS solver exports final objective, gradient norms, iteration counts and a
+strong-convexity upper bound on the objective gap; every ridge candidate must converge.
+
+This is a corrective replication on a previously inspected dataset, not a pristine
+preregistration, and its 439-example test interval will be wider. The implementation,
+tests, run commands and interpretation boundary are in
+[`OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md`](OFFICIAL_CODI_CORRECTNESS_DETECT_REPLICATION.md).
+
+Status: implementation complete and synthetically validated. The real colon-state and
+readout exports are not stored in the repository, so the result is pending execution
+against the completed Kaggle cache.
+
+## 46. Correct-versus-wrong contrastive covariance experiment
+
+The new question is whether the 768-dimensional state-12 covariance can be separated
+into directions specific to correct answers and directions specific to wrong answers,
+and whether projecting a new answer-cue state through those directions can preserve or
+repair the answer. This is not another name for §43's correct-only PCA arm: that arm
+maximised variance within correct examples but did not penalise variance shared with
+wrong examples.
+
+The new contract solves the regularised generalized eigenproblem
+`C_correct v = lambda C_wrong v` on 440 cached GSM8K-test states. The 28 largest-ratio
+directions are the correct-specific candidate and the 28 smallest are the
+wrong-specific candidate. Shrinkage is chosen on a disjoint 440 by held-out
+projection-energy specificity; a final 439 are read once. The split and seed are the
+same frozen test-like partition as §45, preventing a proliferation of differently
+sampled final cohorts.
+
+The primary intervention retains the correct-specific projection around the fitted
+correct mean. It must beat correct-only PCA, the established class-blind accuracy band
+(PCs 4–31), and the best of eight rank- and correct-class-energy-matched random controls by at least one accuracy point,
+with positive paired bootstrap lower bounds. A separate secondary gate removes the
+wrong-specific projection around the global fit mean and requires a one-point gain over
+baseline plus superiority to its matched-random controls. State-12 first-token
+accuracy, gold NLL, and gold margin are primary analytic outcomes. A GPU tier repeats
+baseline and four essential arms with paired greedy exact-match generation on the same
+439 indices.
+
+Status: implementation, synthetic tests, and the run-all Kaggle notebook are complete.
+No real outcome is claimed because `colon_states.pt` and `readout.pt` are external
+completed-run artifacts. The frozen design and interpretation boundary are in
+[`OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md`](OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md).

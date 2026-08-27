@@ -51,12 +51,12 @@ Exploratory: the correctness direction scored AUC 0.700, but **the model's own m
 scored 0.874**. So the gate is not "beat chance", it is **beat the margin**, because a
 probe that loses to a number already sitting in the output is not worth computing.
 
-**2. Steer** — move the state to make the model *more* right.
-Global steering along $d$ already failed: +0.38 points at best, −18.65 at $\alpha{=}4$.
-The mechanism explains why. This track asks the version that has somewhere to act:
-**confine the steering vector to PC 4–31**, the band the readout is sensitive to. This is
-the track that would be a genuinely new result if it worked — the first intervention on
-this model that *improves* rather than degrades.
+**2. Steer** — test whether one fitted global translation improves answers.
+A historical run reported +0.38 points at best and −18.65 at $\alpha{=}4$, but it did
+not preserve vector normalization, so those alpha values are not comparable with this
+run. This track explicitly unit-normalizes the vector and confines it to **PC 4–31**,
+the band the readout is sensitive to. It tests a constant offset; it does not test a
+question-conditioned correction map.
 
 **3. Project** — build the retention subspace from correct examples only.
 Exploratory principal angles between the class-blind and correct-only bases averaged

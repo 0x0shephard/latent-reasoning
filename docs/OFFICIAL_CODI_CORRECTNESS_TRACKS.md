@@ -22,17 +22,16 @@ directions that cannot change an answer. Three consequences follow, one per trac
 | track | question | primary arm | passes if |
 |---|---|---|---|
 | **detect** | does the state say anything about correctness the output doesn't? | `fisher_plus_margin` | ΔAUC over margin-only ≥ 0.01, bootstrap lower bound > 0 |
-| **steer** | is the band a handle or only a location? | `margin_band` | gain ≥ 1.0 pt, lower bound > 0, and above the best matched random direction *in the same band* |
+| **steer** | can one fitted global offset inside the band improve answers? | `margin_band` | gain ≥ 1.0 pt, lower bound > 0, and above the best matched random direction *in the same band* |
 | **project** | does building from correct examples only help? | `correct_only` @ rank 28 | advantage over class-blind ≥ 1.0 pt, lower bound > 0 |
 
 Every gate is stated against the thing that would otherwise explain the result, not
 against chance. The model's own margin scores AUC 0.874, so a detector at 0.70 is a
 failure however far above chance it sits.
 
-**The steer gate is expected to fail**, and saying so in advance is the point: a
-failure sharpens the band claim from "where the answer is read" to "a location, not a
-handle a constant offset can push". A pass would be the project's first
-accuracy-improving intervention.
+**The steer gate is expected to fail**, and saying so in advance is the point. A pass
+would be the project's first accuracy-improving intervention; a failure rules out this
+single global translation, not a question-conditioned or learned steering map.
 
 ## Split discipline
 
@@ -125,13 +124,26 @@ Kaggle export `codi-that-predicts-the-right-answer`. Both tiers ran. Full detail
 The environment reproduces the checkpoint again: baseline exact match 0.43366 against
 a re-decoded gate of 0.43594 (drift 0.0023, 100% cue coverage, float32).
 
-**The steer null is the substantive result.** Confining the steering vector to PC 4–31
-was the strongest available form of the idea, and on full GSM8K greedy decoding it
-changed nothing at all — while a matched random direction in the same band scored
-marginally higher. The band is where the answer is *read*, not a handle a constant
-offset can push.
+**The steer null is the substantive result.** Confining the global steering vector to
+PC 4–31 was the strongest constant-offset arm tested, and on full GSM8K greedy decoding
+it changed nothing at all — while a matched random direction in the same band scored
+marginally higher. This does not test a question-conditioned correction: averaging
+answer-specific margin gradients across different gold answers can cancel them.
 
 **Known limitation.** Split base rates are fit 67.5% / select 66.3% / test 42.1%
 correct: calibration comes from GSM8K train, which CODI was trained on. The nulls are
 robust to this; the narrow detect pass is not, and should be replicated with directions
 fitted on held-out test-like questions.
+
+## Post-run audit
+
+The historical §41 steering record did not preserve normalization metadata, so its
+alpha values are not numerically comparable with this run's explicitly unit-normalized
+vectors. The completed detector also recorded no optimizer convergence diagnostic.
+That makes a convergence-audited rerun appropriate, but the lower held-out AUC of the
+768-feature probe does not itself prove non-convergence: extra features can hurt
+generalization even when the ridge-logistic training objective is optimized.
+
+The durable corrected interpretation is therefore bounded: constant global steering
+failed; correct-only projection failed; and detection passed its preregistered gate but
+remains provisional because it was fitted on the model's training distribution.
