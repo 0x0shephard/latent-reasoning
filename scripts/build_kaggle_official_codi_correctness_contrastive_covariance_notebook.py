@@ -73,7 +73,98 @@ print("commit:", subprocess.run(
 '''
 )
 
-markdown("## 2. Implementation checks")
+markdown(
+    "## 2. Pin the checkpoint-compatible environment\n\n"
+    "The official 43.669% GSM8K reproduction used Transformers 4.52.4, PEFT "
+    "0.15.2, Datasets 3.6.0, and huggingface-hub 0.32.4. Newer Transformers "
+    "changed the legacy tuple-cache behavior used by CODI's hand-rolled latent "
+    "loop, so generation must use the recorded versions. PyTorch is left at "
+    "Kaggle's CUDA-compatible build."
+)
+code(
+    '''
+PINNED_PACKAGES = {
+    "transformers": "4.52.4",
+    "peft": "0.15.2",
+    "datasets": "3.6.0",
+    "huggingface_hub": "0.32.4",
+}
+
+import importlib.metadata as _md
+
+
+def installed_version(name):
+    try:
+        return _md.version(name)
+    except _md.PackageNotFoundError:
+        return None
+
+
+before = {name: installed_version(name) for name in PINNED_PACKAGES}
+print("before:", before)
+missing = [
+    f"{name}=={wanted}"
+    for name, wanted in PINNED_PACKAGES.items()
+    if before.get(name) != wanted
+]
+if missing:
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q", *missing], check=True
+    )
+
+probe = (
+    "import importlib.metadata as m;"
+    "print({n: m.version(n) for n in "
+    f"{list(PINNED_PACKAGES)!r}" "})"
+)
+after = subprocess.run(
+    [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+)
+print("after :", after.stdout.strip())
+for name, wanted in PINNED_PACKAGES.items():
+    assert f"'{name}': '{wanted}'" in after.stdout, (name, wanted, after.stdout)
+'''
+)
+
+markdown(
+    "## 3. Repair PEFT's optional TorchAO integration\n\n"
+    "The current Kaggle image includes `torchao==0.10.0`. PEFT detects it but "
+    "requires a version above 0.16, causing `get_peft_model` to fail before CODI "
+    "loads. CODI does not use quantized LoRA, so an incompatible TorchAO is safely "
+    "removed. The probe runs in a fresh interpreter because PEFT caches the check."
+)
+code(
+    '''
+def peft_torchao_state():
+    probe = (
+        "from peft.import_utils import is_torchao_available\\n"
+        "try:\\n"
+        "    print('ok' if is_torchao_available() else 'absent')\\n"
+        "except ImportError as error:\\n"
+        "    print('incompatible:' + str(error))\\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True
+    )
+    return (result.stdout + result.stderr).strip()
+
+
+torchao_state = peft_torchao_state()
+print("before:", torchao_state)
+if torchao_state.startswith("incompatible"):
+    subprocess.run(
+        [sys.executable, "-m", "pip", "uninstall", "-y", "torchao"],
+        check=True,
+    )
+    torchao_state = peft_torchao_state()
+    print("after :", torchao_state)
+assert not torchao_state.startswith("incompatible"), (
+    f"PEFT still cannot dispatch LoRA: {torchao_state}"
+)
+'''
+)
+
+markdown("## 4. Implementation checks")
 code(
     '''
 subprocess.run(
@@ -86,7 +177,7 @@ subprocess.run(
 '''
 )
 
-markdown("## 3. Resolve attached inputs")
+markdown("## 5. Resolve attached inputs")
 code(
     '''
 def discover(explicit, pattern, required=True):
@@ -115,7 +206,7 @@ print("reproduction:", REPRODUCTION_SUMMARY or "not requested")
 '''
 )
 
-markdown("## 4. Fit/select/test analytic experiment")
+markdown("## 6. Fit/select/test analytic experiment")
 code(
     '''
 SUMMARY = OUTPUT_ROOT / "contrastive_covariance.json"
@@ -158,7 +249,7 @@ print(json.dumps({
 '''
 )
 
-markdown("## 5. Continuous-outcome table")
+markdown("## 7. Continuous-outcome table")
 code(
     '''
 import pandas as pd
@@ -173,7 +264,7 @@ display(pd.DataFrame(summary["shrinkage_selection"]).T)
 )
 
 markdown(
-    "## 6. Optional paired full-generation confirmation\n\n"
+    "## 8. Optional paired full-generation confirmation\n\n"
     "This runs five arms on the exact same frozen 439 indices. The state-12 hook is "
     "applied only at the answer cue. It directly changes the first answer token; "
     "later numeric text can change downstream of that token. Expect this cell to be "
@@ -225,7 +316,7 @@ else:
 )
 
 markdown(
-    "## 7. Interpretation\n\n"
+    "## 9. Interpretation\n\n"
     "Use the executed report, not the intended mechanism, as the conclusion. A full "
     "pass says the 28-D covariance ratio isolates an answer-sufficient channel beyond "
     "ordinary PCA and that deleting the opposite channel improves accuracy. If only "
@@ -234,7 +325,7 @@ markdown(
     "causally useful."
 )
 
-markdown("## 8. Checksummed export")
+markdown("## 10. Checksummed export")
 code(
     '''
 lines = []

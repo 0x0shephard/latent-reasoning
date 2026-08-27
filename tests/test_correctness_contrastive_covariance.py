@@ -1,7 +1,10 @@
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import torch
-from types import SimpleNamespace
 
 import scripts.run_official_codi_correctness_contrastive_covariance as runner
 from scripts.run_official_codi_correctness_contrastive_covariance import evaluate_arm
@@ -187,3 +190,32 @@ def test_runner_writes_paired_synthetic_artifact(tmp_path, monkeypatch):
     assert len(artifact["indices"]["test"]) == 28
     assert artifact["arms"]["contrastive_correct_retain"]["basis"].shape == (768, 2)
     assert artifact["outcomes"]["baseline"]["correct"].shape == (28,)
+
+
+def test_kaggle_notebook_repairs_environment_before_generation():
+    repository = Path(__file__).resolve().parents[1]
+    notebook = json.loads(
+        (
+            repository
+            / "notebooks"
+            / "kaggle_official_codi_correctness_contrastive_covariance.ipynb"
+        )
+        .read_text(encoding="utf-8")
+    )
+    sources = ["".join(cell.get("source", [])) for cell in notebook["cells"]]
+    pin_index = next(
+        index
+        for index, source in enumerate(sources)
+        if '"transformers": "4.52.4"' in source
+    )
+    repair_index = next(
+        index
+        for index, source in enumerate(sources)
+        if '"pip", "uninstall", "-y", "torchao"' in source
+    )
+    generation_index = next(
+        index
+        for index, source in enumerate(sources)
+        if "GENERATION_ARMS = [" in source
+    )
+    assert pin_index < repair_index < generation_index

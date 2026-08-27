@@ -78,5 +78,10 @@ Attach `colon_states.pt` and `readout.pt`. The analytic tier is CPU-capable. For
 optional paired exact-match tier, enable a Kaggle GPU and also attach the completed
 official reproduction summary (or set its path explicitly).
 
+The notebook pins the package versions recorded by the official reproduction. It also
+detects and removes Kaggle's incompatible optional `torchao==0.10.0`, which otherwise
+causes PEFT to fail while constructing the LoRA modules. No TorchAO functionality is
+used by this experiment.
+
 The real cache is not checked into this repository, so this repository ships the
 tested implementation and run-all notebook, not a claimed empirical outcome.
