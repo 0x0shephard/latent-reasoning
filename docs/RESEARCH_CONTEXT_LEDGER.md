@@ -2001,6 +2001,15 @@ The secondary gate also failed: removing the 28 wrong-specific directions produc
 **exactly baseline accuracy** (0.4009, gain 0.00, CI [−1.59, +1.59]), and the best
 matched-random removal tied it.
 
+Correction (2026-08-28), recomputed from the artifact's per-question outcomes: that
+null is a *cancellation*, not inertness. The removal moved **14 of 439 predictions —
+7 gained, 7 lost** — and shifted the arm's mean gold margin (−0.218 versus −0.116)
+and gold NLL (2.981 versus 3.052). The edit therefore changes the state and even the
+answer on a few questions; what it lacks is any direction. Chat and report wording
+that described it as changing "not one prediction" was stronger than the data
+supports, and the accurate statement is that removal is directionless at the same
+scale as matched-random removal.
+
 The GPU exact-match tier confirms the ordering on the same 439 questions: baseline
 0.4237, correct-retain 0.1298, wrong-remove 0.4123 (−1.14 pts, CI [−2.96, +0.68]),
 correct-only PCA 0.3394, accuracy band 0.3622. Analytic and decoded tiers agree within

@@ -135,9 +135,11 @@ Interpretation, bounded exactly as the contract requires:
   energy-matched random subspace by +7.7 points — but they carry only a small fraction
   of the answer-bearing content. Retaining them costs 28 points against baseline and
   20 points against either PCA control.
-- Removing the wrong-specific subspace changes **nothing at all** on first-token
-  accuracy (identical 0.4009) and slightly hurts under real decoding. There is no
-  evidence of a removable "wrong" channel at state 12.
+- Removing the wrong-specific subspace leaves first-token accuracy **identical**
+  (0.4009) and slightly hurts under real decoding. Per-question it is a cancellation
+  rather than inertness — 14 of 439 predictions moved, 7 gained and 7 lost, with the
+  mean gold margin and NLL both shifting — so the edit has an effect but no
+  direction. There is no evidence of a removable "wrong" channel at state 12.
 - Correctness-conditioned covariance is therefore descriptive, not a demonstrated
   correction channel, under any fixed linear projection tested. This replicates the
   §41/§43 orthogonality conclusion on a test-like population: class-specific variance

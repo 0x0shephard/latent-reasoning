@@ -20,8 +20,8 @@ confirmed correctness signal at the answer cue. The
 [correct-versus-wrong covariance intervention](docs/OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md)
 (ledger §47) found that the 28 correct-specific directions of
 `C_correct v = λ C_wrong v` are genuinely class-specific but retain only 0.121 accuracy
-against the PCA controls' 0.321, and removing the 28 wrong-specific directions changes
-exactly nothing. Neither result changes the completed steer and project nulls. The
+against the PCA controls' 0.321, and removing the 28 wrong-specific directions leaves
+accuracy identical (7 questions gained, 7 lost — an effect with no direction). Neither result changes the completed steer and project nulls. The
 [same-question paired conditioned correction](docs/OFFICIAL_CODI_PAIRED_CORRECTION.md)
 (ledger §50) is also **complete and `not_confirmed`**: state-11 perturbations flip the
 answer on only ~14% of questions, the wrong-to-correct delta is unpredictable out of
