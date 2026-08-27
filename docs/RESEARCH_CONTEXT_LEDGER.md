@@ -1969,7 +1969,91 @@ accuracy, gold NLL, and gold margin are primary analytic outcomes. A GPU tier re
 baseline and four essential arms with paired greedy exact-match generation on the same
 439 indices.
 
-Status: implementation, synthetic tests, and the run-all Kaggle notebook are complete.
-No real outcome is claimed because `colon_states.pt` and `readout.pt` are external
-completed-run artifacts. The frozen design and interpretation boundary are in
+Status: complete — see §47. The frozen design and interpretation boundary are in
 [`OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md`](OFFICIAL_CODI_CORRECTNESS_CONTRASTIVE_COVARIANCE.md).
+
+## 47. Completed contrastive covariance run: `not_confirmed`
+
+Kaggle export `jonraza15/can-codis-correct-and-wrong-be-separated` (2026-08-27),
+pinned at commit `fa49050`. Verified locally: all 54 SHA-256 checksums intact, and
+both the analytic gate report and the paired generation report recompute
+**bit-identically** from the raw sweep export using the repository analyzers. The
+generation manifests carry the same frozen partition SHA as the fitted geometry, so
+every arm read the same 439 final questions once.
+
+Two validity properties this run has that §43 lacked:
+
+- **Test-like population.** All fitting used cached GSM8K-*test* states under the
+  frozen §45 partition; realized base rates are fit 44.1% / select 42.0% / test 40.1%
+  correct. The §44 population-shift threat does not apply here.
+- **Shrinkage chosen off-test.** λ ridge 0.2 was selected on the select split by
+  held-out log correct/wrong projection-energy ratio (correct-specificity 0.952), so
+  the directions demonstrably *are* class-specific out of sample.
+
+### Result
+
+The primary gate failed decisively. Retaining the 28 largest-ratio directions of
+`C_correct v = λ C_wrong v` around the correct mean scored **0.1207** first-token
+accuracy against baseline 0.4009 — 20.05 points *below* both correct-only PCA and the
+class-blind accuracy band (identical 0.3212; CI [−24.15, −15.95] for both contrasts).
+The only sub-gate that passed is superiority over the eight energy-matched random
+retains (best 0.0433; +7.74 pts, CI [+5.01, +10.71]).
+
+The secondary gate also failed: removing the 28 wrong-specific directions produced
+**exactly baseline accuracy** (0.4009, gain 0.00, CI [−1.59, +1.59]), and the best
+matched-random removal tied it.
+
+The GPU exact-match tier confirms the ordering on the same 439 questions: baseline
+0.4237, correct-retain 0.1298, wrong-remove 0.4123 (−1.14 pts, CI [−2.96, +0.68]),
+correct-only PCA 0.3394, accuracy band 0.3622. Analytic and decoded tiers agree within
+a few points on every arm, extending the §40 record of the analytic evaluator's
+fidelity.
+
+### What this settles
+
+The §16/§46 question — can the state-12 covariance be split into correct-producing and
+wrong-producing directions usable by a projection — is answered **no** for fixed
+linear interventions. The contrastive directions are real (class-specific out of
+sample, far above matched random) but they are variance that *accompanies* being
+right, not variance that *makes* the answer right; and there is no wrong-specific
+channel whose deletion helps. This replicates §41/§43's orthogonality conclusion on a
+test-like population and closes the third of the three uses (detect / steer / project)
+against the strongest class-conditioned linear estimator tried so far.
+
+Standing additions to §17: do not design further *global, question-independent* linear
+projections or translations at state 12 from class-conditioned second-order statistics;
+the family is exhausted. The open direction remains a question-conditioned correction
+map (§43, §44.3), which no completed experiment has yet tested.
+
+## 47. Same-question paired, conditioned correction
+
+The contrastive covariance design in §46 still compares correct states from some
+questions with wrong states from other questions. Its generalized eigenvectors can
+therefore encode question content, answer value, difficulty, or confidence rather than
+a within-question transition from wrong to correct. Its retention arm also replaces
+the 740 coordinates outside the selected rank-28 subspace, making destructive
+compression inseparable from the intended projection.
+
+The corrective experiment constructs actual within-question state pairs. Sampling the
+answer token is insufficient because the state-12 vector at `The answer is:` exists
+before that token is sampled, so all samples would share exactly the same vector.
+Instead, eight frozen relative-RMS perturbations enter at state 11 and propagate through
+the last block to state 12. A question is eligible only when its variants yield both a
+correct and wrong greedy first answer token. It contributes one equal-weight target:
+the mean correct state minus the mean wrong state, projected into fit-derived PCs 4–31.
+
+A multi-output ridge map predicts that paired displacement from the incoming state's
+28 band coordinates plus its top-two output margin. Deployment is additive, preserving
+all off-band coordinates. Ridge strength, edit size, and a low-confidence margin gate
+are chosen on a disjoint selection split. The final 439 questions are read once. A
+global mean displacement and a target-shuffled map must both be beaten, in addition to
+a one-point accuracy gain over no intervention with a positive paired-bootstrap lower
+bound. An optional four-arm generation tier checks full greedy exact match.
+
+The perturbations are controlled answer-selection counterfactuals, not evidence of
+natural alternative reasoning traces. This also reuses a previously inspected GSM8K
+test population, so a positive is exploratory rather than a pristine confirmation.
+
+Status: implementation and run-all Kaggle notebook complete; real GPU execution is
+pending. The contract is in
+[`OFFICIAL_CODI_PAIRED_CORRECTION.md`](OFFICIAL_CODI_PAIRED_CORRECTION.md).

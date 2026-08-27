@@ -472,3 +472,24 @@ endpoint_correctness_contrastive_covariance:
   bootstrap_samples: 10000
   bootstrap_seed: 20260827
   alpha: 0.05
+
+# Same-question correction follow-up. Output sampling alone cannot alter the
+# pre-token state, so seeded relative-RMS perturbations enter at state 11 and the
+# resulting correct/wrong state-12 pairs train an additive map inside PCs 4-31.
+endpoint_paired_correction:
+  expected_examples: 1319
+  fit_examples: 440
+  select_examples: 440
+  split_seed: 20260827
+  accuracy_band: [4, 32]
+  relative_noise_schedule: [0.03, 0.05, 0.08, 0.12, 0.18, 0.27, 0.40, 0.60]
+  noise_seed: 20260830
+  minimum_paired_questions_per_split: 50
+  ridge_grid: [0.01, 0.1, 1.0, 10.0, 100.0]
+  shuffle_seed: 20260830
+  alpha_grid: [0.0, 0.25, 0.5, 1.0, 1.5, 2.0]
+  gate_fractions: [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
+  minimum_gain_points: 1.0
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260830
+  alpha: 0.05

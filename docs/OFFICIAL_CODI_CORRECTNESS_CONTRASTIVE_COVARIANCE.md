@@ -84,4 +84,61 @@ causes PEFT to fail while constructing the LoRA modules. No TorchAO functionalit
 used by this experiment.
 
 The real cache is not checked into this repository, so this repository ships the
-tested implementation and run-all notebook, not a claimed empirical outcome.
+tested implementation and run-all notebook. The completed empirical outcome below was
+produced by the Kaggle run and verified locally from its export.
+
+## Completed result (2026-08-27): `not_confirmed`
+
+Kaggle export `jonraza15/can-codis-correct-and-wrong-be-separated`, pinned at commit
+`fa49050`, all 54 SHA-256 checksums intact. Both the analytic report and the
+generation report recompute bit-identically from the raw export with the local
+analyzers. The realized split base rates are test-like — fit 44.1% / select 42.0% /
+test 40.1% correct — so the §44 population-shift threat does not apply to this
+experiment. Both tiers ran; shrinkage 0.2 was selected on held-out projection-energy
+specificity (correct-specificity 0.952). The generalized eigenvalue ratios span
+16.3 → 5.0 (largest 28) and 0.58 → 0.20 (smallest 28).
+
+Analytic tier — state-12 first-token accuracy on the 439 frozen test questions:
+
+| arm | accuracy |
+|---|---:|
+| baseline | 0.4009 |
+| classblind top-28 variance PCs | 0.3440 |
+| accuracy band PCs 4–31 | 0.3212 |
+| correct-only PCA rank 28 | 0.3212 |
+| wrong-only PCA rank 28 | 0.3166 |
+| contrastive correct retain, global centre | 0.1367 |
+| **contrastive correct retain (primary)** | **0.1207** |
+| contrastive wrong retain | 0.0478 |
+| matched-random correct-energy retains (8) | 0.018–0.043 |
+| contrastive wrong remove (secondary) | 0.4009 |
+| matched-random wrong-energy removes (8) | 0.374–0.401 |
+
+Gate outcomes:
+
+| gate | requirement | observed | passed |
+|---|---|---|---|
+| vs correct-only PCA | ≥ +1.0 pt, positive lower bound | −20.05 pts, CI [−24.15, −15.95] | no |
+| vs accuracy band PCs 4–31 | ≥ +1.0 pt, positive lower bound | −20.05 pts, CI [−24.15, −15.95] | no |
+| vs best matched random | ≥ +1.0 pt, positive lower bound | +7.74 pts, CI [+5.01, +10.71] | yes |
+| wrong removal vs baseline | ≥ +1.0 pt and above matched randoms | 0.00 pts, CI [−1.59, +1.59] | no |
+
+The paired exact-match generation tier confirms the analytic ordering on the same 439
+questions: baseline 0.4237, contrastive correct retain 0.1298 (−23.2 pts against the
+accuracy band's 0.3622, CI [−27.3, −19.1]), correct-only PCA 0.3394, contrastive wrong
+remove 0.4123 (−1.14 pts vs baseline, CI [−2.96, +0.68]).
+
+Interpretation, bounded exactly as the contract requires:
+
+- The correct/wrong covariance ratio directions are genuinely class-specific — the
+  held-out projection-energy specificity is high, and retention beats every
+  energy-matched random subspace by +7.7 points — but they carry only a small fraction
+  of the answer-bearing content. Retaining them costs 28 points against baseline and
+  20 points against either PCA control.
+- Removing the wrong-specific subspace changes **nothing at all** on first-token
+  accuracy (identical 0.4009) and slightly hurts under real decoding. There is no
+  evidence of a removable "wrong" channel at state 12.
+- Correctness-conditioned covariance is therefore descriptive, not a demonstrated
+  correction channel, under any fixed linear projection tested. This replicates the
+  §41/§43 orthogonality conclusion on a test-like population: class-specific variance
+  and answer content live in nearly disjoint parts of the space.
