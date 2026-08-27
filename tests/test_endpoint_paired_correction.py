@@ -162,7 +162,9 @@ def test_analysis_requires_gain_and_specificity_controls():
         "selected_interventions": {
             "conditioned": {"alpha": 1.0, "edited_fraction": 0.5}
         },
-        "test_arms": {},
+        # The runner writes every arm's test-read summary here, including the
+        # realized edited fraction on the frozen final split.
+        "test_arms": {"conditioned": {"edited_fraction": 0.4}},
     }
     report = analyze_paired_correction(
         summary,
@@ -173,6 +175,20 @@ def test_analysis_requires_gain_and_specificity_controls():
         alpha=0.05,
     )
     assert report["paired_correction_confirmed"]
+
+    # A map whose confidence gate fires on no final-test question cannot confirm,
+    # even with identical outcome vectors.
+    unedited = {**summary, "test_arms": {"conditioned": {"edited_fraction": 0.0}}}
+    report = analyze_paired_correction(
+        unedited,
+        artifact,
+        minimum_gain_points=1.0,
+        bootstrap_samples=1000,
+        bootstrap_seed=1,
+        alpha=0.05,
+    )
+    assert not report["paired_correction_confirmed"]
+    assert not report["nontrivial_intervention_selected"]
 
 
 def test_zero_noise_is_valid_but_excess_noise_is_rejected():
@@ -273,3 +289,25 @@ def test_kaggle_notebook_orders_repair_collection_and_generation():
         if "run_official_codi_paired_correction_generation.py" in value
     )
     assert pin < repair < collect < generate
+
+
+def test_pair_coverage_reports_baseline_composition():
+    from scripts.collect_official_codi_paired_counterfactuals import _pair_coverage
+
+    # Column 0 is the unperturbed baseline variant.
+    correct = torch.tensor(
+        [
+            [True, False, True],  # paired, baseline correct
+            [False, True, False],  # paired, baseline wrong
+            [True, True, True],  # never wrong
+            [False, False, False],  # never correct
+            [False, False, True],  # paired, baseline wrong
+        ]
+    )
+    coverage = _pair_coverage(correct)
+    assert coverage["questions"] == 5
+    assert coverage["paired_questions"] == 3
+    assert coverage["paired_baseline_correct"] == 1
+    assert coverage["paired_baseline_wrong"] == 2
+    assert coverage["always_correct"] == 1
+    assert coverage["always_wrong"] == 1

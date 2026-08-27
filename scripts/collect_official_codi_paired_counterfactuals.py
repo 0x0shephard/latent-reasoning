@@ -53,10 +53,18 @@ def _sha256_json(value) -> str:
 
 def _pair_coverage(correct: torch.Tensor) -> dict:
     paired = correct.any(dim=1) & (~correct).any(dim=1)
+    # Column 0 is the unperturbed baseline variant. Pairs whose baseline is wrong
+    # are the deployment-relevant ones: they show noise *fixing* a genuinely wrong
+    # answer, not merely breaking a correct one. A map trained only on
+    # baseline-correct pairs risks learning to undo the injected noise instead of
+    # learning a correction, so both counts are recorded per split.
+    baseline_correct = correct[:, 0]
     return {
         "questions": int(correct.shape[0]),
         "paired_questions": int(paired.sum()),
         "paired_fraction": float(paired.double().mean()),
+        "paired_baseline_correct": int((paired & baseline_correct).sum()),
+        "paired_baseline_wrong": int((paired & ~baseline_correct).sum()),
         "always_correct": int(correct.all(dim=1).sum()),
         "always_wrong": int((~correct).all(dim=1).sum()),
     }
