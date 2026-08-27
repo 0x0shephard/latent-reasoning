@@ -101,5 +101,38 @@ incompatible optional TorchAO build before importing PEFT.
 
 ## Status
 
-Implementation and synthetic validation are complete. The real trajectory has not
-been collected, so the repository makes no empirical claim about either gate.
+Complete. The run is recorded in ledger §52 and its export is
+`jonraza15/does-codis-trajectory-its-endpoint-forgets`.
+
+## Completed result (2026-08-27): `latent_trajectory_not_supported`
+
+All checksums intact; the gate report recomputes bit-identically from the raw export
+with the local analyzer; run pinned at commit `40ddfc0`. Collection gates: analytic
+parity agreement **1.0** on all 1,319 questions, live first-token accuracy 0.4466
+(+0.0106 over the reproduction's exact match, inside the band). The cache diagnostic
+quantified the pre-pin environment gap: only 84 of 1,319 old cache states are within
+0.001 relative deviation of the live pass (median 0.218, max 2.35), with 71.1%
+first-token agreement. Live split correct shares: fit 47.5% / select 43.2% / test
+43.3%. Five of 234 correctness fits stalled at ridge 100 and were recorded as
+ineligible candidates; zero cells were ineligible.
+
+Both frozen gates failed:
+
+| gate | selected cell | result |
+|---|---|---|
+| correctness | position 4, state 11 | test AUC **0.8571** vs margin-only **0.8819** — ΔAUC **−0.025**, CI [−0.054, +0.005] |
+| answer identity | position 0, state 11 | on 249 wrong test questions: trajectory probe **1.6%**, endpoint probe **6.4%**, majority **3.6%** — gain **−4.8** points, CI vs endpoint [−8.0, −1.6] |
+
+Interpretation, bounded as frozen:
+
+- The trajectory carries real correctness signal (the best cells reach ~0.88 select
+  AUC with the margin), but **nothing beyond the model's own margin** — adding 768
+  trajectory coordinates makes the probe generalize *worse* than the margin alone.
+- The central hypothesis is not merely unsupported but **inverted**: answer identity
+  on wrong questions is *more* linearly recoverable at the endpoint (6.4%) than at
+  any latent trajectory cell (best 1.6%), and even the endpoint barely beats the
+  majority class. When CODI answers incorrectly, the correct answer's identity is
+  essentially absent from the latent trajectory in any linearly readable form —
+  there is nothing there for an editor to restore.
+- Per the frozen decision rule, no latent-state editing experiment is justified, and
+  the latent-trajectory question is closed for linear probes.

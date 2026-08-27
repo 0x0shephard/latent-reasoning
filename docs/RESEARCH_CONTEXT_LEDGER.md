@@ -2189,8 +2189,7 @@ latent-state editing experiment; a correctness-only pass is a detection finding;
 double failure closes the latent-trajectory question for linear probes and the
 project proceeds to write-up with no further mechanistic runs.
 
-Status: implementation, synthetic validation, and the run-all Kaggle notebook are
-complete; the real trajectory collection is pending. The contract is in
+Status: complete — see §52. Both gates failed. The contract is in
 [`OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md`](OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md).
 
 ### §51 addendum: the pre-pin cache states are not reproducible, by measurement
@@ -2221,3 +2220,66 @@ Consequences applied:
   rather than noise flips, and the uniform ~2-point live-versus-cache correct-share
   offset in its collection table is explained. Neither §50 null changes: the fitted
   map altered zero final-test predictions regardless of how its training pairs arose.
+
+## 52. Completed latent-trajectory gate: `latent_trajectory_not_supported`
+
+Kaggle export `jonraza15/does-codis-trajectory-its-endpoint-forgets` (2026-08-27),
+pinned at commit `40ddfc0`. Verified locally: all checksums intact and the gate
+report recomputes **bit-identically** with the repository analyzer. Collection was
+fully live-consistent on the pinned environment: analytic parity agreement 1.0 on all
+1,319 questions, live first-token accuracy 0.4466 (+0.0106 over the reproduction's
+exact match, inside the frozen band), the frozen partition (`c8316e46…`), and the
+cache's recorded chunking. Five of 234 correctness fits stalled at ridge 100 and were
+recorded as ineligible candidates; every used fit carries a convergence certificate.
+
+### Both gates failed
+
+**Correctness.** The best of 78 trajectory cells (position 4, state 11; select AUC
+0.8844) scored test AUC **0.8571** against the margin baseline's **0.8819** —
+ΔAUC **−0.025**, CI [−0.054, +0.005]. Trajectory states carry real correctness
+signal, but adding 768 trajectory coordinates makes the probe generalize *worse*
+than the margin alone. This extends §49's conclusion upstream: at no point in the
+latent computation does a linear readout of the state predict correctness beyond
+the model's own confidence.
+
+**Answer identity — the decisive gate — failed inverted.** On the 249 wrong-answer
+final-test questions, the select-chosen trajectory cell recovered the gold first
+token on **1.6%**, against the same probe class reading the endpoint state at
+**6.4%** and the majority class at **3.6%** (gain −4.8 points; CI against the
+endpoint [−8.0, −1.6]). The hypothesis was that the trajectory knows answers the
+endpoint discards; the measurement says the opposite — answer identity is *more*
+linearly recoverable at the endpoint than anywhere in the trajectory, and even
+there it barely beats the majority class. **When CODI answers incorrectly, the
+correct answer is essentially absent from its latent states in any linearly
+readable form. There is nothing there for an editor to restore.**
+
+### Measured environment side-result
+
+The collection's cache diagnostic quantified the §51-addendum finding: only 84 of
+1,319 pre-pin cache states fall within 0.001 relative deviation of the live pinned
+pass (median deviation 0.218, max 2.35), with 71.1% first-token agreement — while
+aggregate accuracy differs by only ~2.6 points. Environment changes below the
+accuracy-visibility threshold produce O(1) state-level differences through the
+recurrent latent loop. Any future experiment mixing cached states with live passes
+must treat them as different populations.
+
+### The project's mechanistic program is closed
+
+Per the frozen §51 decision rule, no latent-state editing experiment is justified
+and no further mechanistic run is planned. The completed record now reads:
+
+- **One confirmed positive**: PCs 4–31 of the endpoint state carry CODI's answer
+  (§40), geometry replicated across four runs.
+- **Preregistered nulls at every level asked of that finding**: detection beyond
+  the margin (§49, extended upstream by §52), constant steering (§43),
+  class-conditioned projection (§47), question-conditioned correction (§50), and
+  latent-trajectory recoverability (§52).
+- The unified reading: CODI's answer is *determined* by a small linear subspace at
+  the endpoint, but neither its correctness nor its correction is linearly
+  readable or writable anywhere the project could reach — predictive and causal
+  structure dissociate at every conditioning level and every depth tested.
+
+Remaining work is write-up and the original CODI-versus-KaVa scope (seeds and
+controls). Standing addition to §17: do not propose further linear-probe or
+linear-edit experiments on the frozen checkpoint at any state without a
+qualitatively new information source.

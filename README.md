@@ -28,12 +28,17 @@ answer on only ~14% of questions, the wrong-to-correct delta is unpredictable ou
 sample (held-out cosine ≈ 0.016), and the honestly selected edit changed zero
 predictions. Every conditioning level of fixed linear state-12 editing — global,
 class-conditioned, and question-conditioned — has now returned a preregistered null,
-and the endpoint-editing branch is closed. The one remaining cheap gate is the
+and the endpoint-editing branch is closed. The final gate, the
 [latent-trajectory detection experiment](docs/OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md)
-(ledger §51), which asks whether the six latent thought states — the only location
-where edits would propagate — still hold linearly recoverable answer identity that
-the endpoint discards. Only a passed answer-identity gate there would justify any
-further intervention design; otherwise the mechanistic record proceeds to write-up.
+(ledger §52), is **complete and `latent_trajectory_not_supported`** — and inverted:
+answer identity on wrong questions is *more* linearly recoverable at the endpoint
+(6.4%) than at any of the 78 latent trajectory cells (best 1.6%), and no cell
+predicts correctness beyond the model's own margin (ΔAUC −0.025). When CODI is
+wrong, the correct answer is essentially absent from its latent states in any
+linearly readable form. **The mechanistic program is closed**: one confirmed
+positive (the §40 accuracy band) and preregistered nulls at every conditioning
+level and depth tested. Remaining work is the write-up and the original
+CODI-versus-KaVa scope (seeds and controls).
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
