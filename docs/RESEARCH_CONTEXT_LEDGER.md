@@ -2283,3 +2283,54 @@ Remaining work is write-up and the original CODI-versus-KaVa scope (seeds and
 controls). Standing addition to §17: do not propose further linear-probe or
 linear-edit experiments on the frozen checkpoint at any state without a
 qualitatively new information source.
+
+## 53. Exploratory: the trajectory is a workspace of intermediates, and wrong answers have wrong workspaces
+
+Everything in this section is **exploratory** — computed locally on the completed
+§52 export (`jonraza15/does-codis-trajectory-its-endpoint-forgets`) plus the pinned
+GSM8K test solutions (`3101c7d5…`), with no preregistration, and recorded so a frozen
+confirmation can be read as confirmation rather than discovery. It was prompted by a
+§52 post-mortem which found the answer-identity tier had asked the trajectory for the
+wrong content: the CODI paper's own interpretability section decodes latent thoughts
+into *intermediate calculation results*, never final answers, and §52's probe was a
+data-starved 140-class classifier rather than the model's own vocabulary projection.
+
+Reading each thought's state 12 through the frozen readout (top-5 logit lens, exact
+string match against the `<<…=v>>` intermediate values of the gold solutions):
+
+| quantity | value |
+|---|---:|
+| gold intermediates recovered in thoughts (all 1,319) | **32.7%** |
+| shuffled-question null | 4.6% |
+| recovery on questions answered correctly | **41.4%** |
+| recovery on questions answered wrongly | **25.5%** |
+| gold *final* answer in thoughts (correct / wrong) | 9.3% / 10.0% |
+| questions with a hit at thought 0 / 1 / 2 / 3 / 4 / 5 | 3 / **837** / 2 / **749** / 5 / **754** |
+| correctness AUC of the recovery fraction alone (fit+select) | 0.659 |
+| margin + recovery + numeric-count, fit→select AUC | 0.897 vs margin's 0.893 |
+
+Three exploratory conclusions:
+
+1. **The CODI paper's decoding claim replicates quantitatively** on this checkpoint:
+   the six latent thoughts carry gold intermediate values at seven times the matched
+   null, in a strict alternating structure — values at odd thoughts, operator/syntax
+   tokens at even thoughts. With M = 6 the workspace holds roughly three values.
+2. **The correct/wrong separation the project has hunted since §41 exists at the
+   trajectory, as content**: correct runs' workspaces contain 16 points more of the
+   gold intermediates than wrong runs'. This is not a confidence direction — it is
+   whether the model computed the right quantities.
+3. **The §43–§52 null lattice now has a mechanistic explanation.** The trajectory
+   holds intermediates, not the final answer (9–10% versus 33%), so no probe or edit
+   aimed at final-answer identity could succeed; and a wrong run's workspace contains
+   *wrong values*, actual computation errors rather than a removable overlay, so no
+   fixed linear correction could repair it. The nulls were measuring the structure of
+   the mechanism, not its absence.
+
+The margin-relative detect increment remains small (+0.004 on select), so this does
+not promise a detect-gate pass; its value is content, structure, localization, and
+the explanation of the nulls. A frozen confirmation should preregister: recovery
+versus matched null, the odd-slot structure, correct-versus-wrong recovery with a
+paired interval, thought-to-step alignment, and — on wrong questions — whether the
+model's *own* wrong answer is traceable to its decoded wrong intermediates. All
+tiers are CPU-only on the existing export. The final 439 rows entered today's
+aggregates, so the confirmation is corrective-lineage, §42-style, not pristine.
