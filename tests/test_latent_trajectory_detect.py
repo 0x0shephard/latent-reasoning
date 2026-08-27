@@ -364,3 +364,49 @@ def test_collection_batch_size_comes_from_the_cache():
     assert resolve_collection_batch_size({}, 8) == 8
     with pytest.raises(ValueError):
         resolve_collection_batch_size({}, None)
+
+
+def test_non_certified_grid_candidates_are_ineligible_not_fatal(monkeypatch):
+    real_fit = trajectory_runner.fit_logistic_checked
+
+    def flaky_fit(features, labels, *, l2, **kwargs):
+        weight, bias, stats = real_fit(features, labels, l2=l2, **kwargs)
+        # Simulate the observed real-data pathology: one ridge value fails its
+        # certificate for wide feature blocks, while the others certify.
+        if l2 == 100.0 and features.shape[1] > 1:
+            stats["optimization"] = {**stats["optimization"], "converged": False}
+        return weight, bias, stats
+
+    monkeypatch.setattr(trajectory_runner, "fit_logistic_checked", flaky_fit)
+    generator = torch.Generator().manual_seed(2)
+    count = 120
+    features = {
+        "fit": torch.randn(count, 8, generator=generator),
+        "select": torch.randn(count, 8, generator=generator),
+    }
+    labels = {
+        "fit": torch.rand(count, generator=generator) < 0.5,
+        "select": torch.rand(count, generator=generator) < 0.5,
+    }
+    settings = SimpleNamespace(
+        solver_max_iterations=200,
+        solver_gradient_tolerance=1e-7,
+        solver_objective_gap_tolerance=1e-8,
+    )
+    best, failed = trajectory_runner._fit_checked_grid(
+        features, labels, ridge_grid=[0.01, 1.0, 100.0], settings=settings
+    )
+    assert best is not None
+    assert best[1] in (0.01, 1.0)  # the failed ridge is never selectable
+    assert [item["ridge"] for item in failed] == [100.0]
+
+    def always_failing(features, labels, *, l2, **kwargs):
+        weight, bias, stats = real_fit(features, labels, l2=l2, **kwargs)
+        stats["optimization"] = {**stats["optimization"], "converged": False}
+        return weight, bias, stats
+
+    monkeypatch.setattr(trajectory_runner, "fit_logistic_checked", always_failing)
+    best, failed = trajectory_runner._fit_checked_grid(
+        features, labels, ridge_grid=[0.01, 1.0], settings=settings
+    )
+    assert best is None and len(failed) == 2

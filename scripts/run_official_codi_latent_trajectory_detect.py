@@ -70,7 +70,15 @@ def _cell_name(position: int, state: int) -> str:
 
 
 def _fit_checked_grid(features, labels, *, ridge_grid, settings):
-    candidates = []
+    """Fit every ridge candidate; only certified fits are eligible for selection.
+
+    A candidate whose L-BFGS run fails its convergence certificate is recorded
+    and excluded rather than treated as fatal: no un-certified fit can ever be
+    selected, but one pathological (cell, ridge) pair cannot abort the sweep.
+    Returns ``(best, failed_ridges)`` where ``best`` is ``None`` when no
+    candidate certified.
+    """
+    candidates, failed = [], []
     for ridge in ridge_grid:
         weight, bias, stats = fit_logistic_checked(
             features["fit"],
@@ -81,7 +89,10 @@ def _fit_checked_grid(features, labels, *, ridge_grid, settings):
             objective_gap_tolerance=float(settings.solver_objective_gap_tolerance),
         )
         if not stats["optimization"]["converged"]:
-            raise RuntimeError(f"checked logistic ridge={ridge:g} did not converge")
+            failed.append(
+                {"ridge": float(ridge), "optimization": stats["optimization"]}
+            )
+            continue
         select_scores = apply_logistic(features["select"], weight, bias, stats)
         candidates.append(
             (
@@ -92,7 +103,9 @@ def _fit_checked_grid(features, labels, *, ridge_grid, settings):
                 stats,
             )
         )
-    return max(candidates, key=lambda item: (item[0], -item[1]))
+    if not candidates:
+        return None, failed
+    return max(candidates, key=lambda item: (item[0], -item[1])), failed
 
 
 def main(argv=None) -> int:
@@ -140,13 +153,20 @@ def main(argv=None) -> int:
     # ---- correctness track ---------------------------------------------------
     ridge_grid = [float(value) for value in settings.correctness_ridge_grid]
     margin_features = {name: margins[name] for name in splits}
+    margin_best, margin_failed = _fit_checked_grid(
+        margin_features, labels, ridge_grid=ridge_grid, settings=settings
+    )
+    if margin_best is None:
+        raise RuntimeError(
+            f"the margin baseline never certified: {margin_failed}"
+        )
     (
         margin_select_auc,
         margin_ridge,
         margin_weight,
         margin_bias,
         margin_stats,
-    ) = _fit_checked_grid(margin_features, labels, ridge_grid=ridge_grid, settings=settings)
+    ) = margin_best
 
     correctness_curve = []
     best = None
@@ -162,20 +182,30 @@ def main(argv=None) -> int:
             )
             for name, index in splits.items()
         }
-        select_auc, ridge, weight, bias, stats = _fit_checked_grid(
+        cell_best, cell_failed = _fit_checked_grid(
             cell_features, labels, ridge_grid=ridge_grid, settings=settings
         )
         entry = {
             "cell": _cell_name(position, state),
             "position": position,
             "state": state,
-            "ridge": ridge,
-            "select_auc": float(select_auc),
+            "eligible": cell_best is not None,
+            "failed_ridges": [item["ridge"] for item in cell_failed],
         }
+        if cell_best is None:
+            entry["ridge"] = None
+            entry["select_auc"] = None
+            correctness_curve.append(entry)
+            continue
+        select_auc, ridge, weight, bias, stats = cell_best
+        entry["ridge"] = ridge
+        entry["select_auc"] = float(select_auc)
         correctness_curve.append(entry)
         key = (float(select_auc), -ridge, -position, -state)
         if best is None or key > best[0]:
             best = (key, entry, weight, bias, stats, cell_features)
+    if best is None:
+        raise RuntimeError("no trajectory cell produced a certified fit")
     _, chosen_entry, chosen_weight, chosen_bias, chosen_stats, chosen_features = best
     trajectory_scores = apply_logistic(
         chosen_features["test"], chosen_weight, chosen_bias, chosen_stats
@@ -195,6 +225,9 @@ def main(argv=None) -> int:
             "test_auc": roc_auc(margin_scores, labels["test"]),
             "optimization": margin_stats["optimization"],
         },
+        "ineligible_cells": sum(
+            1 for entry in correctness_curve if not entry["eligible"]
+        ),
         "selection_curve": correctness_curve,
     }
 

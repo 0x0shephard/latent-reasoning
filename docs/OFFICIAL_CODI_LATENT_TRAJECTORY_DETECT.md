@@ -60,7 +60,10 @@ cells (6 latent positions × 13 states):
 
 - **correctness track**: ridge-logistic on `[cell state, endpoint margin]` with the
   convergence-certified L-BFGS solver (§45's), against a margin-only baseline fitted
-  the same way. The cell and ridge maximizing select AUC are chosen.
+  the same way. The cell and ridge maximizing select AUC are chosen. A grid
+  candidate that fails its certificate is recorded and excluded from selection
+  rather than aborting the sweep — no un-certified fit can ever be selected, and
+  the report's gate still checks the chosen fits' certificates.
 - **answer-identity track**: an exact closed-form one-hot ridge classifier over the
   gold first-answer-token classes observed in fit, selected by gold-token accuracy on
   the select split's *wrong* questions. Its baselines are the same probe class fitted
