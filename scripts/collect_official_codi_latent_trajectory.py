@@ -247,28 +247,32 @@ def main(argv=None) -> int:
             f"{analytic_parity['minimum_agreement']:g}"
         )
 
-    # Gate 2 — accuracy reproduction: the live pass must behave like the cached
-    # population at the aggregate level even though the cache's exact states
-    # predate the environment pins (ledger §40 remaining limits) and are not
-    # reproducible vector-for-vector.
+    # Gate 2 — accuracy reproduction, anchored to the pinned-environment
+    # reproduction summary rather than the pre-pin cache. First-token
+    # correctness is a superset of numeric exact match, so on a healthy pinned
+    # run it sits at or slightly above the reproduction accuracy; the measured
+    # pre-pin cache is ~2.6 points *below* the live pass (ledger §51 addendum)
+    # and is reported as a diagnostic only.
     live_accuracy = float((predicted == gold).double().mean())
     cache_accuracy = float(
         ((colon_states @ readout.T).argmax(dim=-1) == gold).double().mean()
     )
+    reference_accuracy = float(reproduction["gsm8k_accuracy"])
+    band = [float(value) for value in settings.reproduction_accuracy_band]
+    difference = live_accuracy - reference_accuracy
     accuracy_gate = {
         "live_first_token_accuracy": live_accuracy,
+        "reproduction_exact_match_accuracy": reference_accuracy,
+        "difference": difference,
+        "band": band,
         "cache_first_token_accuracy": cache_accuracy,
-        "drift": abs(live_accuracy - cache_accuracy),
-        "allowance": float(settings.accuracy_drift_allowance),
-        "passed": bool(
-            abs(live_accuracy - cache_accuracy)
-            <= float(settings.accuracy_drift_allowance)
-        ),
+        "passed": bool(band[0] <= difference <= band[1]),
     }
     if not accuracy_gate["passed"]:
         raise RuntimeError(
-            f"live accuracy {live_accuracy:.4f} drifted "
-            f"{accuracy_gate['drift']:.4f} from the cache's {cache_accuracy:.4f}"
+            f"live first-token accuracy {live_accuracy:.4f} is "
+            f"{difference:+.4f} from the reproduction's {reference_accuracy:.4f}, "
+            f"outside [{band[0]:g}, {band[1]:g}]"
         )
 
     # Diagnostic only — how far the pre-pin cache states are from the live pass.

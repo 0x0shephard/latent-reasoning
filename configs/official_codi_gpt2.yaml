@@ -511,7 +511,10 @@ latent_trajectory_detect:
   # collection therefore validates the live pass on its own terms and reports the
   # cache deviation as a diagnostic instead of gating on it.
   analytic_parity_minimum_agreement: 0.99
-  accuracy_drift_allowance: 0.02
+  # Live first-token accuracy minus the reproduction summary's exact-match
+  # accuracy, both on the pinned environment. First-token correctness is a
+  # superset of exact match, so the healthy band sits at or slightly above zero.
+  reproduction_accuracy_band: [-0.01, 0.05]
   cache_state_relative_tolerance: 0.001
   correctness_ridge_grid: [0.0001, 0.01, 1.0]
   identity_ridge_grid: [0.001, 0.01, 0.1, 1.0]

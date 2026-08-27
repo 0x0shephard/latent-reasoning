@@ -212,7 +212,7 @@ def _runner_settings():
         split_seed=20260827,
         expected_partition_sha256="unused-by-runner",
         analytic_parity_minimum_agreement=0.99,
-        accuracy_drift_allowance=0.02,
+        reproduction_accuracy_band=[-0.01, 0.05],
         cache_state_relative_tolerance=0.001,
         correctness_ridge_grid=[1.0],
         identity_ridge_grid=[0.01, 1.0],

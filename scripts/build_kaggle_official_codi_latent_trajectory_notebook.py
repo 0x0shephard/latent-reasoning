@@ -31,7 +31,8 @@ thought states is justified.
 
 One observational GPU pass captures the thirteen hidden states of each latent
 iteration from the released generation path (nothing is edited; a zero-noise endpoint
-capture ties the pass to the validated colon-state cache by direct state parity).
+capture records the live forced-cue state 12, which must reproduce the decoded token
+analytically and match the pinned-environment reproduction accuracy).
 Convergence-certified probes then ask two frozen questions on the frozen
 440/440/439 GSM8K-test partition:
 
@@ -177,9 +178,10 @@ markdown(
     "position ids depend on each chunk's left-padding width, so the collector "
     "reproduces the exact chunking recorded inside the colon-state cache rather "
     "than accepting a batch size here. The live pass must pass an analytic parity "
-    "gate (state 12 reproduces the decoded token) and an accuracy-reproduction "
-    "gate against the cache; the cache's exact vectors predate the environment "
-    "pins and their deviation is reported as a diagnostic, not gated on."
+    "gate (state 12 reproduces the decoded token) and an accuracy gate anchored "
+    "to the pinned-environment reproduction summary; the cache's exact vectors "
+    "predate the environment pins and their deviation is reported as a "
+    "diagnostic, not gated on."
 )
 code(
     '''
