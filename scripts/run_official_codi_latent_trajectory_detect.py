@@ -33,7 +33,6 @@ from src.mech.endpoint_correctness_geometry import (
     readout_matrix,
     roc_auc,
 )
-from src.mech.endpoint_margin_geometry import ANALYTIC_STATE
 from src.mech.latent_trajectory_detect import (
     LATENT_TRAJECTORY_CONTRACT,
     LATENT_TRAJECTORY_SCHEMA_VERSION,
@@ -51,11 +50,18 @@ def load_trajectory_export(path: Path, cache: dict) -> dict:
         raise RuntimeError(
             "trajectory export was not collected from the attached colon-state cache"
         )
-    if not export["parity_gate"]["passed"]:
-        raise RuntimeError("the collection parity gate did not pass")
+    parity = export["parity_gate"]
+    if not (
+        parity["passed"]
+        and parity["analytic_parity"]["passed"]
+        and parity["accuracy_gate"]["passed"]
+    ):
+        raise RuntimeError("the collection parity gates did not pass")
     states = export["trajectory_states"]
     if states.ndim != 4 or states.shape[2] != TRAJECTORY_STATES:
         raise RuntimeError(f"unexpected trajectory shape {tuple(states.shape)}")
+    if export["endpoint_states"].shape != (states.shape[0], states.shape[3]):
+        raise RuntimeError("live endpoint states do not pair with the trajectory")
     return export
 
 
@@ -107,8 +113,11 @@ def main(argv=None) -> int:
     cache, readout_payload = load_margin_cache(args.states, args.readout)
     readout = readout_matrix(readout_payload).double()
     export = load_trajectory_export(args.trajectory, cache)
-    state_index = list(cache["state_order"]).index(ANALYTIC_STATE)
-    colon_states = cache["evaluation_states"][:, state_index, :].double()
+    # Labels, margins, and the endpoint baseline come from the *live* forced-cue
+    # state captured in the same pass as the trajectory: the cache's exact states
+    # predate the environment pins and are not reproducible vector-for-vector, so
+    # the cache supplies only data (questions, gold tokens) and the partition.
+    colon_states = export["endpoint_states"].double()
     gold = cache["evaluation_gold_first_token"].long()
     expected = int(settings.expected_examples)
     trajectory = export["trajectory_states"].double()

@@ -211,7 +211,9 @@ def _runner_settings():
         select_examples=108,
         split_seed=20260827,
         expected_partition_sha256="unused-by-runner",
-        parity_relative_tolerance=0.001,
+        analytic_parity_minimum_agreement=0.99,
+        accuracy_drift_allowance=0.02,
+        cache_state_relative_tolerance=0.001,
         correctness_ridge_grid=[1.0],
         identity_ridge_grid=[0.01, 1.0],
         solver_max_iterations=300,
@@ -268,8 +270,14 @@ def test_runner_end_to_end_finds_planted_cell(tmp_path, monkeypatch):
         "source_request_sha256": "cache",
         "partition_sha256": "part",
         "indices": indices,
-        "parity_gate": {"passed": True},
+        "parity_gate": {
+            "passed": True,
+            "analytic_parity": {"passed": True},
+            "accuracy_gate": {"passed": True},
+        },
         "trajectory_states": trajectory.float(),
+        "endpoint_states": colon_states.float(),
+        "live_first_token": target,
     }
     trajectory_path = tmp_path / "latent_trajectory.pt"
     torch.save(export, trajectory_path)
@@ -324,8 +332,13 @@ def test_runner_refuses_mismatched_lineage(tmp_path, monkeypatch):
     export = {
         "contract": LATENT_TRAJECTORY_CONTRACT,
         "source_request_sha256": "other-cache",
-        "parity_gate": {"passed": True},
+        "parity_gate": {
+            "passed": True,
+            "analytic_parity": {"passed": True},
+            "accuracy_gate": {"passed": True},
+        },
         "trajectory_states": torch.zeros(4, 1, TRAJECTORY_STATES, HIDDEN),
+        "endpoint_states": torch.zeros(4, HIDDEN),
         "partition_sha256": "part",
         "indices": {"fit": [0], "select": [1], "test": [2, 3]},
         "request_sha256": "traj",

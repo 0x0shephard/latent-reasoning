@@ -2192,3 +2192,32 @@ project proceeds to write-up with no further mechanistic runs.
 Status: implementation, synthetic validation, and the run-all Kaggle notebook are
 complete; the real trajectory collection is pending. The contract is in
 [`OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md`](OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md).
+
+### §51 addendum: the pre-pin cache states are not reproducible, by measurement
+
+The first collection attempt gated on exact vector agreement between the live
+forced-cue state 12 and the §37 colon-state cache. It failed at **maximum relative
+deviation 2.35 — identically at batch sizes 16 and 32**, so the mismatch is
+deterministic and chunking-independent. Capture semantics were verified identical to
+the original collector (same `ln_f` hook, same last-position slice, same activation
+window). This measures directly what §40's remaining-limits paragraph recorded as a
+caveat: the colon-state cache was collected on the §39 pre-pin image, and the pinned
+environment reproduces the checkpoint's aggregate accuracy but not that cache's exact
+state vectors.
+
+Consequences applied:
+
+- The collection now validates the live pass on its own terms — analytic parity
+  (`argmax(W·h12)` reproduces the decoded token, ≥ 0.99) and an accuracy-reproduction
+  gate against the cache (allowance 0.02) — and reports the cache-state deviation as
+  a diagnostic. Labels, margins, and the endpoint-probe baseline all come from the
+  live pass, so the §51 experiment is fully self-consistent on the pinned
+  environment and, for itself, removes §40's last-dependency caveat.
+- The collector reproduces the cache's recorded collection batch size (16), since
+  GPT-2's absolute position ids depend on each chunk's left-padding width.
+- **Audit note for §50:** its pairing pool mixed the cache-derived baseline variant
+  with live-collected noise variants. Given the now-measured live-versus-cache state
+  mismatch, some of its 125 "paired" questions may be environment-flip artifacts
+  rather than noise flips, and the uniform ~2-point live-versus-cache correct-share
+  offset in its collection table is explained. Neither §50 null changes: the fitted
+  map altered zero final-test predictions regardless of how its training pairs arose.

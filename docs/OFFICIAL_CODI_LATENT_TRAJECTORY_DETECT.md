@@ -24,13 +24,26 @@ released generation path unmodified with two observers attached:
   latent iterations are kept — thirteen states each (embedding input, the outputs of
   blocks 0–10, and the `ln_f` output), the same 13-state layout every endpoint
   experiment used;
-- a zero-noise endpoint capture records the forced-cue state 12, which must match the
-  attached validated colon-state cache within a frozen relative tolerance (0.001) or
-  the collection refuses to save. This ties the new pass to the cache by direct state
-  parity rather than by trust.
+- a zero-noise endpoint capture records the live forced-cue state 12 of the same pass.
 
-The export is `[1319, 6, 13, 768]` float32 with the collection request, partition, and
-parity gate embedded.
+The live pass is validated on its own terms by two hard gates, mirroring the checks
+that validated the original cache on *its* pass: an analytic parity gate
+(`argmax(W·h12)` must reproduce the token the decoder actually emitted, agreement
+≥ 0.99) and an accuracy-reproduction gate (live first-token accuracy within 0.02 of
+the cache's). A first attempt gated instead on exact vector agreement with the cache
+and failed at maximum relative deviation 2.35, identically at two different batch
+sizes: the colon-state cache predates the environment pins (§40's recorded remaining
+limit), so its exact vectors are not reproducible on the pinned image even though
+aggregate accuracy is. The cache deviation is therefore reported as a diagnostic, and
+the cache supplies only data — questions, gold first tokens, and the partition —
+while every state consumed by the probes (trajectory, labels, margins, and the
+endpoint baseline) comes from the one live, internally consistent pass. For this
+experiment that also removes §40's last-dependency caveat.
+
+The collection reproduces the exact chunking recorded inside the cache (batch size
+16), because GPT-2's absolute position ids depend on each chunk's left-padding width.
+The export is `[1319, 6, 13, 768]` float32 plus the live endpoint states, with the
+collection request, partition, and gates embedded.
 
 ## Frozen population and probes
 
@@ -40,7 +53,9 @@ The deterministic partition is the same one used by §47, §49 and §50 — seed
 colon-state cache. Every probe is fitted on fit; every cell and ridge is chosen on
 select; the final test split is read once per frozen arm.
 
-The probe grid is all 78 cells (6 latent positions × 13 states):
+Correctness labels and margins are derived from the live endpoint state, so probes,
+labels, and baselines share one pass and one environment. The probe grid is all 78
+cells (6 latent positions × 13 states):
 
 - **correctness track**: ridge-logistic on `[cell state, endpoint margin]` with the
   convergence-certified L-BFGS solver (§45's), against a margin-only baseline fitted
