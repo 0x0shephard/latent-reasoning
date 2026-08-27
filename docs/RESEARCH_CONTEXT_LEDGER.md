@@ -2157,3 +2157,38 @@ The endpoint-editing branch of the project is closed. The completed record now
 supports write-up: one confirmed positive (§40 accuracy band), replicated geometry
 (§43, §47), and preregistered nulls covering detection (§49), steering (§43),
 projection (§43, §47), and conditioned correction (§50).
+
+## 51. Latent-trajectory detection gate
+
+§50 closed the endpoint-editing branch and named the two requirements any new
+location must satisfy: edits must propagate, and correctness must still be separable
+from question content there. The six latent thought states are the only location in
+CODI meeting both — they enter the KV cache (the Phase-3 ablations showed they are
+causally load-bearing), and they are computed while reasoning is in progress. No
+completed experiment has tested a correct/wrong or answer-identity split there: every
+prior latent-position experiment used variance-ranked or teacher-residual selectors,
+the ranking §40 later proved wrong.
+
+Per §19, a cheap read-only gate precedes any intervention design. One observational
+GPU pass captures all 78 trajectory cells (6 latent positions × the standard 13
+states) from the released generation path, with a zero-noise endpoint capture that
+must match the validated colon-state cache within 0.001 relative deviation before the
+export saves. On the frozen 440/440/439 partition shared with §47/§49/§50, two frozen
+gates are read once:
+
+- **correctness**: best select-chosen cell + margin must beat the margin alone by
+  ≥ 0.02 AUC (not 0.01 — §49 measured that ~0.013 is unresolvable on 439 questions)
+  with a positive bootstrap lower bound and convergence certificates on both fits.
+- **answer identity**: on final-test *wrong* questions, an exact one-hot ridge probe
+  on the chosen cell must recover the gold first answer token ≥ 5 points better than
+  the same probe class reading the endpoint state and better than the majority class,
+  with positive lower bounds against both.
+
+The frozen decision rule: only a passed answer-identity gate justifies proposing a
+latent-state editing experiment; a correctness-only pass is a detection finding; a
+double failure closes the latent-trajectory question for linear probes and the
+project proceeds to write-up with no further mechanistic runs.
+
+Status: implementation, synthetic validation, and the run-all Kaggle notebook are
+complete; the real trajectory collection is pending. The contract is in
+[`OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md`](OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md).

@@ -493,3 +493,27 @@ endpoint_paired_correction:
   bootstrap_samples: 10000
   bootstrap_seed: 20260830
   alpha: 0.05
+
+# Latent-trajectory detection gate. A cheap, read-only gate that must pass before
+# any editing experiment at the latent thought states is proposed: it asks whether
+# the 6x13 grid of latent-iteration hidden states predicts correctness beyond the
+# endpoint margin (decisively: 0.02 AUC, since 0.013 was shown unresolvable on 439
+# test questions) and whether it recovers the gold first answer token on questions
+# the model gets wrong better than an endpoint-state probe and the majority class.
+latent_trajectory_detect:
+  expected_examples: 1319
+  fit_examples: 440
+  select_examples: 440
+  split_seed: 20260827
+  expected_partition_sha256: c8316e46dba419a22a9b2a2cdbdb644ee2d968d28e5de0a5e487b57b0b1868f2
+  parity_relative_tolerance: 0.001
+  correctness_ridge_grid: [0.0001, 0.01, 1.0]
+  identity_ridge_grid: [0.001, 0.01, 0.1, 1.0]
+  solver_max_iterations: 300
+  solver_gradient_tolerance: 1.0e-7
+  solver_objective_gap_tolerance: 1.0e-8
+  minimum_delta_auc: 0.02
+  minimum_identity_gain_points: 5.0
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260901
+  alpha: 0.05

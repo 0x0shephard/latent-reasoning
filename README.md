@@ -28,7 +28,12 @@ answer on only ~14% of questions, the wrong-to-correct delta is unpredictable ou
 sample (held-out cosine ≈ 0.016), and the honestly selected edit changed zero
 predictions. Every conditioning level of fixed linear state-12 editing — global,
 class-conditioned, and question-conditioned — has now returned a preregistered null,
-and the endpoint-editing branch is closed.
+and the endpoint-editing branch is closed. The one remaining cheap gate is the
+[latent-trajectory detection experiment](docs/OFFICIAL_CODI_LATENT_TRAJECTORY_DETECT.md)
+(ledger §51), which asks whether the six latent thought states — the only location
+where edits would propagate — still hold linearly recoverable answer identity that
+the endpoint discards. Only a passed answer-identity gate there would justify any
+further intervention design; otherwise the mechanistic record proceeds to write-up.
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
