@@ -2052,8 +2052,7 @@ The perturbations are controlled answer-selection counterfactuals, not evidence 
 natural alternative reasoning traces. This also reuses a previously inspected GSM8K
 test population, so a positive is exploratory rather than a pristine confirmation.
 
-Status: implementation and run-all Kaggle notebook complete; real GPU execution is
-pending. The contract is in
+Status: complete — see §50. The gate did not pass. The contract is in
 [`OFFICIAL_CODI_PAIRED_CORRECTION.md`](OFFICIAL_CODI_PAIRED_CORRECTION.md).
 
 ## 49. Completed detect replication: `test_like_detect_not_supported`
@@ -2105,3 +2104,56 @@ preregistered gate beyond the model's own margin. The only open branch remains t
 §48 same-question paired conditioned correction, whose GPU run is pending. No larger
 detect replication is planned; establishing a ~0.013 AUC increment would need a
 substantially larger test-like population than GSM8K test provides under this split.
+
+## 50. Completed paired conditioned correction: `not_confirmed`
+
+Kaggle export `jonraza15/same-question-correct-to-wrong-correction-for-codi`
+(2026-08-27), pinned at commit `e67bb20`. Verified locally: all SHA-256 checksums
+intact, and both the analytic gate report and the paired exact-match generation report
+recompute **bit-identically** from the raw exports with the repository analyzers. The
+frozen partition (`c8316e46…`) is the same one used by §47 and §49; the in-run
+reproduction gate re-passed; no noisy final-test state was ever saved.
+
+### The counterfactual collection worked, and measured two things
+
+First-token correct share on the 880 fit/select questions stayed between 0.431 and
+0.453 at **every** perturbation level — even 0.60 relative RMS at state 11 barely
+moves greedy answer selection. Only 65 fit and 60 select questions produced both a
+correct and a wrong variant. The §48 composition diagnostic shows both transition
+types present (fit 25 baseline-correct / 40 baseline-wrong; select 30 / 30), so the
+result is not an artifact of a denoiser-only training set.
+
+The held-out target cosine was ≈ 0.016 at every ridge (falling to −0.004 at ridge
+100), and MSE selection chose maximum shrinkage. **The paired wrong-to-correct delta
+is essentially unpredictable from the incoming state's band coordinates and margin.**
+
+### Result
+
+Selection honestly chose α = 0.25 with a 10% margin gate for the conditioned arm and
+α = 0 — the no-op — for the global-mean arm. On the 439 final questions the
+conditioned map edited 12.8% of states (analytic) and 48 of 439 decoded states (RMS
+edit norm 0.207) and changed **zero predictions on both tiers**: analytic 0.4009 =
+baseline, exact match 0.4237 = baseline, gold NLL and margin moved at the fourth
+decimal. The shuffled-target control moved one question. Primary and specificity
+gates failed; every bootstrap interval crosses zero.
+
+### What this closes
+
+With §43 (global constant translation), §47 (class-conditioned projection), and now a
+question-conditioned additive map, **every conditioning level of fixed linear
+state-12 editing tested by this project has returned a null.** The two measured
+causes — answer selection is robust to isotropic late-layer noise, and the flip
+direction is unpredictable from state-12 observables — are each sufficient alone.
+
+Bounded as frozen: this does not rule out corrections conditioned on richer inputs
+(question text, earlier-layer states), non-linear maps, or counterfactuals from
+genuinely different reasoning traces rather than local noise. It rules out the
+strongest form the completed evidence had motivated. Standing addition to §17: do not
+propose further fixed linear edits at the answer-cue endpoint, at any conditioning
+level, without a qualitatively new source of counterfactual pairs or conditioning
+information.
+
+The endpoint-editing branch of the project is closed. The completed record now
+supports write-up: one confirmed positive (§40 accuracy band), replicated geometry
+(§43, §47), and preregistered nulls covering detection (§49), steering (§43),
+projection (§43, §47), and conditioned correction (§50).

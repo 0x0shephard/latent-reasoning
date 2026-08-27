@@ -21,10 +21,14 @@ confirmed correctness signal at the answer cue. The
 (ledger §47) found that the 28 correct-specific directions of
 `C_correct v = λ C_wrong v` are genuinely class-specific but retain only 0.121 accuracy
 against the PCA controls' 0.321, and removing the 28 wrong-specific directions changes
-exactly nothing. Neither result changes the completed steer and project nulls. The one
-open branch is the
+exactly nothing. Neither result changes the completed steer and project nulls. The
 [same-question paired conditioned correction](docs/OFFICIAL_CODI_PAIRED_CORRECTION.md)
-(ledger §48), whose GPU run is pending.
+(ledger §50) is also **complete and `not_confirmed`**: state-11 perturbations flip the
+answer on only ~14% of questions, the wrong-to-correct delta is unpredictable out of
+sample (held-out cosine ≈ 0.016), and the honestly selected edit changed zero
+predictions. Every conditioning level of fixed linear state-12 editing — global,
+class-conditioned, and question-conditioned — has now returned a preregistered null,
+and the endpoint-editing branch is closed.
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.
