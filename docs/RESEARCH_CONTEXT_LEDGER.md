@@ -2025,7 +2025,7 @@ projections or translations at state 12 from class-conditioned second-order stat
 the family is exhausted. The open direction remains a question-conditioned correction
 map (§43, §44.3), which no completed experiment has yet tested.
 
-## 47. Same-question paired, conditioned correction
+## 48. Same-question paired, conditioned correction
 
 The contrastive covariance design in §46 still compares correct states from some
 questions with wrong states from other questions. Its generalized eigenvectors can
