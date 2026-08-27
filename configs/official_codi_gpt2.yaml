@@ -553,3 +553,34 @@ latent_workspace:
   bootstrap_samples: 10000
   bootstrap_seed: 20260902
   alpha: 0.05
+
+# Latent value injection (ledger 56). The causal tier of the confirmed workspace:
+# repair (gold intermediates), corruption (gold + 1), and matched random numeric
+# tokens are identical interventions differing only in which value they write.
+# Beta is chosen on the select split by the repair criterion and shared by every
+# arm; the frozen test read happens once. Thresholds are frozen before any run.
+value_injection:
+  expected_examples: 1319
+  fit_examples: 440
+  select_examples: 440
+  split_seed: 20260827
+  expected_partition_sha256: c8316e46dba419a22a9b2a2cdbdb644ee2d968d28e5de0a5e487b57b0b1868f2
+  solutions_sha256: 3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14
+  solutions_url: https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl
+  value_slots: [1, 3, 5]
+  beta_grid: [0.5, 1.0, 2.0, 4.0]
+  random_token_seed: 20260903
+  minimum_corruption_points: 5.0
+  minimum_repair_points: 3.0
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260903
+  alpha: 0.05
+
+# Findings-derived efficiency measurement (ledger 57): latent-budget sweep and
+# rank-k readout microbenchmark. Protocol-frozen measurement, no hypothesis gates.
+efficiency_measurement:
+  latent_iterations_grid: [3, 4, 5, 6]
+  readout_ranks: [28, 32, 64]
+  benchmark_batch: 32
+  benchmark_iterations: 200
+  eval_batch_size: 32

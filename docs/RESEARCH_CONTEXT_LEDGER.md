@@ -2400,3 +2400,39 @@ the workspace holds computed values, not a correctable code. The natural future
 work (not planned this semester) is trajectory-level supervision: KaVa-style
 distillation targets scored against teacher intermediates, which reconnects the
 mechanistic finding to the project's original CODI-versus-KaVa question.
+
+## 56. Preregistered latent value injection
+
+§55 is correlational: it reads values out of the workspace. The causal tier writes
+values in. During the latent loop, at the measured value slots (thoughts 1/3/5,
+state 11), each arm adds a value token's unit-normalized readout direction scaled
+by beta times the state RMS — `gold` writes the question's gold intermediates,
+`offset` writes gold-plus-one, and `random` writes seeded numeric tokens with the
+identical slot mask and scale, so the arms differ only in which value they write.
+Unlike every §43–§52 endpoint edit, this enters inside the latent loop and
+propagates through the KV cache; the gold-value information source is exactly the
+"qualitatively new information" the §50 standing rule requires.
+
+Frozen gates on the standard partition, one test read, thresholds set before any
+run (pristine preregistration): corruption — on baseline-correct rows,
+damage(offset) minus damage(random) ≥ 5 points with a positive paired lower bound
+(values causally used); repair — on baseline-wrong rows, recovery(gold) minus
+recovery(random) ≥ 3 points (values repairable). Beta is chosen on select by the
+repair criterion only and shared by all arms. Stated expectation: corruption
+likely passes, repair is the open question; "used but not repairable" would itself
+be a sharp mechanism result. Contract:
+[`OFFICIAL_CODI_VALUE_INJECTION.md`](OFFICIAL_CODI_VALUE_INJECTION.md).
+
+## 57. Findings-derived efficiency measurement protocol
+
+A companion protocol-frozen measurement study (no hypothesis gates) quantifies the
+two efficiency routes the findings expose: the latent-budget sweep
+(`latent_iterations ∈ {3,4,5,6}`, full-GSM8K numeric exact match and wall clock —
+the model was trained at M = 6, so truncation cost is the open measurement) and
+the rank-{28,32,64} answer-readout microbenchmark (the accuracy side is already
+measured: §40's rank-32 retention kept 94.4% of exact match). Both run in the §56
+notebook. Estimated combined latency saving if the sweep cooperates: ~20% at a
+~2-point accuracy cost; the measurement replaces the estimate.
+
+Status of §56–§57: implementation, synthetic tests, and the run-all Kaggle
+notebook are complete; no run has been executed and no empirical claim is made.
