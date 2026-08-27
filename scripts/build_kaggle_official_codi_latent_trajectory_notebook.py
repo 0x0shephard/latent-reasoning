@@ -62,7 +62,6 @@ REPRODUCTION_SUMMARY_INPUT = ""
 TRAJECTORY_INPUT = ""  # Optional completed latent_trajectory.pt.
 
 RUN_COLLECTION = True
-COLLECTION_BATCH_SIZE = 32
 
 import glob, hashlib, json, os, pathlib, subprocess, sys
 
@@ -174,9 +173,12 @@ print("reproduction:", REPRODUCTION_SUMMARY)
 
 markdown(
     "## Collect the latent trajectory\n\n"
-    "One observational pass over the 1,319 cached questions. The forced-cue state 12 "
-    "is recaptured and must match the attached colon-state cache within the frozen "
-    "relative tolerance, or the collection refuses to save."
+    "One observational pass over the 1,319 cached questions. GPT-2's absolute "
+    "position ids depend on each chunk's left-padding width, so the collector "
+    "reproduces the exact chunking recorded inside the colon-state cache rather "
+    "than accepting a batch size here. The forced-cue state 12 is recaptured and "
+    "must match the attached cache within the frozen relative tolerance, or the "
+    "collection refuses to save."
 )
 code(
     '''
@@ -189,7 +191,6 @@ if RUN_COLLECTION:
          "--readout", READOUT,
          "--output-dir", str(COLLECTION_ROOT),
          "--precision", "float32",
-         "--batch-size", str(COLLECTION_BATCH_SIZE),
          "--device", "cuda"],
         check=True,
     )

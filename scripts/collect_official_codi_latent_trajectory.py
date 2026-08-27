@@ -56,6 +56,31 @@ def _sha256_json(value) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def resolve_collection_batch_size(cache_metadata: dict, cli_value) -> int:
+    """The cache's own collection batch size, never a fresh choice.
+
+    GPT-2's absolute position ids depend on each chunk's left-padding width, so
+    colon states are only reproducible under the exact chunking that produced
+    them.  The state-parity gate therefore requires collecting at the batch size
+    recorded in the cache; a CLI value is honoured only when the cache predates
+    that record, and rejected when it contradicts it.
+    """
+    recorded = cache_metadata.get("batch_size")
+    if recorded is not None:
+        if cli_value is not None and int(cli_value) != int(recorded):
+            raise ValueError(
+                f"--batch-size {cli_value} contradicts the cache's recorded "
+                f"collection batch size {recorded}; omit the flag"
+            )
+        return int(recorded)
+    if cli_value is None:
+        raise ValueError(
+            "the cache records no collection batch size; pass --batch-size "
+            "matching the original collection"
+        )
+    return int(cli_value)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -67,7 +92,13 @@ def main(argv=None) -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--checkpoint-path", type=Path)
     parser.add_argument("--precision", default="float32")
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Only for caches that predate the recorded collection batch size; "
+        "the cache's own record is otherwise authoritative.",
+    )
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
 
@@ -79,6 +110,8 @@ def main(argv=None) -> int:
         raise RuntimeError("official CODI source revision changed")
     reproduction = verify_full_reproduction_gate(args.reproduction_summary, cfg)
     cache, readout_payload = load_margin_cache(args.states, args.readout)
+    batch_size = resolve_collection_batch_size(cache["metadata"], args.batch_size)
+    print(f"[chunking] collection batch size {batch_size} (from the cache record)")
     readout = readout_matrix(readout_payload).double()
     state_index = list(cache["state_order"]).index(ANALYTIC_STATE)
     colon_states = cache["evaluation_states"][:, state_index, :].double()
@@ -119,7 +152,7 @@ def main(argv=None) -> int:
         "trajectory_states": TRAJECTORY_STATES,
         "intervention": None,
         "precision": args.precision,
-        "batch_size": args.batch_size,
+        "batch_size": batch_size,
     }
     request_sha256 = _sha256_json(request)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -175,7 +208,7 @@ def main(argv=None) -> int:
             questions,
             latent_iterations=latent_iterations,
             max_new_tokens=1,
-            batch_size=args.batch_size,
+            batch_size=batch_size,
             device=device,
             kv_intervention=trajectory,
             answer_endpoint_intervention=endpoint_observer,

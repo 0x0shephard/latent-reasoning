@@ -334,3 +334,20 @@ def test_runner_refuses_mismatched_lineage(tmp_path, monkeypatch):
     torch.save(export, path)
     with pytest.raises(RuntimeError):
         trajectory_runner.load_trajectory_export(path, {"request_sha256": "cache"})
+
+
+def test_collection_batch_size_comes_from_the_cache():
+    from scripts.collect_official_codi_latent_trajectory import (
+        resolve_collection_batch_size,
+    )
+
+    # The cache record is authoritative: adopted when the flag is omitted, and a
+    # contradicting flag is an error rather than a silent chunking change.
+    assert resolve_collection_batch_size({"batch_size": 16}, None) == 16
+    assert resolve_collection_batch_size({"batch_size": 16}, 16) == 16
+    with pytest.raises(ValueError):
+        resolve_collection_batch_size({"batch_size": 16}, 32)
+    # Only a cache that predates the record falls back to the flag.
+    assert resolve_collection_batch_size({}, 8) == 8
+    with pytest.raises(ValueError):
+        resolve_collection_batch_size({}, None)
