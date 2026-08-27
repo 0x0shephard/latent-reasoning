@@ -1,0 +1,41 @@
+{
+  "alignment_table": [
+    {
+      "aligned_rate": 0.29698375870069604,
+      "eligible": 431,
+      "other_slot_rate": 0.26450116009280744,
+      "slot": 1,
+      "step": 0
+    },
+    {
+      "aligned_rate": 0.19506172839506172,
+      "eligible": 405,
+      "other_slot_rate": 0.35555555555555557,
+      "slot": 3,
+      "step": 1
+    },
+    {
+      "aligned_rate": 0.1815068493150685,
+      "eligible": 292,
+      "other_slot_rate": 0.23972602739726026,
+      "slot": 5,
+      "step": 2
+    }
+  ],
+  "contract": "frozen_checkpoint_latent_workspace_confirmation_v1",
+  "generated_at": "2026-08-27T18:03:55.487356+00:00",
+  "null_seed": 20260902,
+  "partition_sha256": "c8316e46dba419a22a9b2a2cdbdb644ee2d968d28e5de0a5e487b57b0b1868f2",
+  "schema_version": 1,
+  "solutions_sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14",
+  "source_request_sha256": "13cde84d128e62ae31c63db8cdb3f9f8366a043b0b08a346cb1f49018ffaf57e",
+  "splits": {
+    "partition_sha256": "c8316e46dba419a22a9b2a2cdbdb644ee2d968d28e5de0a5e487b57b0b1868f2",
+    "test": 439,
+    "test_correct_share": 0.4328018223234624,
+    "test_scored": 424
+  },
+  "top_k": 5,
+  "trajectory_request_sha256": "df8dddf6dc603882ea15029499db31c180734a5f84ae968262d22f7597de4957",
+  "workspace_state": 12
+}

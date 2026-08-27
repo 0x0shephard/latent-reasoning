@@ -2351,3 +2351,52 @@ aggregates touched the test rows, this is a §42-style corrective-lineage
 confirmation, not a pristine preregistration. All tiers are CPU-only on the
 completed §52 export. The contract is
 [`OFFICIAL_CODI_LATENT_WORKSPACE.md`](OFFICIAL_CODI_LATENT_WORKSPACE.md).
+
+## 55. Confirmed: the latent thoughts are an arithmetic workspace
+
+The §54 gates were read once against the frozen 439-question final split
+(preregistration commit `5c1e326`; CPU-deterministic run on the checksummed §52
+export; report recomputed bit-identically; summary, artifact, and report pinned
+in-repo under `artifacts/latent_workspace/`). **All four gates passed**, every one
+with a margin over its frozen threshold:
+
+| gate | threshold | observed |
+|---|---|---|
+| content | ≥ +10 pts | 31.0% vs 5.6% null → **+25.3** [+22.5, +28.3] |
+| structure | even ≤ 10%, odd ≥ 0.30 | even **0.14%**; odd 0.62 / 0.54 / 0.54 |
+| correct/wrong gap | ≥ +5 pts | 41.7% vs 22.6% → **+19.2** [+14.3, +24.1] |
+| faithful readout | ≥ +4 pts | own 19.3% vs gold 10.4% → **+8.8** [+2.8, +14.9] |
+
+Hits per thought: `[0, 263, 0, 228, 1, 227]`. The descriptive alignment table
+confirms the workspace is an *unordered* value store: intermediate k does not
+preferentially occupy value slot k.
+
+### The confirmed statement
+
+> On official CODI GPT-2 over GSM8K, the six latent thoughts are a measurable
+> arithmetic workspace: the odd thoughts store the solution's intermediate values
+> (31% recovered verbatim by top-5 decoding against a 5.6% matched null — a
+> conservative lower bound, since multi-token values cannot match), wrongly
+> answered questions carry 19 points less of the correct content, and the model's
+> wrong answers appear among its own workspace numbers significantly more often
+> than the gold answers do.
+
+This is the project's **second confirmed positive** (after the §40 accuracy band),
+and it closes the arc as an explanation rather than a mystery: the endpoint's
+28-dimensional band *determines* the answer (§40) by faithfully reading out a
+workspace whose contents were computed earlier; correctness is not an endpoint
+overlay but the property of having computed the right intermediate values (§55);
+therefore nothing at the endpoint could detect it beyond the margin (§49, §52) and
+no linear edit at any conditioning level could repair it (§43, §47, §50, §52).
+Every null in the lattice is now a corollary of the confirmed mechanism.
+
+### Scope and limits
+
+Bounded to the frozen checkpoint, GSM8K, top-5 exact-match single-token decoding at
+each thought's state 12, and the live pinned-environment pass. No intervention was
+run and no claim is made that the workspace can be edited; the §52 gate already
+established that its contents are not linearly *writable*, and §55 explains why —
+the workspace holds computed values, not a correctable code. The natural future
+work (not planned this semester) is trajectory-level supervision: KaVa-style
+distillation targets scored against teacher intermediates, which reconnects the
+mechanistic finding to the project's original CODI-versus-KaVa question.

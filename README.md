@@ -35,10 +35,23 @@ answer identity on wrong questions is *more* linearly recoverable at the endpoin
 (6.4%) than at any of the 78 latent trajectory cells (best 1.6%), and no cell
 predicts correctness beyond the model's own margin (ΔAUC −0.025). When CODI is
 wrong, the correct answer is essentially absent from its latent states in any
-linearly readable form. **The mechanistic program is closed**: one confirmed
-positive (the §40 accuracy band) and preregistered nulls at every conditioning
-level and depth tested. Remaining work is the write-up and the original
-CODI-versus-KaVa scope (seeds and controls).
+linearly readable form.
+
+The follow-up asked what the trajectory *does* contain, in the model's own
+vocabulary, and produced the project's second confirmed positive: the
+[latent-workspace confirmation](docs/OFFICIAL_CODI_LATENT_WORKSPACE.md)
+(ledger §55) is **complete and `workspace_confirmed`** on all four preregistered
+gates. CODI's odd-numbered thoughts store the solution's intermediate values (31%
+recovered verbatim vs a 5.6% matched null; hits per thought `[0, 263, 0, 228, 1,
+227]`), wrongly answered questions carry 19 points less of the correct content, and
+wrong answers trace to the workspace's own numbers (+8.8 points over gold). The
+mechanism explains the entire null lattice: the endpoint band (§40) faithfully reads
+out a workspace whose values were computed earlier, so correctness was never an
+endpoint overlay that could be detected beyond the margin or repaired by a linear
+edit. **The mechanistic program is closed as an explained system**: two confirmed
+positives and preregistered nulls that are now corollaries of the mechanism.
+Remaining work is the write-up and the original CODI-versus-KaVa scope (seeds and
+controls).
 
 - **CODI** (arXiv 2502.21074): endpoint hidden-state distillation.
 - **KaVa** (arXiv 2510.02312): CODI **+** compressed KV-trajectory distillation.

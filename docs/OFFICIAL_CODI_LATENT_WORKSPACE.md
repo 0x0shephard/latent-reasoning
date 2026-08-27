@@ -73,5 +73,37 @@ written summary and artifact.
 
 ## Status
 
-Implementation and synthetic validation are complete; the frozen gates have not yet
-been read against the real export.
+Complete — **`workspace_confirmed`**, all four gates passed. Recorded in ledger §55.
+
+## Completed result (2026-08-27): `workspace_confirmed`
+
+Run locally (CPU, deterministic) on the checksummed §52 export at preregistration
+commit `5c1e326`; the report recomputes bit-identically with the analyzer, and the
+summary, artifact, and report are pinned in-repo under
+[`artifacts/latent_workspace/`](../artifacts/latent_workspace/) with SHA-256 sums.
+One read of the frozen 439-question final split (424 scored; 15 questions have no
+`<<…=v>>` annotation).
+
+| gate | threshold | observed | CI |
+|---|---|---|---|
+| content | ≥ +10 pts over derangement null | **31.0% vs 5.6% → +25.3 pts** | [+22.5, +28.3] |
+| structure | even share ≤ 10%, odd rates ≥ 0.30 | even share **0.14%** (1 hit / 719); odd rates 0.62 / 0.54 / 0.54 | — |
+| correct/wrong gap | ≥ +5 pts | **41.7% vs 22.6% → +19.2 pts** | [+14.3, +24.1] |
+| faithful readout | ≥ +4 pts | own **19.3%** vs gold **10.4% → +8.8 pts** | [+2.8, +14.9] |
+
+Hits per thought on the final split: `[0, 263, 0, 228, 1, 227]` — the value-slot
+structure is essentially exact. The descriptive alignment table confirms the §53
+observation that step order is *not* preserved (step 1 matches other slots more
+often than its own, 0.36 vs 0.20): the workspace is an unordered value store.
+
+Confirmed conclusion, bounded to official CODI GPT-2, GSM8K, top-5 exact-match
+decoding at each thought's `ln_f` state:
+
+> CODI's six latent thoughts are a measurable arithmetic workspace. The three odd
+> thoughts store the solution's intermediate values (recovering 31% of gold
+> intermediates verbatim against a 5.6% matched null, a conservative lower bound);
+> wrongly answered questions carry 19 points less of the correct content; and the
+> model's wrong answers appear in its own workspace numbers significantly more
+> often than the gold answers do. Errors originate in the latent computation, and
+> the endpoint faithfully reads them out — which is why no endpoint-side detection
+> or correction beyond the model's own margin was ever possible (§43–§52).

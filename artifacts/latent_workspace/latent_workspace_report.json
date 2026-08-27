@@ -1,0 +1,99 @@
+{
+  "alignment_table_descriptive": [
+    {
+      "aligned_rate": 0.29698375870069604,
+      "eligible": 431,
+      "other_slot_rate": 0.26450116009280744,
+      "slot": 1,
+      "step": 0
+    },
+    {
+      "aligned_rate": 0.19506172839506172,
+      "eligible": 405,
+      "other_slot_rate": 0.35555555555555557,
+      "slot": 3,
+      "step": 1
+    },
+    {
+      "aligned_rate": 0.1815068493150685,
+      "eligible": 292,
+      "other_slot_rate": 0.23972602739726026,
+      "slot": 5,
+      "step": 2
+    }
+  ],
+  "analysis": "official_codi_latent_workspace",
+  "analysis_version": 1,
+  "contract": "frozen_checkpoint_latent_workspace_confirmation_v1",
+  "gates": {
+    "content": {
+      "bootstrap_ci_points": [
+        22.466223304827682,
+        28.259869482157363
+      ],
+      "difference_points": 25.327381217535937,
+      "mean_null_recovery": 0.05644654482603073,
+      "mean_recovery": 0.30972033739089966,
+      "minimum_points": 10.0,
+      "passed": true,
+      "scored_questions": 424
+    },
+    "correct_wrong_gap": {
+      "bootstrap_ci_points": [
+        14.268866596484106,
+        24.05563674037235
+      ],
+      "difference_points": 19.1962947845459,
+      "minimum_points": 5.0,
+      "passed": true,
+      "recovery_correct": 0.417473167181015,
+      "recovery_wrong": 0.22551022469997406
+    },
+    "faithful_readout": {
+      "bootstrap_ci_points": [
+        2.8112449799196786,
+        14.859437751004014
+      ],
+      "difference_points": 8.835341365461847,
+      "gold_token_rate": 0.10441767068273092,
+      "minimum_points": 4.0,
+      "own_token_rate": 0.1927710843373494,
+      "passed": true,
+      "wrong_questions": 249
+    },
+    "structure": {
+      "even_hit_share": 0.0013908205841446453,
+      "hits_per_thought": [
+        0,
+        263,
+        0,
+        228,
+        1,
+        227
+      ],
+      "maximum_even_hit_share": 0.1,
+      "minimum_odd_hit_rate": 0.3,
+      "odd_hit_rates": [
+        0.6202830188679245,
+        0.5377358490566038,
+        0.535377358490566
+      ],
+      "passed": true
+    }
+  },
+  "gates_passed": [
+    "content",
+    "structure",
+    "correct_wrong_gap",
+    "faithful_readout"
+  ],
+  "interpretation": "The latent thoughts are a measurable workspace: they carry the gold intermediate values far above a matched null, in alternating value slots, with less of the right content on wrongly answered questions, and the endpoint's wrong answers trace back to the workspace's own numbers.",
+  "splits": {
+    "partition_sha256": "c8316e46dba419a22a9b2a2cdbdb644ee2d968d28e5de0a5e487b57b0b1868f2",
+    "test": 439,
+    "test_correct_share": 0.4328018223234624,
+    "test_scored": 424
+  },
+  "status": "workspace_confirmed",
+  "workspace_confirmed": true
+}
