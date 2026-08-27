@@ -86,5 +86,42 @@ session.
 
 ## Status
 
-Implementation and synthetic validation are complete. No injection has been run;
-the repository makes no empirical claim about either gate.
+Complete — **`value_injection_not_supported`**, both gates failed. Recorded in
+ledger §58; the companion efficiency measurements are in §59.
+
+## Completed result (2026-08-28): `value_injection_not_supported`
+
+Kaggle export `jonraza15/writing-values-two-efficiency-routes`, pinned at commit
+`bb8631d`; all checksums intact and the gate report recomputes bit-identically.
+Beta selection chose 2.0 (the select curve peaked at +1.6 points of gold-over-random
+recovery — already nearly nothing). Every injection arm applied 1,128 identically
+scaled edits (edit RMS norm 18.2, i.e. twice the state RMS at three slots each).
+
+| gate | rows | observed |
+|---|---|---|
+| values causally used | 183 baseline-correct | offset **0.9945** vs random **0.9945** — difference **exactly 0.00**, CI [−1.6, +1.6] |
+| values repairable | 248 baseline-wrong | gold 3/248 vs random 1/248 — **+0.8 points**, CI [0.0, +2.0] |
+
+The headline is the corruption null: writing plausible *wrong* values into the
+value slots, at twice the state's own RMS, left **99.45% of correct answers
+untouched** — indistinguishable from random numeric tokens. The latent computation
+is almost completely robust to additive readout-direction edits at the value
+slots.
+
+Interpretation, bounded as frozen:
+
+- Under **this additive injection** the decoded workspace values are not shown to
+  be causally consumed. The result does not contradict §52's Phase-3 finding that
+  the latent states as a whole are causally necessary (zeroing/shuffling them
+  costs many points); it localizes the robustness: the *vocabulary-aligned
+  component* that makes the values readable is not the component the computation
+  runs on. The decodable values behave as a readable shadow of a redundant,
+  distributed code.
+- This is the strongest evidence in the project for the field's newest
+  methodological warning (decodable ≠ used): the same values that pass four
+  preregistered decoding gates (§55) resist causal manipulation through their own
+  readout directions.
+- Open, and honestly stated: a different injection form (replacement instead of
+  addition, multi-token values, earlier layers, or editing the KV entries the
+  later passes attend to) could still succeed. No such follow-up is planned this
+  semester.

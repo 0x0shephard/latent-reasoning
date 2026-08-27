@@ -2436,3 +2436,62 @@ notebook. Estimated combined latency saving if the sweep cooperates: ~20% at a
 
 Status of §56–§57: implementation, synthetic tests, and the run-all Kaggle
 notebook are complete; no run has been executed and no empirical claim is made.
+
+## 58. Completed value injection: `value_injection_not_supported`
+
+Kaggle export `jonraza15/writing-values-two-efficiency-routes` (2026-08-28), pinned
+at commit `bb8631d`. Verified: all checksums intact, the gate report recomputes
+bit-identically, the frozen partition and checkpoint hashes match. Beta selection
+behaved honestly (select curve peaked at a mere +1.6 points at beta 2.0); every arm
+applied 1,128 identically scaled edits at twice the state RMS.
+
+Both frozen gates failed, and the corruption gate failed **at exactly zero**: on
+the 183 baseline-correct test questions, writing plausible wrong values
+(gold-intermediate-plus-one) into the value slots left 99.45% of answers intact —
+identical to matched random tokens (difference 0.00, CI [−1.6, +1.6]). Repair:
+gold recovered 3 of 248 wrong answers versus random's 1 (+0.8 points, CI
+[0.0, +2.0]).
+
+### What this establishes
+
+The §55 workspace values are **readable but not writable through their own readout
+directions**. This does not contradict the latent states' causal necessity (the
+Phase-3 zero/shuffle ablations cost many points); it localizes it: the
+vocabulary-aligned component that carries the decodable values is not the
+component the computation runs on. The values behave as a readable shadow of a
+redundant, distributed code. Together, §55 + §58 are a sharp instance of the
+field's newest methodological warning — decodable patterns need not be causally
+used — established here with preregistered gates on both sides: four passed
+decoding gates, two failed injection gates, same checkpoint, same values, same
+slots.
+
+Bounded as frozen: the null covers additive readout-direction injection at state
+11 of the value slots. Replacement edits, multi-token values, earlier layers, or
+KV-entry edits remain untested and unplanned this semester. Standing addition to
+§17: do not claim the workspace is editable, and do not build supervision
+proposals that presuppose the readout-aligned component is load-bearing.
+
+## 59. Completed efficiency measurements
+
+Same export, protocol-frozen measurement study (no hypothesis gates), Tesla T4,
+float32, batch 32, full 1,319-question GSM8K per condition:
+
+| latent budget M | exact match | vs M=6 |
+|---:|---:|---:|
+| 6 (trained) | 0.4337 | — |
+| **5** | **0.4359** | **+0.23 pts (free)** |
+| 4 | 0.3836 | −5.00 pts |
+| 3 | 0.3768 | −5.69 pts |
+
+**One latent thought can be dropped at inference for free** — M=5 scored slightly
+above the trained M=6 — and the cliff is at M=4. Batched T4 wall clock was flat
+across M (fixed costs dominate at batch 32), so the latency saving of the dropped
+pass (~1 of ~16 sequential steps in a latency-bound deployment) is architectural
+rather than demonstrated on this hardware configuration.
+
+The rank-k answer-readout microbenchmark measured the full lm_head projection at
+1,327 µs against **117 µs at rank 32 (11.3×)**, 120 µs at rank 28 (11.0×), and
+154 µs at rank 64 (8.6×), with the accuracy side already measured by §40's
+retention arms (rank 32 keeps 94.4% of exact match). The two findings-derived
+efficiency corollaries are therefore: a free M=5 inference budget, and an
+11×-faster answer readout at a 2.4-point accuracy cost.

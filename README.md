@@ -48,7 +48,19 @@ wrong answers trace to the workspace's own numbers (+8.8 points over gold). The
 mechanism explains the entire null lattice: the endpoint band (§40) faithfully reads
 out a workspace whose values were computed earlier, so correctness was never an
 endpoint overlay that could be detected beyond the margin or repaired by a linear
-edit. **The mechanistic program is closed as an explained system**: two confirmed
+edit. The causal tier, the
+[latent value injection](docs/OFFICIAL_CODI_VALUE_INJECTION.md) (ledger §58), is
+**complete and `value_injection_not_supported`**: writing wrong values into the
+value slots through their own readout directions, at twice the state RMS, left
+99.45% of correct answers untouched — identical to random tokens. The workspace
+values are readable but not writable through their readout directions: a readable
+shadow of a redundant, distributed code, and a preregistered instance, on both
+sides, of the field's "decodable ≠ used" warning. The companion
+[efficiency measurements](docs/OFFICIAL_CODI_VALUE_INJECTION.md) (ledger §59)
+found one latent thought can be dropped at inference for free (M=5 slightly beats
+the trained M=6; the cliff is at M=4) and the rank-32 answer readout is a measured
+11.3× faster than the full lm_head at §40's measured 94.4% accuracy retention.
+**The mechanistic program is closed as an explained system**: two confirmed
 positives and preregistered nulls that are now corollaries of the mechanism.
 Remaining work is the write-up and the original CODI-versus-KaVa scope (seeds and
 controls).
