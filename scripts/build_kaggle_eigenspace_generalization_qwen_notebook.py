@@ -93,8 +93,8 @@ markdown("## Install and verify dependencies")
 code(r'''
 subprocess.run([
     sys.executable, "-m", "pip", "install", "-q",
-    "transformers==4.52.4", "datasets==3.6.0", "accelerate>=1.2,<2",
-    "huggingface_hub==0.32.4",
+    "transformers==4.52.4", "accelerate>=1.2,<2",
+    "huggingface_hub>=0.34,<1.0",
 ], check=True)
 subprocess.run(
     [sys.executable, "-m", "pytest", "-q", "tests/test_eigenspace_readout.py"],

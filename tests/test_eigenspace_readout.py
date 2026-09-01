@@ -29,6 +29,10 @@ def test_rank_projection_matches_the_explicit_centred_formula():
     centre, _, eigenvectors = covariance_eigensystem(states)
     basis = eigenvectors[:, 2:6]
     head = LowRankVocabularyHead.from_basis(weight, basis, centre)
+    # ``from_basis`` follows the readout's dtype, just as it does in the model.
+    # Cast the explicit reference calculation to the same dtype.
+    centre = centre.to(weight.dtype)
+    basis = basis.to(weight.dtype)
     expected = centre @ weight.T + ((states - centre) @ basis) @ (weight @ basis).T
     assert torch.allclose(head(states), expected, atol=1e-5, rtol=1e-5)
 
