@@ -27,7 +27,7 @@ def test_codi_distillation_notebook_has_matched_controls_and_test_gate():
         "learned_eigen_r32", "learned_random_r32", "fixed_eigen_r32",
         "answer_state_observer", "FIT_EXAMPLES = 1536", "TEST_LIMIT = 0",
         "hybrid_supported", "numeric_exact_match", "wall_clock_seconds",
-        "tests/test_eigenspace_readout.py",
+        "tests/test_eigenspace_readout.py", '"checkout", "--detach"',
     ):
         assert required in source
 
@@ -41,6 +41,6 @@ def test_qwen_generalization_notebook_has_frozen_cross_model_controls():
         "SELECT_EXAMPLES = 128", "TEST_EXAMPLES = 256", "RANKS = [32, 64]",
         "readout_aware", "skip4", "RANDOM_NULL_REPLICATES = 20",
         "generalization_supported", "inconclusive_low_baseline_correct_count",
-        "isolated_head_speedup",
+        "isolated_head_speedup", '"checkout", "--detach"',
     ):
         assert required in source

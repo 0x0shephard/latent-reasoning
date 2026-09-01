@@ -79,7 +79,10 @@ os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
 if not pathlib.Path(REPO_DIR).exists():
     subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
 subprocess.run(["git", "-C", REPO_DIR, "fetch", "--all", "--tags"], check=True)
-subprocess.run(["git", "-C", REPO_DIR, "checkout", RUN_COMMIT], check=True)
+RESOLVED_COMMIT = "origin/main" if RUN_COMMIT == "main" else RUN_COMMIT
+subprocess.run(
+    ["git", "-C", REPO_DIR, "checkout", "--detach", RESOLVED_COMMIT], check=True
+)
 os.chdir(REPO_DIR)
 sys.path.insert(0, REPO_DIR)
 pathlib.Path(OUTPUT_ROOT).mkdir(parents=True, exist_ok=True)
@@ -87,6 +90,10 @@ print("commit:", subprocess.run(
     ["git", "-C", REPO_DIR, "rev-parse", "HEAD"],
     capture_output=True, text=True, check=True,
 ).stdout.strip())
+assert RUN_COMMIT == "main" or subprocess.run(
+    ["git", "-C", REPO_DIR, "rev-parse", "HEAD"],
+    capture_output=True, text=True, check=True,
+).stdout.strip().startswith(RUN_COMMIT)
 ''')
 
 markdown("## Install and verify dependencies")
