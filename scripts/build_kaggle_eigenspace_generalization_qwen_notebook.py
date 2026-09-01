@@ -54,10 +54,11 @@ than 50 correct test answers, the accuracy comparison is labelled inconclusive.
 markdown("## Setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the immutable commit after these files are pushed.
+RUN_COMMIT = "main"  # Our GitHub code revision; use a latent-reasoning commit here.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 MODEL_ID = "Qwen/Qwen2.5-Math-1.5B-Instruct"
-MODEL_REVISION = "main"  # Pin to a commit hash for a final confirmatory run.
+# This must be a revision from the Qwen Hugging Face repository, not RUN_COMMIT.
+HF_MODEL_REVISION = "f903dd76e2a9741d582f2a31248f1f5d0ac0e2bf"
 OUTPUT_ROOT = "/kaggle/working/eigenspace_generalization_qwen"
 
 SEED = 20260902
@@ -74,6 +75,9 @@ BATCH_SIZE = 4
 RUN_GENERATION_ARMS = True
 
 import glob, json, os, pathlib, subprocess, sys, time
+assert HF_MODEL_REVISION != RUN_COMMIT, (
+    "HF_MODEL_REVISION belongs to Qwen on Hugging Face; RUN_COMMIT belongs to our GitHub repo"
+)
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
 if not pathlib.Path(REPO_DIR).exists():
@@ -150,10 +154,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 device = torch.device("cuda")
 dtype = torch.float16
 tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_ID, revision=MODEL_REVISION, token=os.environ.get("HF_TOKEN") or None,
+    MODEL_ID, revision=HF_MODEL_REVISION, token=os.environ.get("HF_TOKEN") or None,
 )
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, revision=MODEL_REVISION, torch_dtype=dtype, low_cpu_mem_usage=True,
+    MODEL_ID, revision=HF_MODEL_REVISION, torch_dtype=dtype, low_cpu_mem_usage=True,
     token=os.environ.get("HF_TOKEN") or None,
 ).to(device).eval()
 for parameter in model.parameters():
@@ -378,7 +382,7 @@ if generation_results:
 
 summary = {
     "experiment": "eigenspace_readout_generalization_qwen",
-    "model": MODEL_ID, "model_revision": MODEL_REVISION, "seed": SEED,
+    "model": MODEL_ID, "model_revision": HF_MODEL_REVISION, "seed": SEED,
     "splits": {"fit": len(fit_rows), "select": len(select_rows), "test": len(test_rows)},
     "baseline_accuracy": {name: sum(value["correct"])/len(value["correct"])
                           for name, value in baseline.items()},
