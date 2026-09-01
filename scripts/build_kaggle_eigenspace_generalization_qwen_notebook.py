@@ -253,7 +253,8 @@ def generate_records(rows, split_name):
             )
             records.append({
                 "split": split_name, "row": start + offset,
-                "question": row["question"], "gold": row["gold"],
+                "question": row["question"],
+                "gold": str(row["gold"]) if row["gold"] is not None else None,
                 "prompt": prompt, "generation": text,
                 "generated_token_ids": token_ids,
                 "generated_tokens": len(token_ids),
