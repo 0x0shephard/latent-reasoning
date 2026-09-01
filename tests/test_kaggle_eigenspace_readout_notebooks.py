@@ -45,7 +45,7 @@ def test_qwen_generalization_notebook_has_matched_endpoint_and_trajectory_contro
         "distilled_endpoint_r", "distilled_trajectory_r", "distilled_random_r",
         "RANDOM_NULL_REPLICATES = 20", "teacher_forced_replay_at_least_95pct",
         "deployable_generalization_supported", "end_to_end_token_throughput_speedup",
-        '"gold": str(row["gold"])', "truncated", "milliseconds_per_token",
+        '"gold": str(row["gold"])', "default=str", "truncated", "milliseconds_per_token",
         '"checkout", "--detach"',
     ):
         assert required in source

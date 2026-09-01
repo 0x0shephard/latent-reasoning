@@ -219,7 +219,7 @@ def write_jsonl(path, records):
     temporary = pathlib.Path(str(path) + ".tmp")
     with temporary.open("w", encoding="utf-8") as handle:
         for record in records:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
     temporary.replace(path)
 
 def trim_generated_ids(token_ids):
