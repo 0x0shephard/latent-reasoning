@@ -74,7 +74,7 @@ markdown(r"""
 markdown("## Setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the immutable commit printed after this code is pushed.
+RUN_COMMIT = "bad8ff7"  # Immutable commit containing this experiment and its helpers.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 MODEL_ID = "Qwen/Qwen2.5-Math-1.5B-Instruct"
 HF_MODEL_REVISION = "f903dd76e2a9741d582f2a31248f1f5d0ac0e2bf"
