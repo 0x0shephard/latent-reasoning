@@ -32,16 +32,19 @@ def test_codi_distillation_notebook_has_matched_controls_and_test_gate():
         assert required in source
 
 
-def test_qwen_generalization_notebook_has_frozen_cross_model_controls():
+def test_qwen_generalization_notebook_has_matched_endpoint_and_trajectory_controls():
     path = ROOT / "notebooks" / "kaggle_eigenspace_readout_generalization_qwen.ipynb"
     payload, source = _source(path)
     assert payload["nbformat"] == 4
     for required in (
         "Qwen/Qwen2.5-Math-1.5B-Instruct", "FIT_EXAMPLES = 512",
         "HF_MODEL_REVISION", "f903dd76e2a9741d582f2a31248f1f5d0ac0e2bf",
-        "SELECT_EXAMPLES = 128", "TEST_EXAMPLES = 256", "RANKS = [32, 64]",
-        "readout_aware", "skip4", "RANDOM_NULL_REPLICATES = 20",
-        "generalization_supported", "inconclusive_low_baseline_correct_count",
-        "isolated_head_speedup", '"checkout", "--detach"',
+        "SELECT_EXAMPLES = 128", "TEST_EXAMPLES = 256", "RANKS = [64, 96, 192]",
+        "MAX_NEW_TOKENS = 512", "Please reason step by step",
+        "final_answer_span", "endpoint_states", "trajectory_states",
+        "distilled_endpoint_r", "distilled_trajectory_r", "distilled_random_r",
+        "RANDOM_NULL_REPLICATES = 20", "teacher_forced_replay_at_least_95pct",
+        "deployable_generalization_supported", "end_to_end_token_throughput_speedup",
+        "truncated", "milliseconds_per_token", '"checkout", "--detach"',
     ):
         assert required in source
