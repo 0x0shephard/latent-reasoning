@@ -322,8 +322,15 @@ def generate_official_codi(
     answer_cue: str = "The answer is:",
     force_answer_cue: bool = False,
     return_endpoint_metadata: bool = False,
+    answer_state_observer=None,
 ) -> list[str] | tuple[list[str], dict]:
-    """Greedy generation matching the released path, with optional causal KV edits."""
+    """Greedy generation matching the released path, with optional causal KV edits.
+
+    ``answer_state_observer`` is an opt-in measurement hook. It receives the final
+    normalized state used to predict each answer token, the active-row mask, and the
+    zero-based answer-token position. The default path remains byte-for-byte
+    unchanged and does not request hidden states.
+    """
     if latent_iterations <= 0:
         raise ValueError("latent_iterations must be positive")
     if max_new_tokens <= 0:
@@ -403,12 +410,18 @@ def generate_official_codi(
                     inputs_embeds=embedding(forced),
                     past_key_values=cache,
                     use_cache=True,
-                    output_hidden_states=False,
+                    output_hidden_states=answer_state_observer is not None,
                     output_attentions=False,
                     return_dict=True,
                 )
             cache = decoded.past_key_values
             endpoint_applied |= endpoint_mask
+            if answer_state_observer is not None:
+                answer_state_observer(
+                    decoded.hidden_states[-1][:, -1, :],
+                    ~finished,
+                    0,
+                )
             next_token = decoded.logits[:, -1, : model.eot_id].argmax(dim=-1)
             for row, token_id in enumerate(next_token.tolist()):
                 generated[row].append(int(token_id))
@@ -432,7 +445,7 @@ def generate_official_codi(
         intervene_everywhere = bool(
             getattr(answer_endpoint_intervention, "applies_to_all_positions", False)
         )
-        for _ in remaining_steps:
+        for answer_position in remaining_steps:
             if bool(finished.all()):
                 break
             if intervene_everywhere:
@@ -456,11 +469,17 @@ def generate_official_codi(
                     inputs_embeds=token_embedding,
                     past_key_values=cache,
                     use_cache=True,
-                    output_hidden_states=False,
+                    output_hidden_states=answer_state_observer is not None,
                     output_attentions=False,
                     return_dict=True,
                 )
             cache = decoded.past_key_values
+            if answer_state_observer is not None:
+                answer_state_observer(
+                    decoded.hidden_states[-1][:, -1, :],
+                    ~finished,
+                    int(answer_position),
+                )
             # The released script excludes only the final synthetic EOT id.
             next_token = decoded.logits[:, -1, : model.eot_id].argmax(dim=-1)
             for row, token_id in enumerate(next_token.tolist()):
