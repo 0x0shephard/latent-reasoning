@@ -49,3 +49,22 @@ def test_qwen_generalization_notebook_has_matched_endpoint_and_trajectory_contro
         '"checkout", "--detach"',
     ):
         assert required in source
+
+
+def test_qwen_answer_localization_notebook_has_rank_sweep_and_causal_controls():
+    path = ROOT / "notebooks" / "kaggle_qwen_answer_eigenspace_localization.ipynb"
+    payload, source = _source(path)
+    assert payload["nbformat"] == 4
+    for required in (
+        "does-the-answer-eigenspace-generalize-beyond-codi",
+        "RANKS = [1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64",
+        "SUFFICIENCY_THRESHOLD = 0.99", "intervention_metrics",
+        "keep_full_agreement", "remove_full_agreement",
+        "minimum_sufficient_rank_interval", "selected_eigenvector_indices",
+        "complete_answer_suffix", "keep_aware_r", "remove_aware_r",
+        "keep_random_r", "paired_bootstrap_95ci",
+        "full_suffix_outcome_replay", "specificity_over_random_supported",
+        "localized_sufficient_and_necessary_answer_eigenspace",
+        "layer_28_post_final_norm_pre_lm_head_first_boxed_answer_token",
+    ):
+        assert required in source
