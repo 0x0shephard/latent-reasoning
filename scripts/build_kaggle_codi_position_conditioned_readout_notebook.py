@@ -8,7 +8,7 @@ except ModuleNotFoundError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "notebooks" / "kaggle_codi_position_conditioned_readout.ipynb"
+OUTPUT = ROOT / "notebooks" / "kaggle_codi_position_conditioned_readout_v2.ipynb"
 notebook = nbf.v4.new_notebook()
 cells = []
 
@@ -22,7 +22,7 @@ def code(source: str) -> None:
 
 
 markdown(r"""
-# Do CODI's later answer tokens have their own small readout spaces?
+# CODI position-conditioned low-rank readout — corrected v2
 
 ## Exact question
 
@@ -65,7 +65,7 @@ experts are stored.
 markdown("## Setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "98394c6"  # Immutable supported-bucket v2 implementation.
+RUN_COMMIT = "main"  # Replaced with the immutable implementation commit before release.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""
@@ -121,19 +121,23 @@ PINNED_PACKAGES = {
     "datasets": "3.6.0",
     "huggingface_hub": "0.32.4",
 }
-import importlib.metadata as package_metadata
+from importlib.metadata import PackageNotFoundError, version as package_version
 
-def installed(name):
+def installed_package_version(name):
     try:
-        return package_metadata.version(name)
-    except package_metadata.PackageNotFoundError:
+        return package_version(name)
+    except PackageNotFoundError:
         return None
 
 missing = [f"{name}=={version}" for name, version in PINNED_PACKAGES.items()
-           if installed(name) != version]
+           if installed_package_version(name) != version]
 if missing:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", *missing], check=True)
-print({name: installed(name) for name in PINNED_PACKAGES})
+observed_package_versions = {
+    name: installed_package_version(name) for name in PINNED_PACKAGES
+}
+assert observed_package_versions == PINNED_PACKAGES, observed_package_versions
+print(observed_package_versions)
 
 probe = (
     "from peft.import_utils import is_torchao_available\n"
@@ -713,7 +717,7 @@ if generation_results:
 summary = {
     "experiment": "official_codi_position_conditioned_low_rank_readout_v2_supported_buckets",
     "code_commit": CODE_COMMIT, "checkpoint_sha256": load_report.checkpoint_sha256,
-    "environment": {name: installed(name) for name in PINNED_PACKAGES},
+    "environment": observed_package_versions,
     "inputs": {"reproduction_summary": REPRODUCTION_SUMMARY,
                "colon_states": COLON_STATES, "readout": READOUT},
     "seed": SEED,

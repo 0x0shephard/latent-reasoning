@@ -117,6 +117,6 @@ same online rank at each step but sends positions 1 and later to the wrong exper
 - reusable router: `src/mech/position_conditioned_readout.py`
 - decoder routing: `src/models/official_codi.py`
 - notebook builder: `scripts/build_kaggle_codi_position_conditioned_readout_notebook.py`
-- Kaggle notebook: `notebooks/kaggle_codi_position_conditioned_readout.ipynb`
+- Kaggle notebook: `notebooks/kaggle_codi_position_conditioned_readout_v2.ipynb`
 - tests: `tests/test_position_conditioned_readout.py` and
   `tests/test_kaggle_eigenspace_readout_notebooks.py`

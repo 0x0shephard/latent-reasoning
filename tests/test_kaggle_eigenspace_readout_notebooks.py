@@ -71,7 +71,7 @@ def test_qwen_answer_localization_notebook_has_rank_sweep_and_causal_controls():
 
 
 def test_codi_position_conditioned_notebook_has_locality_controls_and_timing():
-    path = ROOT / "notebooks" / "kaggle_codi_position_conditioned_readout.ipynb"
+    path = ROOT / "notebooks" / "kaggle_codi_position_conditioned_readout_v2.ipynb"
     payload, source = _source(path)
     assert payload["nbformat"] == 4
     for required in (
@@ -86,7 +86,8 @@ def test_codi_position_conditioned_notebook_has_locality_controls_and_timing():
         "first_token_control_reproduces_38_06_within_2_points",
         "microseconds_per_question", "microseconds_per_visible_token",
         "visible_generated_tokens", "position_locality_supported",
-        "package_metadata.version", "generation_metadata",
+        "installed_package_version", "observed_package_versions", "generation_metadata",
+        "PackageNotFoundError", "version as package_version",
         "TEST_LIMIT = 0", "tests/test_position_conditioned_readout.py",
         '"checkout", "--detach"', "default=str",
     ):
