@@ -65,7 +65,7 @@ experts are stored.
 markdown("## Setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the immutable implementation commit after pushing.
+RUN_COMMIT = "38beba0"  # Immutable position-conditioned experiment implementation.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""
