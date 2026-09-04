@@ -127,13 +127,25 @@ class OfficialCODIGPT2(nn.Module):
         return self.codi.config
 
     def input_embeddings(self) -> nn.Module:
-        base = self.codi.get_base_model()
+        base = official_codi_base_model(self)
         if not hasattr(base, "transformer") or not hasattr(base.transformer, "wte"):
             raise TypeError("official CODI GPT-2 requires transformer.wte embeddings")
         return base.transformer.wte
 
     def tie_weights(self) -> None:
         self.codi.tie_weights()
+
+
+def official_codi_base_model(model: OfficialCODIGPT2) -> nn.Module:
+    """Return the causal LM below PEFT, or the already-merged causal LM.
+
+    The author-compatible loader initially constructs a ``PeftModel``.  Optimized
+    inference may subsequently call ``merge_and_unload()``, which replaces that
+    wrapper with the ordinary Transformers causal LM.  Keeping this distinction in
+    one helper prevents inference utilities from depending on either representation.
+    """
+    getter = getattr(model.codi, "get_base_model", None)
+    return getter() if callable(getter) else model.codi
 
 
 def build_official_codi_gpt2(
@@ -317,7 +329,7 @@ def _set_output_head_answer_position(
     continuous-latent passes, where CODI computes but does not consume vocabulary
     logits.
     """
-    base_model = model.codi.get_base_model()
+    base_model = official_codi_base_model(model)
     head = base_model.get_output_embeddings()
     setter = getattr(head, "set_answer_position", None)
     if setter is not None:
