@@ -121,12 +121,12 @@ PINNED_PACKAGES = {
     "datasets": "3.6.0",
     "huggingface_hub": "0.32.4",
 }
-import importlib.metadata as metadata
+import importlib.metadata as package_metadata
 
 def installed(name):
     try:
-        return metadata.version(name)
-    except metadata.PackageNotFoundError:
+        return package_metadata.version(name)
+    except package_metadata.PackageNotFoundError:
         return None
 
 missing = [f"{name}=={version}" for name, version in PINNED_PACKAGES.items()
@@ -559,7 +559,7 @@ if RUN_FULL_GENERATION:
         )
         torch.cuda.synchronize()
         started = time.perf_counter()
-        generations, metadata = generate_official_codi(
+        generations, generation_metadata = generate_official_codi(
             model, tokenizer, test_questions,
             latent_iterations=int(cfg.eval.latent_iterations),
             max_new_tokens=MAX_NEW_TOKENS, batch_size=GENERATION_BATCH_SIZE,
@@ -573,11 +573,11 @@ if RUN_FULL_GENERATION:
         records = [
             {"arm": arm, "row": index, "gold": str(row["gold"]),
              "generation": text, "correct": outcome,
-             "generated_tokens": int(metadata["generated_token_counts"][index])}
+             "generated_tokens": int(generation_metadata["generated_token_counts"][index])}
             for index, (row, text, outcome) in enumerate(zip(test_examples, generations, correct))
         ]
         write_jsonl(pathlib.Path(OUTPUT_ROOT) / f"{arm}.jsonl", records)
-        token_count = int(metadata["generated_token_count"])
+        token_count = int(generation_metadata["generated_token_count"])
         generation_outcomes[arm] = correct
         generation_results[arm] = {
             "examples": len(test_examples), "correct": int(sum(correct)),
