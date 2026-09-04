@@ -48,7 +48,7 @@ No arm is selected or modified after test results are observed.
 markdown("## 1. Configuration and immutable repository checkout")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replaced with an immutable commit after this notebook is committed.
+RUN_COMMIT = "2d34366"  # Immutable implementation commit.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""
