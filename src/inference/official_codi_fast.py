@@ -183,6 +183,7 @@ def generate_official_codi_fast(
     device: torch.device,
     answer_cue: str = "The answer is:",
     candidate_token_ids: torch.Tensor | None = None,
+    answer_state_observer=None,
 ) -> FastCODIGeneration:
     """Decode forced-cue CODI answers without computing unused vocabulary logits."""
     if latent_iterations <= 0:
@@ -199,6 +200,13 @@ def generate_official_codi_fast(
         raise TypeError("fast official CODI path requires a GPT-2 transformer body")
     embedding = model.input_embeddings()
     output_head = base.get_output_embeddings()
+    answer_position_setter = getattr(output_head, "set_answer_position", None)
+
+    def set_answer_position(position: int | None) -> None:
+        if answer_position_setter is not None:
+            answer_position_setter(position)
+
+    set_answer_position(None)
     vocabulary_stop = int(model.eot_id)
     candidate_ids_device = None
     candidate_weight = None
@@ -261,6 +269,10 @@ def generate_official_codi_fast(
             return_dict=True,
         )
         cache = cue_output.past_key_values
+        active = torch.ones(input_ids.shape[0], dtype=torch.bool, device=device)
+        set_answer_position(0)
+        if answer_state_observer is not None:
+            answer_state_observer(cue_output.last_hidden_state[:, -1, :], active, 0)
         next_token = _select_token(
             output_head,
             cue_output.last_hidden_state[:, -1, :],
@@ -295,6 +307,13 @@ def generate_official_codi_fast(
                 return_dict=True,
             )
             cache = token_output.past_key_values
+            set_answer_position(answer_position + 1)
+            if answer_state_observer is not None:
+                answer_state_observer(
+                    token_output.last_hidden_state[:, -1, :],
+                    ~finished,
+                    answer_position + 1,
+                )
             next_token = _select_token(
                 output_head,
                 token_output.last_hidden_state[:, -1, :],
@@ -313,6 +332,7 @@ def generate_official_codi_fast(
             result_counts[original_index] = count
             result_texts[original_index] = tokenizer.decode(ids, skip_special_tokens=True)
 
+    set_answer_position(None)
     if any(value is None for value in result_tokens) or any(
         value is None for value in result_texts
     ):

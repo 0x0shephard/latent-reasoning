@@ -92,6 +92,19 @@ class TinyCODI(nn.Module):
         return self.codi.embedding
 
 
+class TrackingHead(nn.Module):
+    def __init__(self, head):
+        super().__init__()
+        self.head = head
+        self.positions = []
+
+    def set_answer_position(self, position):
+        self.positions.append(position)
+
+    def forward(self, hidden):
+        return self.head(hidden)
+
+
 def test_preparation_length_buckets_reduce_padding_and_restore_indices():
     tokenizer = TinyTokenizer()
     questions = ["one two three four", "one", "one two", "one two three"]
@@ -135,3 +148,28 @@ def test_fast_decoder_generates_and_restores_original_question_order():
     assert result.texts == ("2", "2")
     assert result.generated_token_counts == (2, 2)
 
+
+def test_fast_decoder_exposes_visible_states_and_answer_positions():
+    tokenizer = TinyTokenizer()
+    prepared = prepare_official_codi_batches(
+        tokenizer, ["question"], batch_size=1, length_bucketed=False
+    )
+    model = TinyCODI()
+    tracking = TrackingHead(model.codi.lm_head)
+    model.codi.lm_head = tracking
+    observed = []
+
+    def observer(states, active, position):
+        observed.append((tuple(states.shape), active.tolist(), position))
+
+    generate_official_codi_fast(
+        model,
+        tokenizer,
+        prepared,
+        latent_iterations=2,
+        max_new_tokens=4,
+        device=torch.device("cpu"),
+        answer_state_observer=observer,
+    )
+    assert tracking.positions == [None, 0, 1, None]
+    assert observed == [((1, 2), [True], 0), ((1, 2), [True], 1)]
