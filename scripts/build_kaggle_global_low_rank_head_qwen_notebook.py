@@ -42,7 +42,7 @@ transfer of the same directions.
 markdown("## Configuration")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the released immutable commit when available.
+RUN_COMMIT = "99a5814"  # Immutable global-head implementation commit.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 MODEL_ID = "Qwen/Qwen2.5-Math-1.5B-Instruct"
 MODEL_REVISION = "f903dd76e2a9741d582f2a31248f1f5d0ac0e2bf"

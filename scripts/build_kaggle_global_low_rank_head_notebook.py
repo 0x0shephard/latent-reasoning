@@ -54,7 +54,7 @@ Numerical factors are refitted per model—they are never copied between hidden 
 markdown("## Configuration")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the immutable commit printed after this notebook is released.
+RUN_COMMIT = "99a5814"  # Immutable global-head implementation commit.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""
 OUTPUT_ROOT = "/kaggle/working/trajectory_whitened_global_head"
