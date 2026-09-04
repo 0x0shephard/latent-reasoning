@@ -26,7 +26,7 @@ def test_deployment_notebook_and_builder_exist_and_parse():
 
 def test_deployment_notebook_reuses_the_locked_rank96_artifact():
     text = notebook_text()
-    assert 'RUN_COMMIT = "b6a7ebf"' in text
+    assert 'RUN_COMMIT = "3f92e79"' in text
     assert "global_low_rank_head.pt" in text
     assert "RANK = 96" in text
     assert "prior_retention >= 0.98" in text
@@ -61,4 +61,3 @@ def test_deployment_notebook_uses_the_full_locked_quality_population():
     assert "same_body_only_decoder" in text
     assert "merged_lora" in text
     assert "input_embedding_remains_dense" in text
-

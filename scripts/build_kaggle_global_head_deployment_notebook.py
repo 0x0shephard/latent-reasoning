@@ -57,7 +57,7 @@ a second small reduction chooses among block winners.
 markdown("## 1. Configuration and immutable checkout")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "b6a7ebf"  # Contains the validated rank-96 fitter and body-only decoder.
+RUN_COMMIT = "3f92e79"  # Immutable deployment-benchmark implementation commit.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""
