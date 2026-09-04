@@ -307,6 +307,23 @@ def _new_answer_endpoint_mask(
     )
 
 
+def _set_output_head_answer_position(
+    model: OfficialCODIGPT2, position: int | None
+) -> None:
+    """Tell an opt-in routed output head which visible answer token is next.
+
+    Ordinary Hugging Face heads do not implement ``set_answer_position``, so this
+    is a no-op for every existing experiment.  ``None`` marks prompt encoding and
+    continuous-latent passes, where CODI computes but does not consume vocabulary
+    logits.
+    """
+    base_model = model.codi.get_base_model()
+    head = base_model.get_output_embeddings()
+    setter = getattr(head, "set_answer_position", None)
+    if setter is not None:
+        setter(position)
+
+
 @torch.inference_mode()
 def generate_official_codi(
     model: OfficialCODIGPT2,
@@ -341,6 +358,7 @@ def generate_official_codi(
     model.eval()
     outputs: list[str] = []
     endpoint_reached: list[bool] = []
+    generated_token_counts: list[int] = []
     embedding = model.input_embeddings()
     normalized = _normalized_official_questions(questions)
     cue_ids = list(
@@ -368,6 +386,7 @@ def generate_official_codi(
             (batch["attention_mask"], torch.ones_like(bot)), dim=1
         )
 
+        _set_output_head_answer_position(model, None)
         encoded = model.codi(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -378,6 +397,7 @@ def generate_official_codi(
         cache = encoded.past_key_values
         latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
         for latent_position in range(latent_iterations):
+            _set_output_head_answer_position(model, None)
             latent_output = model.codi(
                 inputs_embeds=latent,
                 past_key_values=cache,
@@ -405,6 +425,7 @@ def generate_official_codi(
                 if answer_endpoint_intervention is not None
                 else nullcontext()
             )
+            _set_output_head_answer_position(model, 0)
             with context:
                 decoded = model.codi(
                     inputs_embeds=embedding(forced),
@@ -464,6 +485,7 @@ def generate_official_codi(
                 if answer_endpoint_intervention is not None and bool(endpoint_mask.any())
                 else nullcontext()
             )
+            _set_output_head_answer_position(model, int(answer_position))
             with context:
                 decoded = model.codi(
                     inputs_embeds=token_embedding,
@@ -493,7 +515,10 @@ def generate_official_codi(
             tokenizer.decode(token_ids, skip_special_tokens=True)
             for token_ids in generated
         )
+        generated_token_counts.extend(len(token_ids) for token_ids in generated)
         endpoint_reached.extend(bool(value) for value in endpoint_applied.tolist())
+
+    _set_output_head_answer_position(model, None)
 
     if len(outputs) != len(questions):
         raise RuntimeError("official CODI generation count mismatch")
@@ -505,5 +530,7 @@ def generate_official_codi(
             "endpoint_reached": endpoint_reached,
             "endpoint_reached_count": int(sum(endpoint_reached)),
             "endpoint_reached_fraction": float(sum(endpoint_reached) / len(endpoint_reached)),
+            "generated_token_counts": generated_token_counts,
+            "generated_token_count": int(sum(generated_token_counts)),
         }
     return outputs
