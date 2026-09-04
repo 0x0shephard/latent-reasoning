@@ -28,11 +28,11 @@ def test_default_buckets_cover_answer_positions_without_overlap():
     expected = {
         0: "p0",
         1: "p1",
-        2: "p2",
-        3: "p3_5",
-        5: "p3_5",
-        6: "p6_plus",
-        99: "p6_plus",
+        2: "p2_plus",
+        3: "p2_plus",
+        5: "p2_plus",
+        6: "p2_plus",
+        99: "p2_plus",
     }
     assert {
         position: answer_position_bucket(position)
@@ -63,11 +63,11 @@ def test_router_uses_inactive_and_position_specific_heads():
     assert router.active_bucket == "p0"
     assert torch.equal(router(hidden), torch.full((2, 7), 1.0))
     router.set_answer_position(4)
-    assert router.active_bucket == "p3_5"
-    assert torch.equal(router(hidden), torch.full((2, 7), 4.0))
+    assert router.active_bucket == "p2_plus"
+    assert torch.equal(router(hidden), torch.full((2, 7), 3.0))
     router.set_answer_position(20)
-    assert router.active_bucket == "p6_plus"
-    assert torch.equal(router(hidden), torch.full((2, 7), 5.0))
+    assert router.active_bucket == "p2_plus"
+    assert torch.equal(router(hidden), torch.full((2, 7), 3.0))
 
 
 def test_vocabulary_prefix_head_slices_only_the_last_dimension():

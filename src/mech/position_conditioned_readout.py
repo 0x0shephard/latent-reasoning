@@ -37,9 +37,7 @@ class AnswerPositionBucket:
 DEFAULT_ANSWER_POSITION_BUCKETS = (
     AnswerPositionBucket("p0", 0, 1),
     AnswerPositionBucket("p1", 1, 2),
-    AnswerPositionBucket("p2", 2, 3),
-    AnswerPositionBucket("p3_5", 3, 6),
-    AnswerPositionBucket("p6_plus", 6, None),
+    AnswerPositionBucket("p2_plus", 2, None),
 )
 
 

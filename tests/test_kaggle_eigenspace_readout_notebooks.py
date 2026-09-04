@@ -80,6 +80,8 @@ def test_codi_position_conditioned_notebook_has_locality_controls_and_timing():
         "learned_position_local_onpolicy", "learned_global_r32",
         "permuted_position_local_onpolicy", "permuted_sources",
         "learned_global_r64", "DEFAULT_ANSWER_POSITION_BUCKETS",
+        "p2_plus", "MIN_FIT_STATES_PER_BUCKET = 64",
+        "MIN_SELECT_STATES_PER_BUCKET = 16",
         "answer_position_bucket", "confirmed_colon_pc_band_4_31",
         "first_token_control_reproduces_38_06_within_2_points",
         "microseconds_per_question", "microseconds_per_visible_token",

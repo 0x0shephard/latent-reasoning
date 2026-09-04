@@ -2,8 +2,14 @@
 
 ## Status
 
-Implemented and awaiting Kaggle execution. No result is claimed before the locked
-full-GSM8K run completes.
+Version 1 reached state collection and failed safely: the 1,024-question fit split
+contained 1,024 `p0` states, 1,024 `p1` states, 169 `p2` states, 92 states across
+positions 3–5, and only 2 states at position 6 or later. The 256-question selection
+split contained no position-6-or-later state. A separate tail expert was therefore
+unidentifiable.
+
+Version 2 is implemented with supportable buckets and awaits Kaggle execution. No
+outcome result is claimed before the locked full-GSM8K run completes.
 
 ## Motivation
 
@@ -22,14 +28,14 @@ tests whether later positions instead occupy different small readout spaces.
 | --- | --- |
 | `p0` | 0 |
 | `p1` | 1 |
-| `p2` | 2 |
-| `p3_5` | 3 through 5 |
-| `p6_plus` | 6 and later |
+| `p2_plus` | 2 and later |
 
 Bucket boundaries, ranks, epochs, and gates are frozen before the test outputs are
 read. Position zero uses the confirmed 28-dimensional PC 4–31 band. Every later
 bucket uses rank 32 selected from that bucket's own training-state covariance by
 readout-aware score. Learned arms distil the frozen original vocabulary logits.
+The notebook requires at least 64 fit, 16 selection, and 16 on-policy observations
+for every bucket and stops rather than fitting an unsupported expert.
 
 ## Leakage control
 
@@ -53,11 +59,11 @@ fitting or selection.
 | `fixed_position_local` | fixed rank 28 | bucket-specific fixed rank 32 | Test fixed local geometry |
 | `learned_position_local` | learned rank 28 | bucket-specific learned rank 32 | Test clean-trajectory distillation |
 | `learned_position_local_onpolicy` | learned rank 28 | bucket-specific learned rank 32 | Correct states visited after compressed decisions |
-| `permuted_position_local_onpolicy` | same learned rank 28 | permuted learned rank-32 experts | Equal-storage and equal-online-rank later-position specificity control |
+| `permuted_position_local_onpolicy` | same learned rank 28 | rank-32 `p1` and `p2_plus` experts exchanged | Equal-storage and equal-online-rank later-position specificity control |
 | `learned_global_r32` | learned rank 32 | same learned rank 32 | Equal online-rank, trajectory-aware global control |
 | `learned_global_r64` | learned rank 64 | same learned rank 64 | Higher-rank trajectory-aware global control |
 
-The local arm stores five experts but executes only one at each answer step. Its
+The local arm stores three experts but executes only one at each answer step. Its
 online arithmetic is therefore rank 28 or 32, while its stored parameter count is
 larger than a single global head. Both quantities are reported.
 

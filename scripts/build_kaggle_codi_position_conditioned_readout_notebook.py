@@ -38,14 +38,14 @@ claim. It compares:
 2. `first_token_pc4_31_then_full`: exact computational equivalent of the confirmed
    first-token intervention, followed by the full head;
 3. `same_pc4_31_everywhere`: the naive reuse of the colon basis at every answer step;
-4. `fixed_position_local`: independently fitted fixed bases for positions 0, 1, 2,
-   3–5, and 6+;
+4. `fixed_position_local`: independently fitted fixed bases for the first token,
+   second token, and all later tokens;
 5. `learned_position_local`: those local heads after clean-trajectory distillation;
 6. `learned_position_local_onpolicy`: the same heads after one compressed-rollout
    recovery round;
-7. `permuted_position_local_onpolicy`: the identical learned experts, with the four
-   later-position experts assigned to wrong buckets, controlling for stored parameter
-   count and per-position online rank;
+7. `permuted_position_local_onpolicy`: the identical learned experts, with the two
+   rank-32 later-position experts exchanged, controlling for stored parameter count
+   and per-position online rank;
 8. `learned_global_r32` and `learned_global_r64`: one learned head used everywhere.
 
 All bases and learned weights use GSM8K training questions only. Selection states are
@@ -58,7 +58,7 @@ six latent iterations, tokenizer, vocabulary, and greedy decoder stay frozen.
 Position locality is supported only if the on-policy local head beats the
 same-PC4–31-everywhere arm and the learned global rank-32 arm on paired exact match,
 while running faster than the full model. A local result must report its larger stored
-parameter count; selecting one rank-32 expert per token reduces computation, but five
+parameter count; selecting one rank-32 expert per token reduces computation, but three
 experts are stored.
 """)
 
@@ -78,6 +78,9 @@ FIT_QUESTIONS = 1024
 SELECT_QUESTIONS = 256
 ONPOLICY_QUESTIONS = 256
 MAX_STATES_PER_BUCKET = 4096
+MIN_FIT_STATES_PER_BUCKET = 64
+MIN_SELECT_STATES_PER_BUCKET = 16
+MIN_ONPOLICY_STATES_PER_BUCKET = 16
 POSITION_RANK = 32
 GLOBAL_RANKS = (32, 64)
 CLEAN_DISTILL_EPOCHS = 6
@@ -306,8 +309,17 @@ def collect_bucket_states(questions, output_head, tag):
     finally:
         base_model.set_output_embeddings(full_head)
     result = {}
+    required = {
+        "clean_fit": MIN_FIT_STATES_PER_BUCKET,
+        "clean_select": MIN_SELECT_STATES_PER_BUCKET,
+        "compressed_onpolicy": MIN_ONPOLICY_STATES_PER_BUCKET,
+    }[tag]
     for offset, name in enumerate(BUCKET_NAMES):
-        assert captured[name], f"{tag} produced no states for {name}"
+        observed = sum(len(block) for block in captured[name])
+        assert observed >= required, (
+            f"{tag} produced only {observed} states for {name}; at least {required} "
+            "are required to estimate and validate a local head"
+        )
         values = torch.cat(captured[name], dim=0)
         result[name] = cap_states(values, MAX_STATES_PER_BUCKET, SEED + 100 * offset)
     print(tag, {name: len(values) for name, values in result.items()})
@@ -427,10 +439,10 @@ onpolicy_position_router = PositionConditionedVocabularyHead(
 ).to(device)
 
 # Same learned parameters and rank at every position as the primary arm. Position zero
-# stays rank 28; the four rank-32 later experts are cyclically misassigned. This
-# distinguishes later-position matching from merely storing several experts.
+# stays rank 28; the two rank-32 later experts are exchanged. This distinguishes
+# later-position matching from merely storing several experts.
 permuted_sources = {
-    "p0": "p0", "p1": "p2", "p2": "p3_5", "p3_5": "p6_plus", "p6_plus": "p1",
+    "p0": "p0", "p1": "p2_plus", "p2_plus": "p1",
 }
 permuted_position_router = PositionConditionedVocabularyHead(
     {target: onpolicy_position_heads[source]
@@ -699,7 +711,7 @@ if generation_results:
     )
 
 summary = {
-    "experiment": "official_codi_position_conditioned_low_rank_readout_v1",
+    "experiment": "official_codi_position_conditioned_low_rank_readout_v2_supported_buckets",
     "code_commit": CODE_COMMIT, "checkpoint_sha256": load_report.checkpoint_sha256,
     "environment": {name: installed(name) for name in PINNED_PACKAGES},
     "inputs": {"reproduction_summary": REPRODUCTION_SUMMARY,
