@@ -28,6 +28,12 @@ All arms share the same merged-LoRA CODI transformer, body-only decoder, prompt
 preparation, maximum generation length, and greedy vocabulary boundary. Unsupported
 compiled or Triton arms are recorded rather than silently substituted.
 
+The compiled selector uses a dynamic batch dimension and a contiguous hidden-state
+view. Autoregressive transformer slices otherwise expose position-dependent strides
+that can force TorchDynamo to compile many equivalent graphs. If an optional compiled
+or Triton backend still fails during a real-decoder warmup, the notebook records the
+exception and continues with the dense and eager rank-96 controls.
+
 The first random-vector selector check is only an out-of-distribution smoke test and
 does not impose a top-1 agreement threshold. FP16 reduction order can change nearly
 tied argmaxes. The notebook subsequently measures agreement and eager-logit regret on

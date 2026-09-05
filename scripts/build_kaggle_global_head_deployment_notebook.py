@@ -287,7 +287,7 @@ class CompiledRankHead(nn.Module):
         self.core = CompiledArgmaxCore(source)
         # Bypass Module registration for the OptimizedModule; `core` owns the parameters.
         object.__setattr__(self, "_compiled_core", torch.compile(
-            self.core, mode=mode, fullgraph=True, dynamic=False,
+            self.core, mode=mode, fullgraph=True, dynamic=True,
         ))
 
     def forward(self, hidden):
@@ -295,7 +295,9 @@ class CompiledRankHead(nn.Module):
 
     def select_token(self, hidden, *, vocabulary_stop):
         assert int(vocabulary_stop) == self.vocabulary_size
-        return self._compiled_core(hidden)
+        # Transformer slices can have a different leading stride at each decoding
+        # position. Normalize the layout so Dynamo does not compile one graph per stride.
+        return self._compiled_core(hidden.contiguous())
 
 
 TRITON_AVAILABLE = False
@@ -651,16 +653,31 @@ def timed_generation(head, prepared):
     peak_increment = max(0, torch.cuda.max_memory_allocated(device) - before)
     return generated, elapsed, peak_increment
 
-# Compile/warm every shape before starting the clock.
+# Compile/warm every real decoding shape before starting the clock. Compiled and
+# custom-kernel arms are optional systems probes: a runtime/backend failure is recorded
+# and that arm is removed rather than invalidating the dense/eager experiment.
+runtime_unsupported = {}
 for batch in TIMING_BATCH_SIZES:
-    for name, head in arms.items():
+    for name, head in list(arms.items()):
+        if name in runtime_unsupported:
+            continue
         base_model.set_output_embeddings(head)
-        _ = generate_official_codi_fast(
-            model, tokenizer, prepared_warmup[batch],
-            latent_iterations=int(cfg.eval.latent_iterations), max_new_tokens=MAX_NEW_TOKENS,
-            device=device, answer_cue="The answer is:",
-        )
+        try:
+            _ = generate_official_codi_fast(
+                model, tokenizer, prepared_warmup[batch],
+                latent_iterations=int(cfg.eval.latent_iterations), max_new_tokens=MAX_NEW_TOKENS,
+                device=device, answer_cue="The answer is:",
+            )
+        except Exception as error:
+            if name in {"dense_fp16", "rank96_eager"}:
+                raise
+            runtime_unsupported[name] = repr(error)
 torch.cuda.synchronize()
+for name, error in runtime_unsupported.items():
+    arm_errors[name] = f"real-decoder warmup failed: {error}"
+    arms.pop(name, None)
+assert "dense_fp16" in arms and "rank96_eager" in arms
+print({"timed_arms": list(arms), "runtime_unsupported": runtime_unsupported})
 
 timing_raw = {name: {str(batch): [] for batch in TIMING_BATCH_SIZES} for name in arms}
 for batch in TIMING_BATCH_SIZES:
