@@ -26,7 +26,7 @@ def test_deployment_notebook_and_builder_exist_and_parse():
 
 def test_deployment_notebook_reuses_the_locked_rank96_artifact():
     text = notebook_text()
-    assert 'RUN_COMMIT = "48d7c2d"' in text
+    assert 'RUN_COMMIT = "bb373cd"' in text
     assert "global_low_rank_head.pt" in text
     assert "RANK = 96" in text
     assert "prior_retention >= 0.98" in text
