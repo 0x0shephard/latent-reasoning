@@ -52,9 +52,8 @@ before evaluation. The test set is used once for the locked comparisons.
 markdown("## 1. Configuration and immutable source checkout")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-# This commit contains every dependency used below. The new bridge utility is also
-# included inline as a compatibility fallback until its source commit is published.
-RUN_COMMIT = "e1c291a"
+# Immutable implementation commit containing the bridge utility used below.
+RUN_COMMIT = "0d04b20"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""

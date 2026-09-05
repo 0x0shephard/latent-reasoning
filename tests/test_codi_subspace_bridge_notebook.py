@@ -25,7 +25,7 @@ def test_bridge_notebook_and_builder_exist_and_parse():
 
 def test_bridge_notebook_reuses_frozen_artifacts_without_training():
     text = notebook_text()
-    assert 'RUN_COMMIT = "e1c291a"' in text
+    assert 'RUN_COMMIT = "0d04b20"' in text
     assert "colon_states_seed89/colon_states.pt" in text
     assert "global_low_rank_head.pt" in text
     assert "PRIMARY_BAND = (4, 32)" in text
