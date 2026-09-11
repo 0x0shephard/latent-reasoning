@@ -62,7 +62,7 @@ run as a dataset, attach the completed datasets to a final aggregation run, set
 markdown("## Configuration")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the immutable commit printed after this notebook is pushed.
+RUN_COMMIT = "e2f7336"  # Immutable cross-model benchmark implementation commit.
 REPO_DIR = "/kaggle/working/latent-reasoning"
 OUTPUT_ROOT = "/kaggle/working/cross_model_global_head"
 
