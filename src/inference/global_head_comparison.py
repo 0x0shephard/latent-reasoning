@@ -38,8 +38,9 @@ class Timeline:
         row = dict(self.context, trace_id=self.trace_id, event_id=self.counter,
                    parent_id=self.stack[-1] if self.stack else None,
                    name=name, kind=kind, **extra)
-        marker = torch.profiler.record_function(name)
-        marker.__enter__()
+        marker = None if self.unified_clock else torch.profiler.record_function(name)
+        if marker is not None:
+            marker.__enter__()
         row['_wall_start'] = time.perf_counter()
         events = None
         if (gpu or self.unified_clock) and self.device.type == 'cuda':
@@ -55,7 +56,8 @@ class Timeline:
         if events:
             events[1].record()
         row['cpu_wall_ms'] = (time.perf_counter() - row.pop('_wall_start')) * 1000
-        marker.__exit__(None, None, None)
+        if marker is not None:
+            marker.__exit__(None, None, None)
         if self.stack and self.stack[-1] == row['event_id']:
             self.stack.pop()
         self.pending.append((row, events))
@@ -336,7 +338,7 @@ BREAKDOWN_ROWS = (
     'Input transfer to GPU', 'Embeddings',
     *(f'Transformer block {i + 1:02d}' for i in range(12)),
     'Transformer final norm', 'Transformer masks / bookkeeping',
-    'Latent projector', 'Low-rank LM head', 'Argmax / head dispatch',
+    'Latent projector', 'LM head', 'Argmax / head dispatch',
     'Token buffers / cache updates', 'EOS check / synchronization',
     'Output transfer to CPU', 'Text decoding', 'Python / tracing gaps',
 )
@@ -356,7 +358,7 @@ def _category(row, ancestors):
         if name.startswith('projector'):
             return 'Latent projector'
         if name.startswith('lm_head') and name != 'lm_head_and_argmax':
-            return 'Low-rank LM head'
+            return 'LM head'
     name = row['name']
     if name in ('load_question', 'question_normalization', 'question_tokenization', 'answer_cue_tokenization'):
         return 'Question loading / tokenization'
@@ -418,8 +420,13 @@ def partition_question(events):
                 breakdown=[dict(name=name, phase=phase, ms=value) for (name, phase), value in values.items()])
 
 
-def bottleneck_means(samples):
-    """Four data columns, means per question (including zero-work questions)."""
+def bottleneck_means(samples, *, per_token=False):
+    """Question means or aggregate time / native generated-step count.
+
+    Token units: explicit = visible output token; CODI overall = latent + visible
+    step; CODI latent = latent step; CODI visible = visible output token. Prompt and
+    forced cue work are amortized, not added to the generated-step denominator.
+    """
     groups = {mode: [s for s in samples if s['mode'] == mode] for mode in ('explicit_cot', 'codi')}
     if any(not group for group in groups.values()):
         raise ValueError('Both reasoning modes need timing samples')
@@ -427,37 +434,54 @@ def bottleneck_means(samples):
     totals = dict.fromkeys(COLUMNS, 0.0)
     for mode, group in groups.items():
         overall = 'Explicit' if mode == 'explicit_cot' else 'CODI overall'
+        if per_token:
+            visible = sum(s['visible_tokens'] for s in group)
+            latent = sum(s['latent_steps'] for s in group)
+            denominators = {overall: visible + latent if mode == 'codi' else visible,
+                            'CODI latent only': latent, 'CODI visible only': visible}
+            if denominators[overall] <= 0 or (mode == 'codi' and min(latent, visible) <= 0):
+                raise ValueError('Per-token reporting needs positive generated-step counts')
+        else:
+            denominators = dict.fromkeys(COLUMNS, len(group))
         for sample in group:
-            totals[overall] += sample['total_ms'] / len(group)
+            totals[overall] += sample['total_ms'] / denominators[overall]
             for item in sample['breakdown']:
-                value = item['ms'] / len(group)
+                value = item['ms'] / denominators[overall]
                 rows[item['name']][overall] += value
                 if mode == 'codi' and item['phase'] in ('latent', 'visible'):
                     column = 'CODI latent only' if item['phase'] == 'latent' else 'CODI visible only'
-                    rows[item['name']][column] += value
-                    totals[column] += value
-    return [('Total average time', totals), *rows.items(), ('Total average time (repeat)', dict(totals))]
+                    phase_value = item['ms'] / denominators[column]
+                    rows[item['name']][column] += phase_value
+                    totals[column] += phase_value
+    label = 'Total average time per token/step' if per_token else 'Total average time'
+    return [(label, totals), *rows.items(), (label + ' (repeat)', dict(totals))]
 
 
 @torch.inference_mode()
 def profile_question(model, tokenizer, head, question, *, mode, device, max_new_tokens,
-                     question_id=0, repeat=0):
-    """One batch-1 sample, retaining every module call for optional inspection."""
+                     question_id=0, repeat=0, arm='rank96', latent_iterations=6):
+    """One batch-1 sample; only displayed components receive module hooks."""
     device = torch.device(device)
     timeline = Timeline(device, unified_clock=True)
-    timeline.context.update(mode=mode, question_id=question_id, repeat=repeat, phase='shared')
+    timeline.context.update(mode=mode, arm=arm, question_id=question_id, repeat=repeat, phase='shared')
     base = official_codi_base_model(model)
     if device.type == 'cuda':
         torch.cuda.synchronize(device)
-    with timeline.modules([('transformer', base.transformer), ('projector', model.prj), ('lm_head', head)]):
+    roots = [(f'transformer.h.{i}', block) for i, block in enumerate(base.transformer.h)]
+    roots += [('transformer.' + name, getattr(base.transformer, name))
+              for name in ('wte', 'wpe', 'ln_f') if hasattr(base.transformer, name)]
+    roots += [('projector', model.prj), ('lm_head', head)]
+    with timeline.modules(roots, recursive=False):
         with timeline.span('question_total'):
             with timeline.span('load_question', gpu=False):
                 questions = [str(question)]
             batches = prepare_questions(tokenizer, questions, 1, timeline)
             result = decode(model, tokenizer, batches, head, mode=mode, device=device,
-                            max_new_tokens=max_new_tokens, timeline=timeline)
+                            max_new_tokens=max_new_tokens, latent_iterations=latent_iterations, timeline=timeline)
     timeline.resolve()
     sample = partition_question(timeline.records)
-    sample.update(tokens=list(result.token_ids[0]), text=result.texts[0],
+    sample.update(arm=arm, tokens=list(result.token_ids[0]), text=result.texts[0],
+                  prompt_tokens=int(batches[0].mask.sum()),
+                  latent_steps=latent_iterations if mode == 'codi' else 0,
                   visible_tokens=result.generated_token_counts[0])
     return sample, timeline.records

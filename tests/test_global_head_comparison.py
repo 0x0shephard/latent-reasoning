@@ -118,12 +118,12 @@ def test_partition_does_not_double_count_layers_and_uses_one_clock():
 
 
 def test_means_count_zero_work_questions_in_denominator():
-    samples=[dict(mode=mode,total_ms=6.,breakdown=[dict(name='Low-rank LM head',phase='visible',ms=6.)])
+    samples=[dict(mode=mode,total_ms=6.,breakdown=[dict(name='LM head',phase='visible',ms=6.)])
              for mode in ('codi','explicit_cot')]
     samples.append(dict(mode='codi',total_ms=0.,breakdown=[]))
     table=dict(bottleneck_means(samples))
-    assert table['Low-rank LM head']['CODI overall']==3.
-    assert table['Low-rank LM head']['Explicit']==6.
+    assert table['LM head']['CODI overall']==3.
+    assert table['LM head']['Explicit']==6.
 
 
 def test_notebook_compiles_and_embeds_current_runtime():
@@ -137,7 +137,9 @@ def test_notebook_compiles_and_embeds_current_runtime():
     combined='\n'.join(sources)
     assert 'REPRODUCTION_SUMMARY' not in combined
     assert 'explicit_cot' in combined and "'T4' in torch.cuda.get_device_name(0)" in combined
-    assert 'runtime.bottleneck_means(profile_samples)' in combined
+    assert 'runtime.bottleneck_means(samples,per_token=per_token)' in combined
+    assert "assert len(test_rows)==1319" in combined
+    assert "answers_match(result.texts[0],row['gold'])" in combined
     assert 'TRY_TRITON' not in combined and 'TIMING_BATCH_SIZES' not in combined
     assert "'datasets==" not in combined and "'pandas==" not in combined
     assert 'huggingface_hub>=0.34.0,<1.0' in combined and 'hf_xet' in combined
@@ -186,6 +188,8 @@ def test_notebook_fitting_and_four_column_report_with_synthetic_cpu_model(tmp_pa
     notebook=json.loads((ROOT/'notebooks/kaggle_codi_vs_explicit_cot_global_head_profile.ipynb').read_text(encoding='utf-8'))
     sources=[''.join(c['source']) for c in notebook['cells'] if c['cell_type']=='code']
     rows=[dict(question=f'question {i}',gold='2') for i in range(24)]
+    displayed=[]
+    test_rows=[dict(question=f'test question {i}',gold='2' if i==0 else '999') for i in range(4)]
     scope=dict(runtime=runtime,torch=torch,pd=pd,time=time,gc=gc,gzip=gzip,pathlib=pathlib,json=json,random=random,
         asdict=asdict,NestedLowRankVocabularyHead=NestedLowRankVocabularyHead,
         activation_whitened_factors=activation_whitened_factors,distil_nested_head=distil_nested_head,
@@ -197,7 +201,7 @@ def test_notebook_fitting_and_four_column_report_with_synthetic_cpu_model(tmp_pa
         MAX_NEW_TOKENS={'codi':4,'explicit_cot':4},COLLECT_BATCH_SIZE=4,DISTILL_BATCH_SIZE=4,
         MAX_FIT_STATES=16,MAX_SELECT_STATES=8,MAX_RECOVERY_STATES=8,CLEAN_EPOCHS=1,RECOVERY_EPOCHS=1,
         TIMING_REPEATS=2,DEPLOY_DTYPE=torch.float32,DEBUG_PATH=tmp_path/'debug.jsonl.gz',
-        EXPERIMENT_SOURCE_SHA256='synthetic',display=lambda x:None,
+        EXPERIMENT_SOURCE_SHA256='synthetic',display=displayed.append,test_rows=test_rows,
         splits=dict(fit=rows[:8],selection=rows[8:12],recovery=rows[12:16],timing=rows[16:20],warmup=rows[20:]),
         save_json=save_json,save_pt=lambda path,value:torch.save(value,path))
     def debug_record(kind,value):
@@ -215,22 +219,34 @@ def test_notebook_fitting_and_four_column_report_with_synthetic_cpu_model(tmp_pa
     summary=next(s for s in sources if 'report=runtime.bottleneck_means' in s)
     exec(compile(benchmark,'benchmark-cell','exec'),scope)
     exec(compile(summary,'summary-cell','exec'),scope)
-    table=pd.read_csv(tmp_path/'bottleneck.csv',index_col=0)
-    assert list(table.columns)==list(COLUMNS)
-    assert len(list(tmp_path.glob('*.csv')))==1
-    assert len(scope['profile_samples'])==16
+    accuracy=next(s for s in sources if 'accuracy_results={}' in s)
+    exec(compile(accuracy,'accuracy-cell','exec'),scope)
+    assert len(displayed)==4
+    assert set(scope['tables'])=={'dense_per_question','rank96_per_question','dense_per_token','rank96_per_token'}
+    saved=json.loads((tmp_path/'timing_tables.json').read_text())
+    assert set(saved)==set(scope['tables'])
+    assert len(list(tmp_path.glob('*.csv')))==0
+    assert len(scope['profile_samples'])==32
     assert len(scope['clean_samples'])==32
-    assert set(row['mode'] for row in scope['profile_samples'])=={'codi','explicit_cot'}
-    for column in COLUMNS:
-        assert abs(table[column].iloc[1:-1].sum()-table[column].iloc[0])<0.0001
-        assert table[column].iloc[0]==table[column].iloc[-1]
-    assert table.loc['Low-rank LM head','CODI latent only']==0
-    assert table.loc['Latent projector','Explicit']==0
+    assert set(row['arm'] for row in scope['profile_samples'])=={'dense','rank96'}
+    for table in displayed:
+        assert list(table.columns)==list(COLUMNS)
+        for column in COLUMNS:
+            assert abs(table[column].iloc[1:-1].sum()-table[column].iloc[0])<0.0001
+            assert table[column].iloc[0]==table[column].iloc[-1]
+        assert table.loc['LM head','CODI latent only']==0
+        assert table.loc['Latent projector','Explicit']==0
     records=[json.loads(line) for line in gzip.open(scope['DEBUG_PATH'],'rt')]
     traces=[r['data'] for r in records if r['kind']=='events']
-    assert len(traces)==16
+    assert len(traces)==32
     assert any(r['name']=='transformer.h.11' for trace in traces for r in trace)
     assert all(not module._forward_hooks for module in model.modules())
+    for arm in ('dense','rank96'):
+        assert scope['accuracy_results']['codi',arm]['accuracy']==0.25
+        assert scope['accuracy_results']['explicit_cot',arm]['accuracy']==0
+    predictions=[r['data'] for r in records if r['kind']=='accuracy_sample']
+    assert len(predictions)==16  # no timing-repeat duplication or train-question evaluation
+    assert sum(r['correct'] for r in predictions)==2
     # Re-running fitting with the same fingerprint reuses completed head artifacts.
     monkeypatch.setattr(runtime,'decode',lambda *a,**k: (_ for _ in ()).throw(AssertionError('cached fit decoded')))
     scope['weight']=model.codi.lm_head.weight[:119].detach(); scope['bias']=None
@@ -286,3 +302,21 @@ def test_native_gpt2_cache_matches_legacy_codi_and_hf_explicit_generation():
                                       mode=mode,device='cpu',max_new_tokens=6)
         assert sample['total_ms']>0 and len(events)>20
         assert abs(sum(r['ms'] for r in sample['breakdown'])-sample['total_ms'])<0.0001
+
+
+def test_per_token_tables_use_native_steps_and_pooled_counts():
+    codi=[dict(mode='codi',total_ms=24.,visible_tokens=3,latent_steps=6,
+               breakdown=[dict(name='Python / tracing gaps',phase='shared',ms=3.),
+                          dict(name='Latent projector',phase='latent',ms=12.),
+                          dict(name='LM head',phase='visible',ms=9.)]),
+          dict(mode='codi',total_ms=18.,visible_tokens=1,latent_steps=6,
+               breakdown=[dict(name='Python / tracing gaps',phase='shared',ms=3.),
+                          dict(name='Latent projector',phase='latent',ms=12.),
+                          dict(name='LM head',phase='visible',ms=3.)])]
+    explicit=[dict(mode='explicit_cot',total_ms=t,visible_tokens=n,latent_steps=0,
+                   breakdown=[dict(name='LM head',phase='visible',ms=t)]) for t,n in [(10.,1),(30.,9)]]
+    table=bottleneck_means(codi+explicit,per_token=True)
+    totals=table[0][1]
+    assert totals=={'Explicit':4.,'CODI overall':42/16,'CODI latent only':2.,'CODI visible only':3.}
+    for column in COLUMNS:
+        assert abs(sum(values[column] for _,values in table[1:-1])-totals[column])<1e-10

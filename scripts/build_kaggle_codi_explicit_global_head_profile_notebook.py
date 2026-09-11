@@ -1,4 +1,4 @@
-"""Build the self-contained T4 notebook with one four-column bottleneck table."""
+"""Build the self-contained T4 notebook with four before/after bottleneck tables."""
 from pathlib import Path
 import hashlib
 import json
@@ -16,9 +16,14 @@ md('''# Where does the time go? Explicit GPT-2 vs CODI
 **Kaggle: Settings → Accelerator → GPU T4 x2; Internet on; Run All.** One T4 is used.
 No attachments, old summaries, settings changes, or prior fitted heads are needed.
 
-The final output is one table: **Explicit | CODI overall | CODI latent only | CODI visible only**.
-Every value is mean **milliseconds per question**, with the total at the top and bottom.
-The rows cover all 12 transformer blocks, the head, transfers, text preparation, and runtime overhead.
+The output is four tables, each with **Explicit | CODI overall | CODI latent only | CODI visible only**:
+1. Before compression: mean ms/question.
+2. After rank-96 compression: mean ms/question.
+3. Before compression: mean ms/generated token or latent step.
+4. After compression: mean ms/generated token or latent step.
+
+Totals appear at the top and bottom. Accuracy before/after is evaluated on all **1,319
+GSM8K test questions**, separately from timing and training. Only two heads are compared.
 
 This runs the PDF's **rank-96 global head, eager PyTorch, FP16, batch 1**. Both paths use
 CODI's released GPT-2 weights: explicit generates the teacher-style reasoning text;
@@ -101,6 +106,7 @@ from src.models.official_codi import (
 from src.inference.official_codi_fast import (
     generate_official_codi_fast,prepare_official_codi_batches,merge_official_codi_lora_)
 from src.utils.config import load_config
+from src.data.answer_extract import answers_match,normalize_gold
 assert torch.cuda.is_available(),'Select Settings > Accelerator > GPU T4 x2.'
 assert 'T4' in torch.cuda.get_device_name(0),'Select GPU T4 x2 in Kaggle settings and restart the session.'
 device=torch.device('cuda:0')
@@ -109,7 +115,7 @@ torch.manual_seed(SEED); random.seed(SEED)
 config=dict(seed=SEED,fit=FIT_QUESTIONS,selection=SELECT_QUESTIONS,recovery=RECOVERY_QUESTIONS,
     state_caps=[MAX_FIT_STATES,MAX_SELECT_STATES,MAX_RECOVERY_STATES],ranks=RANKS,
     epochs=[CLEAN_EPOCHS,RECOVERY_EPOCHS],token_caps=MAX_NEW_TOKENS,
-    questions=TIMING_QUESTIONS,repeats=TIMING_REPEATS,batch_size=1,head='rank96_eager',
+    questions=TIMING_QUESTIONS,repeats=TIMING_REPEATS,batch_size=1,heads=['dense','rank96_eager'],accuracy='full_gsm8k_test',
     base=BASE_COMMIT,source=EXPERIMENT_SOURCE_SHA256,torch=torch.__version__,cuda=torch.version.cuda,
     packages={name:version(name) for name in ('transformers','peft','huggingface_hub','hf_xet','accelerate')},
     gpu=torch.cuda.get_device_name(0))
@@ -164,6 +170,15 @@ with setup.span('gsm8k_download_parse_and_partition',gpu=False):
         splits[name]=rows[start:start+size]; start+=size
     assert start<=len(rows)
     debug_record('partitions',splits)
+with setup.span('gsm8k_test_download_and_parse',gpu=False):
+    with urlopen(url.replace('train.jsonl','test.jsonl'),timeout=300) as response:
+        test=[json.loads(line) for line in response if line.strip()]
+    test_rows=[dict(question=str(row['question']),gold=str(normalize_gold(row['answer'],'gsm8k_main'))) for row in test]
+    assert len(test_rows)==1319 and all(row['gold']!='None' for row in test_rows)
+    train_keys={' '.join(r['question'].casefold().split()) for r in train}
+    assert not train_keys & {' '.join(r['question'].casefold().split()) for r in test_rows}
+    debug_record('accuracy_questions',test_rows)
+
 with setup.span('config_load',gpu=False): cfg=load_config('configs/official_codi_gpt2.yaml')
 with setup.span('checkpoint_download_and_hash',gpu=False):
     checkpoint=download_official_checkpoint(repo_id=cfg.checkpoint.repo_id,revision=cfg.checkpoint.revision,
@@ -288,7 +303,7 @@ del weight,bias
 flush_setup()
 ''')
 md('''Measure batch-1 generation on the same 16 held-out questions, repeated three times.
-Only rank 96 receives detailed profiling. Dense generation supplies a brief unprofiled reference.
+Both heads receive the same clean timing and lightweight component profiling. The decoder is identical; only the LM head changes.
 ''')
 code(r'''
 # Timing runner: only one deployed method, one batch size, and two reasoning modes.
@@ -318,9 +333,10 @@ with setup.span('generation_warmup'):
     for mode in MODES:
         for row in splits['warmup']:
             for head in (dense,heads[mode]): clean_generation(mode,head,row['question'])
-        # Warm the instrumented path too; discard this trace.
-        runtime.profile_question(model,tokenizer,heads[mode],splits['warmup'][0]['question'],
-            mode=mode,device=device,max_new_tokens=MAX_NEW_TOKENS[mode])
+        # Warm both instrumented paths; discard these traces.
+        for arm,head in [('dense',dense),('rank96',heads[mode])]:
+            runtime.profile_question(model,tokenizer,head,splits['warmup'][0]['question'],
+                mode=mode,device=device,max_new_tokens=MAX_NEW_TOKENS[mode],arm=arm)
 flush_setup()
 
 clean_samples=[]
@@ -339,63 +355,119 @@ for repeat in range(TIMING_REPEATS):
                      visible_tokens=result.generated_token_counts[0],tokens=list(result.token_ids[0]),text=result.texts[0])
             clean_samples.append(row)
             debug_record('clean_sample',row)
-            if arm=='rank96': expected[mode,i]=row['tokens']
+            expected[mode,arm,i]=row['tokens']
     for mode,i in jobs:
-        sample,events=runtime.profile_question(model,tokenizer,heads[mode],splits['timing'][i]['question'],
-            mode=mode,device=device,max_new_tokens=MAX_NEW_TOKENS[mode],question_id=i,repeat=repeat)
-        assert sample['tokens']==expected[mode,i],'Instrumentation changed generated tokens'
-        profile_samples.append(sample)
-        debug_record('profile_sample',sample)
-        debug_record('events',events)
-        del events
+        arms=[('dense',dense),('rank96',heads[mode])]; rng.shuffle(arms)
+        for arm,head in arms:
+            sample,events=runtime.profile_question(model,tokenizer,head,splits['timing'][i]['question'],
+                mode=mode,device=device,max_new_tokens=MAX_NEW_TOKENS[mode],question_id=i,repeat=repeat,arm=arm)
+            assert sample['tokens']==expected[mode,arm,i],'Instrumentation changed generated tokens'
+            profile_samples.append(sample)
+            debug_record('profile_sample',sample)
+            debug_record('events',events)
+            del events
     print(f'Timing repeat {repeat+1}/{TIMING_REPEATS} complete.',flush=True)
 ''')
-md('''**Reading the table:** mean ms/question, using instrumented elapsed time on one CUDA stream.
-Parent/child intervals are partitioned so each column adds to its total. Host-induced GPU
-idle time is included; these are not pure kernel execution times. Profiling itself adds overhead.
+md('''**Reading the tables:** these are profiled elapsed times, including CPU dispatch and
+GPU idle intervals. Hooks cover the 12 whole blocks and displayed components, without
+recursively instrumenting their internal modules. Clean wall-time means are printed too.
 
-CODI latent = its six reasoning passes and projector; visible = answer cue, answer tokens,
-and output handling. Overall also includes shared prompt loading, tokenization, transfer,
-and prefill. Downloads and head fitting are one-time setup costs, outside the per-question total.
+**CODI overall = shared prompt work + latent + visible.** Shared work is preparation,
+transfer, prompt prefill and surrounding runtime overhead; its time is already included
+in the component rows. The equation above each question table makes it explicit.
+
+**Per-token denominators:** Explicit / visible = generated visible tokens, including EOS;
+latent = six latent steps; CODI overall = latent + visible steps. Prompt/cue work is
+amortized over those steps. We divide summed time by summed step count, not average
+unequally weighted per-question ratios. Per-token columns have different denominators
+and should not be added together. No forced cue or prompt tokens enter the denominator.
 ''')
 code(r'''
-# The single main result table: exactly four numeric columns, means only.
-report=runtime.bottleneck_means(profile_samples)
-bottleneck=pd.DataFrame([values for _,values in report],index=[name for name,_ in report],columns=runtime.COLUMNS)
-bottleneck.index.name='Mean ms per question'
-assert all(abs(bottleneck.iloc[1:-1][c].sum()-bottleneck.iloc[0][c])<0.05 for c in runtime.COLUMNS)
-with pd.option_context('display.max_rows',None,'display.max_columns',4,'display.width',160,'display.float_format',lambda x:f'{x:.3f}'):
-    display(bottleneck)
-# The same table is saved once; individual cases stay in one optional debug file.
-bottleneck.to_csv(RUN_DIR/'bottleneck.csv')
+# Four tables, four numeric columns each; no backend or batch-size sweep.
+tables={}
+for per_token in (False,True):
+    for arm,label in [('dense','Before: normal dense LM head'),('rank96','After: rank-96 global LM head')]:
+        samples=[s for s in profile_samples if s['arm']==arm]
+        report=runtime.bottleneck_means(samples,per_token=per_token)
+        table=pd.DataFrame([values for _,values in report],index=[name for name,_ in report],columns=runtime.COLUMNS)
+        table.index.name='Mean ms / token or latent step' if per_token else 'Mean ms / question'
+        key=arm+('_per_token' if per_token else '_per_question')
+        tables[key]=table
+        assert all(abs(table.iloc[1:-1][c].sum()-table.iloc[0][c])<0.05 for c in runtime.COLUMNS)
+        print(label+' - '+table.index.name)
+        codi=[s for s in samples if s['mode']=='codi']
+        if not per_token:
+            shared=sum(item['ms'] for sample in codi for item in sample['breakdown'] if item['phase']=='shared')/len(codi)
+            total=table.iloc[0]
+            assert abs(total['CODI overall']-shared-total['CODI latent only']-total['CODI visible only'])<0.05
+            print(f"CODI: {total['CODI overall']:.3f} = {shared:.3f} shared + "
+                  f"{total['CODI latent only']:.3f} latent + {total['CODI visible only']:.3f} visible ms/question.")
+        else:
+            visible=sum(s['visible_tokens'] for s in codi)/len(codi)
+            latent=sum(s['latent_steps'] for s in codi)/len(codi)
+            print(f'CODI denominators per question: {latent:.0f} latent + {visible:.2f} visible = {latent+visible:.2f} overall steps.')
+        with pd.option_context('display.max_rows',None,'display.max_columns',4,'display.width',160,'display.float_format',lambda x:f'{x:.3f}'):
+            display(table)
+save_json(RUN_DIR/'timing_tables.json',{key:table.to_dict(orient='split') for key,table in tables.items()})
 for mode,label in [('explicit_cot','Explicit'),('codi','CODI')]:
     means={arm:sum(r['ms'] for r in clean_samples if r['mode']==mode and r['arm']==arm)/
         sum(r['mode']==mode and r['arm']==arm for r in clean_samples) for arm in ('dense','rank96')}
     lengths={arm:sum(r['visible_tokens'] for r in clean_samples if r['mode']==mode and r['arm']==arm)/
         sum(r['mode']==mode and r['arm']==arm for r in clean_samples) for arm in ('dense','rank96')}
-    print(f"{label}, without profiler: dense {means['dense']:.2f} → rank 96 {means['rank96']:.2f} ms/question; "
-          f"mean visible tokens {lengths['dense']:.1f} → {lengths['rank96']:.1f}.")
-    capped=sum(r['tokens'][-1]!=tokenizer.eos_token_id for r in clean_samples if r['mode']==mode and r['arm']=='rank96')
-    if capped: print(f'{label}: {capped} measured generations reached the token cap; interpret timings with that in mind.')
-print('Dense and rank-96 totals use their own generated sequences; differing lengths affect latency.')
-# A concise setup total; individual setup operations are available in debug.jsonl.gz.
-setup_ms=0
-with gzip.open(DEBUG_PATH,'rt') as stream:
-    for line in stream:
-        record=json.loads(line)
-        if record['kind']=='setup': setup_ms+=record['data']['cpu_wall_ms']
-print(f'One-time setup and fitting: {setup_ms/60000:.1f} minutes. Raw values: {DEBUG_PATH}')
+    inflation={arm:sum(r['total_ms'] for r in profile_samples if r['mode']==mode and r['arm']==arm)/
+        sum(r['mode']==mode and r['arm']==arm for r in profile_samples)/means[arm] for arm in ('dense','rank96')}
+    prompts=[s['prompt_tokens'] for s in profile_samples if s['mode']==mode and s['arm']=='dense']
+    print(f"{label}, WITHOUT profiler: dense {means['dense']:.2f} -> rank96 {means['rank96']:.2f} ms/question; "
+          f"mean visible tokens {lengths['dense']:.1f} -> {lengths['rank96']:.1f}; mean prompt tokens {sum(prompts)/len(prompts):.1f}.")
+    print(f"  Profiler inflation: dense {inflation['dense']:.2f}x; rank96 {inflation['rank96']:.2f}x. Component times include this overhead.")
+    for arm in ('dense','rank96'):
+        capped=sum(r['tokens'][-1]!=tokenizer.eos_token_id for r in clean_samples if r['mode']==mode and r['arm']==arm)
+        if capped: print(f'  {arm}: {capped} timed generations reached the token cap.')
+print('Free-generation timings can change when output lengths/answers change. Accuracy is measured next.')
 ''')
-md('''Optional inspection stays inside this notebook. Run this only when debugging a question:
+md('Evaluate final-answer numeric exact match on the full GSM8K test set, once per model/head, without profiling. No test question is used to fit a head.')
+code(r'''
+# Accuracy is generation accuracy, not agreement with the dense head.
+# Batch 1 matches timing and avoids changing padding/cache behavior for this check.
+accuracy_results={}
+with torch.inference_mode():
+    for mode in MODES:
+        for arm,head in [('dense',dense),('rank96',heads[mode])]:
+            correct=0; capped=0
+            for i,row in enumerate(test_rows):
+                batches=runtime.prepare_questions(tokenizer,[row['question']],1)
+                result=runtime.decode(model,tokenizer,batches,head,mode=mode,device=device,max_new_tokens=MAX_NEW_TOKENS[mode])
+                matched=answers_match(result.texts[0],row['gold'])
+                hit_cap=result.token_ids[0][-1]!=tokenizer.eos_token_id
+                correct+=int(matched); capped+=int(hit_cap)
+                debug_record('accuracy_sample',dict(mode=mode,arm=arm,question_id=i,gold=row['gold'],
+                    text=result.texts[0],tokens=list(result.token_ids[0]),correct=bool(matched),hit_cap=bool(hit_cap)))
+                if (i+1)%256==0: print(f'Accuracy {mode}/{arm}: {i+1}/{len(test_rows)}',flush=True)
+            accuracy_results[mode,arm]=dict(correct=correct,total=len(test_rows),accuracy=correct/len(test_rows),capped=capped)
+            debug_record('accuracy_result',dict(mode=mode,arm=arm,**accuracy_results[mode,arm]))
+print(f'GSM8K test accuracy - {len(test_rows)} questions, numeric exact match:')
+for mode,label in [('explicit_cot','Explicit'),('codi','CODI')]:
+    before,after=accuracy_results[mode,'dense'],accuracy_results[mode,'rank96']
+    print(f"{label}: dense {before['accuracy']:.2%} ({before['correct']}/{before['total']}) -> "
+          f"rank96 {after['accuracy']:.2%} ({after['correct']}/{after['total']}); "
+          f"change {100*(after['accuracy']-before['accuracy']):+.2f} percentage points.")
+    if before['capped'] or after['capped']:
+        print(f"  Reached token cap: dense {before['capped']}; rank96 {after['capped']}. Scored with the same answer extractor.")
+print(f'Four timing tables are in `tables`; individual measurements and accuracy predictions are in {DEBUG_PATH}.')
+''')
+md('''Optional inspection stays inside the notebook. The four DataFrames are in `tables`,
+per-question measurements in `profile_samples`, unprofiled results in `clean_samples`,
+and accuracy in `accuracy_results`. No CSV downloads are required.
 ```python
-# All named submodules, token positions and individual CPU/CUDA event values for one question.
+# Every recorded component/stage call for CODI, after compression, question 0.
 with gzip.open(DEBUG_PATH, 'rt') as stream:
     events = next(r['data'] for line in stream if (r := json.loads(line))['kind'] == 'events'
-                  and r['data'][0]['mode'] == 'codi' and r['data'][0]['question_id'] == 0)
-pd.DataFrame(events)  # filter name, phase or token_position here
+                  and r['data'][0]['mode'] == 'codi' and r['data'][0]['arm'] == 'rank96'
+                  and r['data'][0]['question_id'] == 0)
+pd.DataFrame(events)  # filter name, phase or token_position
 ```
-The four-column table is also available as `bottleneck`; per-question rows as
-`profile_samples`; clean baseline measurements as `clean_samples`. No CSV downloads are required.
+The log also retains each setup operation, dataset partition, model/head report,
+package version, generated answer, gold answer, and correctness decision.
 ''')
 for index,cell in enumerate(cells): cell['id']=f'bottleneck-{index:03d}'
 notebook=dict(nbformat=4,nbformat_minor=5,cells=cells,metadata=dict(
