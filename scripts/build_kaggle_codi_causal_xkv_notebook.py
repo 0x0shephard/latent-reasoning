@@ -40,7 +40,7 @@ until that operator is fused into an attention kernel.
 md("## 1. Setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"
+RUN_COMMIT = "6e172775ead54be5f8917ee403e893e9ed42932d"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""
 LAYERWISE_ARTIFACT_INPUT = ""

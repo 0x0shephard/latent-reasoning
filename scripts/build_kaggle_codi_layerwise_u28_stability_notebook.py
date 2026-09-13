@@ -46,7 +46,7 @@ or speed result. Use a GPU with Internet enabled and **Save & Run All**.
 md("## 1. Configuration and immutable inputs")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replace with the pushed immutable commit for the final run.
+RUN_COMMIT = "6e172775ead54be5f8917ee403e893e9ed42932d"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""
 COLON_STATES_INPUT = ""
