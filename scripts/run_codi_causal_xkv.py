@@ -101,7 +101,11 @@ def run(args) -> dict:
     cfg = load_config(args.config)
     reproduction = verify_full_reproduction_gate(args.reproduction_summary, cfg)
     artifact = torch.load(args.layerwise_artifact, map_location="cpu", weights_only=False)
-    if artifact.get("contract") != "official_codi_layerwise_transport_of_final_u28_v1":
+    supported_contracts = {
+        "official_codi_layerwise_transport_of_final_u28_v1",
+        "official_codi_independent_layer_subspaces_direct_latent_kv_v1",
+    }
+    if artifact.get("contract") not in supported_contracts:
         raise RuntimeError("wrong layerwise artifact contract")
     if not artifact["gate"]["passed"] and not args.allow_unconfirmed:
         raise RuntimeError(
@@ -133,16 +137,25 @@ def run(args) -> dict:
         rows = rows[: args.examples]
     questions = [row["question"] for row in rows]
 
-    selected_group = tuple(artifact["gate"]["selected_contiguous_attention_layers"])
+    direct_discovery = artifact["contract"].endswith("direct_latent_kv_v1")
+    selected_key = "selected_contiguous_layers" if direct_discovery else "selected_contiguous_attention_layers"
+    selected_group = tuple(artifact["gate"][selected_key])
     if not selected_group:
         # Only reachable for explicitly labelled --allow-unconfirmed runs.
         selected_group = (8, 9, 10, 11)
     groups = groups_around_validated_run(selected_group)
-    attention_bases = {
-        layer: RidgeTransport.from_state_dict(artifact["transports"][f"attn_ln_{layer:02d}"]).basis
-        for layer in range(12)
-    }
-    responses = gpt2_qkv_response_bases(model, attention_bases)
+    if direct_discovery:
+        responses = {
+            layer: {"key": artifact["aligned_key_responses"][layer],
+                    "value": artifact["aligned_value_responses"][layer]}
+            for layer in range(12)
+        }
+    else:
+        attention_bases = {
+            layer: RidgeTransport.from_state_dict(artifact["transports"][f"attn_ln_{layer:02d}"]).basis
+            for layer in range(12)
+        }
+        responses = gpt2_qkv_response_bases(model, attention_bases)
     causal_bases = {}
     random_bases = {}
     generator = torch.Generator().manual_seed(args.random_seed)

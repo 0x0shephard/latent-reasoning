@@ -1,0 +1,46 @@
+import torch
+
+from src.mech.direct_layerwise_kv import (
+    DirectLatentKVSubspaceIntervention,
+    align_layerwise_bases,
+    fit_layerwise_eigensystems,
+    longest_contiguous_run,
+    score_layerwise_answer_directions,
+    select_layerwise_bases,
+)
+
+
+def test_independent_eigensystems_selection_and_alignment():
+    generator = torch.Generator().manual_seed(41)
+    states = torch.randn(20, 12, 2, 768, generator=generator)
+    gradients = 0.2 * states + torch.randn(states.shape, generator=generator)
+    eigen = fit_layerwise_eigensystems(states)
+    score = score_layerwise_answer_directions(states, gradients, eigen, seed=7)
+    bases, indices = select_layerwise_bases(eigen, score["split_stable_z"], rank=4)
+    aligned, rotations = align_layerwise_bases(states, eigen.means, bases)
+    assert indices.shape == (12, 4)
+    assert aligned.shape == (12, 768, 4)
+    assert rotations.shape == (12, 4, 4)
+    assert torch.allclose(aligned[3].T @ aligned[3], torch.eye(4), atol=2e-5)
+
+
+def test_direct_kv_remove_edits_only_requested_layer_and_position():
+    generator = torch.Generator().manual_seed(5)
+    cache = tuple((torch.randn(2, 2, 3, 4, generator=generator),
+                   torch.randn(2, 2, 3, 4, generator=generator)) for _ in range(12))
+    bases = torch.eye(8)[:, :2].repeat(12, 1, 1)
+    means = torch.zeros(12, 6, 8)
+    intervention = DirectLatentKVSubspaceIntervention(
+        key_bases=bases, value_bases=bases, key_means=means, value_means=means,
+        layers=[3], positions=[1], mode="remove")
+    untouched = intervention(cache, 0)
+    assert all(torch.equal(a, b) for old, new in zip(cache, untouched) for a, b in zip(old, new))
+    edited = intervention(cache, 1)
+    assert torch.equal(edited[2][0], cache[2][0])
+    assert torch.equal(edited[3][0][:, :, :-1], cache[3][0][:, :, :-1])
+    flattened = edited[3][0][:, :, -1].reshape(2, 8)
+    assert torch.allclose(flattened[:, :2], torch.zeros(2, 2), atol=1e-6)
+
+
+def test_longest_contiguous_run_prefers_late_tie():
+    assert longest_contiguous_run([1, 2, 6, 7]) == [6, 7]
