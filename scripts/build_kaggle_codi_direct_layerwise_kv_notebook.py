@@ -56,7 +56,7 @@ md(r"""
 md("## Data and setup")
 code(r'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "main"  # Replaced with an immutable revision after this build is pushed.
+RUN_COMMIT = "4c03c525f0204a7cd30f4de5e31323c482e6d698"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""
 DISCOVERY_OUTPUT = "/kaggle/working/codi_direct_layerwise_kv"
