@@ -85,7 +85,7 @@ def _collect_fit(model, tokenizer, rows, scorer, batch_size, device):
 
 
 def _collect_selection(model, tokenizer, rows, scorer, batch_size, device):
-    state_chunks, gradient_chunks = [], []
+    state_chunks, gradient_chunks, connectivity_chunks = [], [], []
     for start in range(0, len(rows), batch_size):
         batch = collate_official_codi_kv_rows(
             tokenizer, rows[start:start + batch_size], bot_token_id=model.bot_id).to(device)
@@ -93,11 +93,13 @@ def _collect_selection(model, tokenizer, rows, scorer, batch_size, device):
         with trace.capture(): output = scorer(batch)
         states = trace.states()
         gradients = trace.gradients(output.mean_loss) * states.shape[0]
+        connectivity_chunks.append(trace.gradient_connectivity())
         state_chunks.append(states.detach().float().cpu())
         gradient_chunks.append(gradients.detach().float().cpu())
         del batch, output, trace, states, gradients
         if device.type == "cuda": torch.cuda.empty_cache()
-    return torch.cat(state_chunks), torch.cat(gradient_chunks)
+    connectivity = torch.stack(connectivity_chunks)
+    return torch.cat(state_chunks), torch.cat(gradient_chunks), connectivity
 
 
 def _orthonormalize_responses(responses, kind):
@@ -178,8 +180,11 @@ def run(args):
     fit_states, fit_keys, fit_values = _collect_fit(
         model, tokenizer, fit_rows, scorer, args.fit_batch_size, device)
     eigensystem = fit_layerwise_eigensystems(fit_states)
-    select_states, select_gradients = _collect_selection(
+    select_states, select_gradients, gradient_connectivity = _collect_selection(
         model, tokenizer, select_rows, scorer, args.selection_batch_size, device)
+    connectivity_fraction = gradient_connectivity.float().mean(0)
+    print("[gradient connectivity fraction by layer x latent position]")
+    print(connectivity_fraction)
     scores = score_layerwise_answer_directions(
         select_states, select_gradients, eigensystem, seed=args.seed + 1)
     bases, indices = select_layerwise_bases(
@@ -260,6 +265,7 @@ def run(args):
             "selection": _sha([_normalized_question(x["question"]) for x in select_rows]),
             "causal": _sha([_normalized_question(x["question"]) for x in causal_rows])},
         "rank": args.rank, "latent_positions": 6,
+        "gradient_connectivity_fraction": connectivity_fraction,
         "layer_means": eigensystem.means, "eigenvalues": eigensystem.eigenvalues,
         "selected_pc_indices": indices, "selected_bases": bases,
         "aligned_bases": aligned_bases, "alignment_rotations": rotations,
@@ -276,7 +282,8 @@ def run(args):
         "layer_means", "eigenvalues", "selected_pc_indices", "selected_bases",
         "aligned_bases", "alignment_rotations", "direction_scores", "key_means",
         "value_means", "key_bases", "value_bases", "aligned_key_responses",
-        "aligned_value_responses"}}
+        "aligned_value_responses", "gradient_connectivity_fraction"}}
+    summary["gradient_connectivity_fraction"] = connectivity_fraction.tolist()
     summary["layer_direction_summary"] = [{
         "layer": layer,
         "selected_pc_indices": indices[layer].tolist(),

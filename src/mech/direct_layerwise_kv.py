@@ -18,6 +18,7 @@ class LatentAttentionStateTrace:
         self.modules = [block.ln_1 for block in transformer.h]
         self.latent_positions = int(latent_positions)
         self.raw: list[list[torch.Tensor]] = [[] for _ in self.modules]
+        self._gradient_connected: torch.Tensor | None = None
 
     def _hook(self, layer):
         def hook(_module, _inputs, output):
@@ -52,13 +53,35 @@ class LatentAttentionStateTrace:
         """Differentiate answer NLL with respect to each captured latent state."""
         self.validate()
         flattened = tuple(value for layer in self.raw for value in layer)
-        gradients = torch.autograd.grad(loss, flattened, allow_unused=False)
+        # A captured tensor can be structurally absent from the answer-loss graph
+        # under a particular Transformers cache path. Mathematically its derivative
+        # is zero. Preserve that fact explicitly and audit it instead of making one
+        # disconnected cell abort the whole 12x6 experiment.
+        gradients = torch.autograd.grad(loss, flattened, allow_unused=True)
         rows = []
+        connected_rows = []
         offset = 0
-        for _layer in range(GPT2_BLOCKS):
-            rows.append(torch.stack(gradients[offset : offset + self.latent_positions], dim=1))
+        for layer in range(GPT2_BLOCKS):
+            layer_values = []
+            layer_connected = []
+            for position, gradient in enumerate(
+                gradients[offset : offset + self.latent_positions]
+            ):
+                connected = gradient is not None
+                layer_connected.append(connected)
+                layer_values.append(
+                    gradient if connected else torch.zeros_like(self.raw[layer][position])
+                )
+            rows.append(torch.stack(layer_values, dim=1))
+            connected_rows.append(layer_connected)
             offset += self.latent_positions
+        self._gradient_connected = torch.tensor(connected_rows, dtype=torch.bool)
         return torch.stack(rows, dim=1)
+
+    def gradient_connectivity(self) -> torch.Tensor:
+        if self._gradient_connected is None:
+            raise RuntimeError("gradients() must run before requesting connectivity")
+        return self._gradient_connected.clone()
 
 
 @dataclass(frozen=True)

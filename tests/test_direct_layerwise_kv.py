@@ -44,3 +44,18 @@ def test_direct_kv_remove_edits_only_requested_layer_and_position():
 
 def test_longest_contiguous_run_prefers_late_tie():
     assert longest_contiguous_run([1, 2, 6, 7]) == [6, 7]
+
+
+def test_disconnected_gradient_cells_are_zero_filled_and_audited():
+    # Exercise the structural policy directly without constructing GPT-2.
+    trace = object.__new__(__import__(
+        "src.mech.direct_layerwise_kv", fromlist=["LatentAttentionStateTrace"]
+    ).LatentAttentionStateTrace)
+    trace.latent_positions = 1
+    trace.raw = [[torch.randn(2, 3, requires_grad=True)] for _ in range(12)]
+    trace._gradient_connected = None
+    loss = sum(value.square().sum() for layer in trace.raw[:11] for value in layer)
+    gradients = trace.gradients(loss)
+    assert gradients.shape == (2, 12, 1, 3)
+    assert trace.gradient_connectivity()[-1, 0].item() is False
+    assert torch.equal(gradients[:, -1, 0], torch.zeros(2, 3))

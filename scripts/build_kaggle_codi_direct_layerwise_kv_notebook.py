@@ -49,6 +49,8 @@ md(r"""
   it does not silently call all selected directions validated.
 - KV intervention covers latent positions 0–5. It changes the stored cache and hence
   later latent passes—not merely the final answer-cue activation.
+- Structurally disconnected layer/position activations receive a zero gradient and
+  are disclosed in a 12×6 connectivity table; they are never silently discarded.
 - Cache factorization quality uses dense reconstruction for stock Transformers.
   Factor memory is modelled; end-to-end memory and latency require a fused kernel.
 """)
@@ -117,6 +119,8 @@ command = [sys.executable, "-u", "scripts/run_codi_direct_layerwise_kv_discovery
 subprocess.run(command, check=True)
 summary = json.loads((pathlib.Path(DISCOVERY_OUTPUT) / "summary.json").read_text())
 print(json.dumps({"dense": summary["dense_first_token"], "gate": summary["gate"]}, indent=2))
+print("gradient connectivity fraction [layer][latent position]")
+print(summary["gradient_connectivity_fraction"])
 ''')
 
 md("### Layer-local directions: stability, variance and causal specificity")
