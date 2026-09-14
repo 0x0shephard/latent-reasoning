@@ -108,6 +108,7 @@ def run(args) -> dict:
         "official_codi_layerwise_transport_of_final_u28_v1",
         "official_codi_independent_layer_subspaces_direct_latent_kv_v1",
         "official_codi_preanswer_gradient_variable_rank_kv_v2",
+        "official_codi_task_sensitive_variable_rank_kv_v1",
     }
     if artifact.get("contract") not in supported_contracts:
         raise RuntimeError("wrong layerwise artifact contract")
@@ -141,7 +142,10 @@ def run(args) -> dict:
         rows = rows[: args.examples]
     questions = [row["question"] for row in rows]
 
-    variable_discovery = artifact["contract"] == "official_codi_preanswer_gradient_variable_rank_kv_v2"
+    variable_discovery = artifact["contract"] in {
+        "official_codi_preanswer_gradient_variable_rank_kv_v2",
+        "official_codi_task_sensitive_variable_rank_kv_v1",
+    }
     direct_discovery = variable_discovery or artifact["contract"].endswith("direct_latent_kv_v1")
     selected_key = "selected_contiguous_layers" if direct_discovery else "selected_contiguous_attention_layers"
     selected_group = tuple(artifact["gate"][selected_key])
