@@ -136,3 +136,27 @@ def test_variable_selection_can_return_different_ranks_and_zero():
     assert ranks[2] == 3
     assert bases[2].shape == (768, 3)
     assert indices[0].numel() == 0
+
+
+def test_variable_selection_uses_disjoint_validation_scores_for_rank():
+    identity = torch.eye(768)
+    eigen = LayerwiseEigensystem(
+        means=torch.zeros(12, 2, 768), eigenvalues=torch.ones(12, 768),
+        eigenvectors=identity.repeat(12, 1, 1),
+    )
+    z = torch.zeros(12, 768); effect = torch.zeros(12, 768)
+    positive = torch.zeros(12, 768, dtype=torch.bool); q = torch.ones(12, 768)
+    z[0, :3] = 5; effect[0, :3] = torch.tensor([3.0, 2.0, 1.0])
+    positive[0, :3] = True; q[0, :3] = 0.001
+    validation_effect = effect.clone(); validation_effect[0, :3] = torch.tensor([0.9, -0.2, 0.1])
+    validation_positive = positive.clone(); validation_positive[0, 1] = False
+    common = {"split_stable_z": z, "positive_both_splits": positive,
+              "q_values": q, "excess_predicted_removal_damage": effect}
+    validation = {**common, "positive_both_splits": validation_positive,
+                  "excess_predicted_removal_damage": validation_effect}
+    _, indices, ranks = select_variable_layerwise_bases(
+        eigen, common, maximum_rank=64, minimum_split_z=1.645, fdr_q=0.05,
+        retained_effect_fraction=0.95, validation_scores=validation,
+    )
+    assert ranks[0] == 2
+    assert indices[0].tolist() == [0, 2]

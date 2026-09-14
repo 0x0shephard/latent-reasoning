@@ -189,7 +189,10 @@ def run(args):
         raise RuntimeError("GSM8K train count drifted")
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
-    total = args.fit_examples + args.select_examples + args.causal_examples
+    total = (
+        args.fit_examples + args.select_examples
+        + args.rank_examples + args.causal_examples
+    )
     rows, sampling = sample_gsm8k_train_calibration(
         train,
         test_questions={_normalized_question(row["question"]) for row in test},
@@ -198,6 +201,8 @@ def run(args):
     )
     fit_rows = rows[: args.fit_examples]
     select_rows = rows[args.fit_examples : args.fit_examples + args.select_examples]
+    rank_start = args.fit_examples + args.select_examples
+    rank_rows = rows[rank_start : rank_start + args.rank_examples]
     causal_rows = rows[-args.causal_examples :]
     latent_positions = int(cfg.eval.latent_iterations)
     scorer = OfficialCODIAnswerScorer(model, latent_positions=latent_positions)
@@ -206,11 +211,17 @@ def run(args):
         model, tokenizer, fit_rows, scorer, args.fit_batch_size, device
     )
     eigensystem = fit_layerwise_eigensystems(fit_states)
-    select_states, key_gradients, value_gradients, connectivity = _collect_selection(
+    select_states, key_gradients, value_gradients, select_connectivity = _collect_selection(
         model, tokenizer, select_rows, latent_positions,
         args.selection_batch_size, device,
     )
-    connectivity_fraction = connectivity.float().mean(0)
+    rank_states, rank_key_gradients, rank_value_gradients, rank_connectivity = _collect_selection(
+        model, tokenizer, rank_rows, latent_positions,
+        args.selection_batch_size, device,
+    )
+    connectivity_fraction = torch.cat(
+        (select_connectivity, rank_connectivity), dim=0
+    ).float().mean(0)
     if not bool((connectivity_fraction == 1).all()):
         raise RuntimeError(
             "pre-answer KV gradient connectivity gate failed; every layer and both "
@@ -230,10 +241,15 @@ def run(args):
         select_states, key_gradients, value_gradients, eigensystem,
         full_key_responses, full_value_responses, seed=args.seed + 1,
     )
+    rank_scores = score_preanswer_kv_directions(
+        rank_states, rank_key_gradients, rank_value_gradients, eigensystem,
+        full_key_responses, full_value_responses, seed=args.seed + 2,
+    )
     hidden_bases, selected_indices, ranks = select_variable_layerwise_bases(
         eigensystem, scores, maximum_rank=args.maximum_rank,
         minimum_split_z=args.minimum_split_z, fdr_q=args.fdr_q,
         retained_effect_fraction=args.retained_effect_fraction,
+        validation_scores=rank_scores,
     )
     selected_key_responses, selected_value_responses = {}, {}
     for layer in range(12):
@@ -378,6 +394,7 @@ def run(args):
         "split_hashes": {
             "fit": _sha([_normalized_question(row["question"]) for row in fit_rows]),
             "selection": _sha([_normalized_question(row["question"]) for row in select_rows]),
+            "rank_selection": _sha([_normalized_question(row["question"]) for row in rank_rows]),
             "causal": _sha([_normalized_question(row["question"]) for row in causal_rows]),
         },
         "latent_positions": latent_positions,
@@ -386,6 +403,7 @@ def run(args):
         "eigenvalues": eigensystem.eigenvalues,
         "eigenvectors": eigensystem.eigenvectors,
         "direction_scores": scores,
+        "rank_selection_scores": rank_scores,
         "selected_pc_indices": selected_indices,
         "selected_hidden_bases": hidden_bases,
         "selected_key_responses": selected_key_responses,
@@ -400,6 +418,7 @@ def run(args):
     _atomic_torch_save(payload, args.output_dir / "preanswer_kv_subspaces.pt")
     excluded = {
         "layer_means", "eigenvalues", "eigenvectors", "direction_scores",
+        "rank_selection_scores",
         "selected_pc_indices", "selected_hidden_bases", "selected_key_responses",
         "selected_value_responses", "key_means", "value_means",
         "gradient_connectivity_fraction",
@@ -419,6 +438,7 @@ def main():
     parser.add_argument("--checkpoint-path", type=Path)
     parser.add_argument("--fit-examples", type=int, default=1024)
     parser.add_argument("--select-examples", type=int, default=1024)
+    parser.add_argument("--rank-examples", type=int, default=256)
     parser.add_argument("--causal-examples", type=int, default=128)
     parser.add_argument("--fit-batch-size", type=int, default=16)
     parser.add_argument("--selection-batch-size", type=int, default=4)

@@ -92,6 +92,7 @@ COMPRESSION_OUTPUT = "/kaggle/working/codi_preanswer_kv_compression"
 
 FIT_EXAMPLES = 1024
 SELECTION_EXAMPLES = 1024
+RANK_SELECTION_EXAMPLES = 256
 CAUSAL_EXAMPLES = 128
 MAXIMUM_RANK = 64
 RANDOM_CONTROLS = 4
@@ -165,6 +166,7 @@ command = [
     "--output-dir", DISCOVERY_OUTPUT,
     "--fit-examples", str(FIT_EXAMPLES),
     "--select-examples", str(SELECTION_EXAMPLES),
+    "--rank-examples", str(RANK_SELECTION_EXAMPLES),
     "--causal-examples", str(CAUSAL_EXAMPLES),
     "--maximum-rank", str(MAXIMUM_RANK),
     "--random-controls", str(RANDOM_CONTROLS),

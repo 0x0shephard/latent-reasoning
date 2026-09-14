@@ -260,6 +260,7 @@ def select_variable_layerwise_bases(
     minimum_split_z: float,
     fdr_q: float,
     retained_effect_fraction: float = 0.95,
+    validation_scores: Mapping[str, torch.Tensor] | None = None,
 ) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor], list[int]]:
     """Return statistically validated PCs and a parsimonious rank per layer."""
     bases, indices, ranks = {}, {}, []
@@ -276,7 +277,16 @@ def select_variable_layerwise_bases(
                 descending=True,
             )
             candidates = candidates[order][:maximum_rank]
-            weights = scores["excess_predicted_removal_damage"][layer, candidates].clamp_min(0)
+            rank_scores = validation_scores or scores
+            if validation_scores is not None:
+                rank_stable = (
+                    rank_scores["positive_both_splits"][layer, candidates]
+                    & (rank_scores["excess_predicted_removal_damage"][layer, candidates] > 0)
+                )
+                candidates = candidates[rank_stable]
+            weights = rank_scores[
+                "excess_predicted_removal_damage"
+            ][layer, candidates].clamp_min(0)
             if float(weights.sum()) > 0:
                 cumulative = weights.cumsum(0) / weights.sum()
                 operational_rank = int(torch.where(

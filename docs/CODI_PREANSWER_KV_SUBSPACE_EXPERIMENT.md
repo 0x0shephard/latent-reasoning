@@ -12,8 +12,9 @@ projections, and scores predicted removal damage using direct cache gradients.
 
 Selection is variable-rank. A direction must be positive in both deterministic
 selection halves, exceed an example-shuffled null, and survive global FDR correction.
-The operational rank is the smallest ranked prefix retaining 95% of the validated
-first-order effect, with a rank-64 ceiling.
+A separate rank-selection split must confirm positive effects. The operational rank
+is the smallest ranked prefix retaining 95% of that disjoint validation effect, with
+a rank-64 ceiling.
 
 Causal confirmation removes and retains the selected K/V subspace at all six latent
 positions and compares removal damage with rank- and energy-matched random controls.
