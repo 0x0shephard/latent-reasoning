@@ -11,7 +11,7 @@ except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_task_sensitive_kv_subspaces.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "52f8ba7e462c03feb94b87e6373783022c0e7006"
 nb = nbf.v4.new_notebook()
 cells = []
 
