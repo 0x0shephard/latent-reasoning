@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_task_aware_protected_xkv.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "56e4bb3851be4dbc8f7472af5b1eb3f8e44da91d"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -121,7 +121,7 @@ RANDOM_PROTECTION_CONTROLS = 20
 import glob, json, os, pathlib, subprocess, sys
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
-assert RUN_COMMIT != "__RUN_COMMIT__", "Use the pinned commit printed with this notebook"
+assert len(RUN_COMMIT) == 40, "RUN_COMMIT must be an immutable full Git hash"
 if not pathlib.Path(REPO_DIR).exists():
     subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
 subprocess.run(["git", "-C", REPO_DIR, "fetch", "--all", "--tags"], check=True)
