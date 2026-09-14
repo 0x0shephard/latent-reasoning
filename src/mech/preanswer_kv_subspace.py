@@ -18,6 +18,8 @@ class PreAnswerKVResult:
     mean_loss: torch.Tensor
     first_logits: torch.Tensor
     first_targets: torch.Tensor
+    key_states: torch.Tensor
+    value_states: torch.Tensor
     key_gradients: torch.Tensor | None
     value_gradients: torch.Tensor | None
     gradient_connected: torch.Tensor | None
@@ -130,6 +132,9 @@ def official_codi_preanswer_kv_forward(
     # Normalize once and then use these exact tensors as both the decoder inputs and
     # the autograd targets. Conversion after decoding would create disconnected views.
     legacy_cache = cache_as_legacy_tuple(cache)
+    key_states, value_states = latent_cache_tensor(
+        legacy_cache, latent_positions=latent_positions
+    )
     answer_inputs, answer_targets, answer_mask = build_official_student_answer_io(
         batch, eot_token_id=model.eot_id, pad_token_id=model.pad_token_id
     )
@@ -162,6 +167,8 @@ def official_codi_preanswer_kv_forward(
         mean_loss=per_example.mean(),
         first_logits=first_logits,
         first_targets=first_targets,
+        key_states=key_states,
+        value_states=value_states,
         key_gradients=key_gradients,
         value_gradients=value_gradients,
         gradient_connected=connected,

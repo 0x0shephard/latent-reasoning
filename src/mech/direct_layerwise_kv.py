@@ -231,10 +231,12 @@ class DirectLatentKVSubspaceIntervention:
                 if (
                     key_basis.ndim != 2
                     or key_basis.shape[0] != feature_width
-                    or key_basis.shape != value_basis.shape
+                    or value_basis.ndim != 2
+                    or value_basis.shape[0] != feature_width
                 ):
                     raise ValueError(
-                        "each mapped K/V basis must share shape [D, rank]"
+                        "each mapped K/V basis must have shape [D, rank]; K and V "
+                        "ranks may differ"
                     )
         if tensor_bases:
             self.key_bases = key_bases.float()
@@ -259,6 +261,8 @@ class DirectLatentKVSubspaceIntervention:
         return converter(), factory
 
     def _edit(self, tensor, basis, mean):
+        if basis.shape[1] == 0:
+            return tensor
         batch, heads, _tokens, head_width = tensor.shape
         last = tensor[:, :, -1, :].reshape(batch, heads * head_width).float()
         basis, mean = basis.to(last), mean.to(last)

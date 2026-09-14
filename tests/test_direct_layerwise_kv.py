@@ -56,6 +56,36 @@ def test_direct_kv_intervention_accepts_variable_rank_layer_mappings():
     assert torch.equal(edited[5][0], cache[5][0])
 
 
+def test_direct_kv_intervention_accepts_independent_key_and_value_ranks():
+    cache = tuple((torch.ones(1, 2, 1, 4), torch.ones(1, 2, 1, 4)) for _ in range(12))
+    key_bases = {3: torch.eye(8)[:, :1]}
+    value_bases = {3: torch.eye(8)[:, :3]}
+    means = torch.zeros(12, 1, 8)
+    intervention = DirectLatentKVSubspaceIntervention(
+        key_bases=key_bases, value_bases=value_bases,
+        key_means=means, value_means=means,
+        layers=[3], positions=[0], mode="remove",
+    )
+    edited = intervention(cache, 0)
+    assert edited[3][0][0, 0, 0, 0].item() == 0
+    assert torch.equal(edited[3][0][0, 0, 0, 1:], torch.ones(3))
+    assert torch.equal(edited[3][1][0, 0, 0, :3], torch.zeros(3))
+
+
+def test_empty_basis_is_inactive_for_retain_and_remove():
+    cache = tuple((torch.ones(1, 2, 1, 4), torch.ones(1, 2, 1, 4)) for _ in range(12))
+    bases = {3: torch.empty(8, 0)}
+    means = torch.zeros(12, 1, 8)
+    for mode in ("retain", "remove"):
+        intervention = DirectLatentKVSubspaceIntervention(
+            key_bases=bases, value_bases=bases, key_means=means, value_means=means,
+            layers=[3], positions=[0], mode=mode,
+        )
+        edited = intervention(cache, 0)
+        assert torch.equal(edited[3][0], cache[3][0])
+        assert torch.equal(edited[3][1], cache[3][1])
+
+
 def test_longest_contiguous_run_prefers_late_tie():
     assert longest_contiguous_run([1, 2, 6, 7]) == [6, 7]
 

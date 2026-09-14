@@ -143,6 +143,46 @@ def mapped_group_variable_causal_basis(
     return basis
 
 
+def mapped_group_independent_kv_basis(
+    key_bases: Sequence[torch.Tensor], value_bases: Sequence[torch.Tensor]
+) -> torch.Tensor:
+    """Embed independently ranked K and V directions in group feature space.
+
+    Each key direction occupies only its layer's key feature block and each value
+    direction occupies only its layer's value feature block.  The resulting core
+    therefore has ``sum(r_key + r_value)`` columns and does not invent a pairing
+    between separately discovered key and value directions.
+    """
+    if not key_bases or len(key_bases) != len(value_bases):
+        raise ValueError("key and value basis lists must match")
+    width = key_bases[0].shape[0]
+    if any(
+        key.ndim != 2 or value.ndim != 2
+        or key.shape[0] != width or value.shape[0] != width
+        for key, value in zip(key_bases, value_bases)
+    ):
+        raise ValueError("each K/V basis must have shape [width, independent_rank]")
+    feature_width = 2 * len(key_bases) * width
+    columns = []
+    for layer, (key, value) in enumerate(zip(key_bases, value_bases)):
+        start = 2 * layer * width
+        for direction in range(key.shape[1]):
+            column = key.new_zeros(feature_width)
+            column[start : start + width] = key[:, direction]
+            columns.append(column)
+        for direction in range(value.shape[1]):
+            column = value.new_zeros(feature_width)
+            column[start + width : start + 2 * width] = value[:, direction]
+            columns.append(column)
+    if not columns:
+        return key_bases[0].new_zeros((feature_width, 0))
+    # Columns have disjoint blocks across layer/kind and each input basis is
+    # orthonormal, but QR also protects this contract against round-off.
+    stacked = torch.stack(columns, dim=1).float()
+    basis, _ = torch.linalg.qr(stacked, mode="reduced")
+    return basis
+
+
 def reduced_attention(
     query: torch.Tensor,
     code: torch.Tensor,

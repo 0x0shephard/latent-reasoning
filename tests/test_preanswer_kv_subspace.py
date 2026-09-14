@@ -85,6 +85,8 @@ def test_preanswer_forward_differentiates_the_same_cache_used_by_answer_decoder(
         model, batch, latent_positions=2, return_gradients=True
     )
     assert output.per_example_loss.shape == (2,)
+    assert output.key_states.shape == (2, 1, 2, 4)
+    assert output.value_states.shape == (2, 1, 2, 4)
     assert output.key_gradients.shape == (2, 1, 2, 4)
     assert output.value_gradients.shape == (2, 1, 2, 4)
     assert bool(output.gradient_connected.all())

@@ -23,7 +23,7 @@ from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import official_answers_match
 from src.mech.causal_xkv import (
     compress_reconstruct_cache, mapped_group_causal_basis,
-    mapped_group_variable_causal_basis,
+    mapped_group_independent_kv_basis, mapped_group_variable_causal_basis,
 )
 from src.mech.layerwise_u28 import RidgeTransport, random_orthonormal_basis
 from src.mech.official_codi_layerwise import gpt2_qkv_response_bases
@@ -109,6 +109,7 @@ def run(args) -> dict:
         "official_codi_independent_layer_subspaces_direct_latent_kv_v1",
         "official_codi_preanswer_gradient_variable_rank_kv_v2",
         "official_codi_task_sensitive_variable_rank_kv_v1",
+        "official_codi_direct_cache_task_sensitive_independent_kv_v1",
     }
     if artifact.get("contract") not in supported_contracts:
         raise RuntimeError("wrong layerwise artifact contract")
@@ -142,9 +143,13 @@ def run(args) -> dict:
         rows = rows[: args.examples]
     questions = [row["question"] for row in rows]
 
+    independent_kv_discovery = artifact["contract"] == (
+        "official_codi_direct_cache_task_sensitive_independent_kv_v1"
+    )
     variable_discovery = artifact["contract"] in {
         "official_codi_preanswer_gradient_variable_rank_kv_v2",
         "official_codi_task_sensitive_variable_rank_kv_v1",
+        "official_codi_direct_cache_task_sensitive_independent_kv_v1",
     }
     direct_discovery = variable_discovery or artifact["contract"].endswith("direct_latent_kv_v1")
     selected_key = "selected_contiguous_layers" if direct_discovery else "selected_contiguous_attention_layers"
@@ -175,7 +180,13 @@ def run(args) -> dict:
     random_bases = {}
     generator = torch.Generator().manual_seed(args.random_seed)
     for group in (selected_group,):
-        mapper = mapped_group_variable_causal_basis if variable_discovery else mapped_group_causal_basis
+        if independent_kv_discovery:
+            mapper = mapped_group_independent_kv_basis
+        else:
+            mapper = (
+                mapped_group_variable_causal_basis
+                if variable_discovery else mapped_group_causal_basis
+            )
         causal_bases[group] = mapper(
             [responses[layer]["key"] for layer in group],
             [responses[layer]["value"] for layer in group],
@@ -199,6 +210,8 @@ def run(args) -> dict:
     ranks = sorted({int(value) for value in args.ranks.split(",")})
     for rank in ranks:
         protected_name = (
+            f"xkv_independent_kv_protected_r{rank}"
+            if independent_kv_discovery else
             f"xkv_variable_protected_r{rank}"
             if variable_discovery else f"xkv_u28_protected_r{rank}"
         )
