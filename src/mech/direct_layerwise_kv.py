@@ -206,6 +206,9 @@ class DirectLatentKVSubspaceIntervention:
     ):
         if mode not in {"retain", "remove"}:
             raise ValueError("mode must be retain or remove")
+        if key_means.shape != value_means.shape or key_means.ndim != 3:
+            raise ValueError("K/V means must share [L,P,D]")
+        feature_width = int(key_means.shape[-1])
         tensor_bases = isinstance(key_bases, torch.Tensor) and isinstance(
             value_bases, torch.Tensor
         )
@@ -215,7 +218,9 @@ class DirectLatentKVSubspaceIntervention:
         if not tensor_bases and not mapping_bases:
             raise ValueError("K/V bases must both be tensors or layer mappings")
         if tensor_bases and (
-            key_bases.shape != value_bases.shape or key_bases.ndim != 3
+            key_bases.shape != value_bases.shape
+            or key_bases.ndim != 3
+            or key_bases.shape[1] != feature_width
         ):
             raise ValueError("K/V tensor bases must share [L,D,R]")
         if mapping_bases:
@@ -225,14 +230,12 @@ class DirectLatentKVSubspaceIntervention:
                 key_basis, value_basis = key_bases[layer], value_bases[layer]
                 if (
                     key_basis.ndim != 2
-                    or key_basis.shape[0] != GPT2_WIDTH
+                    or key_basis.shape[0] != feature_width
                     or key_basis.shape != value_basis.shape
                 ):
                     raise ValueError(
-                        "each mapped K/V basis must share shape [768, rank]"
+                        "each mapped K/V basis must share shape [D, rank]"
                     )
-        if key_means.shape != value_means.shape or key_means.ndim != 3:
-            raise ValueError("K/V means must share [L,P,D]")
         if tensor_bases:
             self.key_bases = key_bases.float()
             self.value_bases = value_bases.float()
