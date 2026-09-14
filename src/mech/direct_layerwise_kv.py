@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import torch
 
@@ -196,8 +196,8 @@ class DirectLatentKVSubspaceIntervention:
     def __init__(
         self,
         *,
-        key_bases: torch.Tensor,
-        value_bases: torch.Tensor,
+        key_bases: torch.Tensor | Mapping[int, torch.Tensor],
+        value_bases: torch.Tensor | Mapping[int, torch.Tensor],
         key_means: torch.Tensor,
         value_means: torch.Tensor,
         layers: Sequence[int],
@@ -206,11 +206,43 @@ class DirectLatentKVSubspaceIntervention:
     ):
         if mode not in {"retain", "remove"}:
             raise ValueError("mode must be retain or remove")
-        if key_bases.shape != value_bases.shape or key_bases.ndim != 3:
-            raise ValueError("K/V bases must share [L,D,R]")
+        tensor_bases = isinstance(key_bases, torch.Tensor) and isinstance(
+            value_bases, torch.Tensor
+        )
+        mapping_bases = isinstance(key_bases, Mapping) and isinstance(
+            value_bases, Mapping
+        )
+        if not tensor_bases and not mapping_bases:
+            raise ValueError("K/V bases must both be tensors or layer mappings")
+        if tensor_bases and (
+            key_bases.shape != value_bases.shape or key_bases.ndim != 3
+        ):
+            raise ValueError("K/V tensor bases must share [L,D,R]")
+        if mapping_bases:
+            if set(key_bases) != set(value_bases):
+                raise ValueError("K/V basis mappings must contain the same layers")
+            for layer in key_bases:
+                key_basis, value_basis = key_bases[layer], value_bases[layer]
+                if (
+                    key_basis.ndim != 2
+                    or key_basis.shape[0] != GPT2_WIDTH
+                    or key_basis.shape != value_basis.shape
+                ):
+                    raise ValueError(
+                        "each mapped K/V basis must share shape [768, rank]"
+                    )
         if key_means.shape != value_means.shape or key_means.ndim != 3:
             raise ValueError("K/V means must share [L,P,D]")
-        self.key_bases, self.value_bases = key_bases.float(), value_bases.float()
+        if tensor_bases:
+            self.key_bases = key_bases.float()
+            self.value_bases = value_bases.float()
+        else:
+            self.key_bases = {
+                int(layer): basis.float() for layer, basis in key_bases.items()
+            }
+            self.value_bases = {
+                int(layer): basis.float() for layer, basis in value_bases.items()
+            }
         self.key_means, self.value_means = key_means.float(), value_means.float()
         self.layers, self.positions, self.mode = set(layers), set(positions), mode
 
@@ -234,6 +266,10 @@ class DirectLatentKVSubspaceIntervention:
         result[:, :, -1, :] = replacement.reshape(batch, heads, head_width).to(tensor.dtype)
         return result
 
+    @staticmethod
+    def _layer_basis(bases, layer: int):
+        return bases[layer]
+
     def __call__(self, cache, position: int):
         if position not in self.positions: return cache
         legacy, restore = self._legacy(cache)
@@ -241,8 +277,14 @@ class DirectLatentKVSubspaceIntervention:
         for layer, entry in enumerate(legacy):
             if layer not in self.layers:
                 updated.append(entry); continue
-            key = self._edit(entry[0], self.key_bases[layer], self.key_means[layer, position])
-            value = self._edit(entry[1], self.value_bases[layer], self.value_means[layer, position])
+            key = self._edit(
+                entry[0], self._layer_basis(self.key_bases, layer),
+                self.key_means[layer, position]
+            )
+            value = self._edit(
+                entry[1], self._layer_basis(self.value_bases, layer),
+                self.value_means[layer, position]
+            )
             updated.append((key, value, *entry[2:]))
         values = tuple(updated)
         if restore is tuple: return values

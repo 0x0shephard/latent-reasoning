@@ -42,6 +42,20 @@ def test_direct_kv_remove_edits_only_requested_layer_and_position():
     assert torch.allclose(flattened[:, :2], torch.zeros(2, 2), atol=1e-6)
 
 
+def test_direct_kv_intervention_accepts_variable_rank_layer_mappings():
+    cache = tuple((torch.ones(1, 2, 1, 4), torch.ones(1, 2, 1, 4)) for _ in range(12))
+    key_bases = {3: torch.eye(8)[:, :1], 5: torch.eye(8)[:, :3]}
+    value_bases = {3: torch.eye(8)[:, :1], 5: torch.eye(8)[:, :3]}
+    intervention = DirectLatentKVSubspaceIntervention(
+        key_bases=key_bases, value_bases=value_bases,
+        key_means=torch.zeros(12, 1, 8), value_means=torch.zeros(12, 1, 8),
+        layers=[3], positions=[0], mode="remove",
+    )
+    edited = intervention(cache, 0)
+    assert edited[3][0][0, 0, 0, 0].item() == 0
+    assert torch.equal(edited[5][0], cache[5][0])
+
+
 def test_longest_contiguous_run_prefers_late_tie():
     assert longest_contiguous_run([1, 2, 6, 7]) == [6, 7]
 

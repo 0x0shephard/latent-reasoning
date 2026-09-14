@@ -1,4 +1,4 @@
-"""Compare ordinary xKV factorization with a U28-causal protected core in CODI."""
+"""Compare ordinary xKV with a causally protected feature core in CODI."""
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,10 @@ from src.data.datasets import load_eval_set
 from src.data.prompts import PromptStyle
 from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import official_answers_match
-from src.mech.causal_xkv import compress_reconstruct_cache, mapped_group_causal_basis
+from src.mech.causal_xkv import (
+    compress_reconstruct_cache, mapped_group_causal_basis,
+    mapped_group_variable_causal_basis,
+)
 from src.mech.layerwise_u28 import RidgeTransport, random_orthonormal_basis
 from src.mech.official_codi_layerwise import gpt2_qkv_response_bases
 from src.models.official_codi import (
@@ -104,6 +107,7 @@ def run(args) -> dict:
     supported_contracts = {
         "official_codi_layerwise_transport_of_final_u28_v1",
         "official_codi_independent_layer_subspaces_direct_latent_kv_v1",
+        "official_codi_preanswer_gradient_variable_rank_kv_v2",
     }
     if artifact.get("contract") not in supported_contracts:
         raise RuntimeError("wrong layerwise artifact contract")
@@ -137,14 +141,21 @@ def run(args) -> dict:
         rows = rows[: args.examples]
     questions = [row["question"] for row in rows]
 
-    direct_discovery = artifact["contract"].endswith("direct_latent_kv_v1")
+    variable_discovery = artifact["contract"] == "official_codi_preanswer_gradient_variable_rank_kv_v2"
+    direct_discovery = variable_discovery or artifact["contract"].endswith("direct_latent_kv_v1")
     selected_key = "selected_contiguous_layers" if direct_discovery else "selected_contiguous_attention_layers"
     selected_group = tuple(artifact["gate"][selected_key])
     if not selected_group:
         # Only reachable for explicitly labelled --allow-unconfirmed runs.
         selected_group = (8, 9, 10, 11)
     groups = groups_around_validated_run(selected_group)
-    if direct_discovery:
+    if variable_discovery:
+        responses = {
+            layer: {"key": artifact["selected_key_responses"][layer],
+                    "value": artifact["selected_value_responses"][layer]}
+            for layer in range(12)
+        }
+    elif direct_discovery:
         responses = {
             layer: {"key": artifact["aligned_key_responses"][layer],
                     "value": artifact["aligned_value_responses"][layer]}
@@ -160,7 +171,8 @@ def run(args) -> dict:
     random_bases = {}
     generator = torch.Generator().manual_seed(args.random_seed)
     for group in (selected_group,):
-        causal_bases[group] = mapped_group_causal_basis(
+        mapper = mapped_group_variable_causal_basis if variable_discovery else mapped_group_causal_basis
+        causal_bases[group] = mapper(
             [responses[layer]["key"] for layer in group],
             [responses[layer]["value"] for layer in group],
         )
@@ -182,11 +194,15 @@ def run(args) -> dict:
     }
     ranks = sorted({int(value) for value in args.ranks.split(",")})
     for rank in ranks:
+        protected_name = (
+            f"xkv_variable_protected_r{rank}"
+            if variable_discovery else f"xkv_u28_protected_r{rank}"
+        )
         arms = {
             f"per_layer_svd_r{rank}": (tuple((layer,) for layer in range(12)), None),
             f"xkv_svd_r{rank}": (groups, None),
             f"xkv_random_protected_r{rank}": (groups, random_bases),
-            f"xkv_u28_protected_r{rank}": (groups, causal_bases),
+            protected_name: (groups, causal_bases),
         }
         for name, (groups, protected) in arms.items():
             factorizer = FinalLatentCacheFactorizer(groups, rank, protected)

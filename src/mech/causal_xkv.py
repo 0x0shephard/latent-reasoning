@@ -111,6 +111,38 @@ def mapped_group_causal_basis(
     return basis
 
 
+def mapped_group_variable_causal_basis(
+    key_bases: Sequence[torch.Tensor], value_bases: Sequence[torch.Tensor]
+) -> torch.Tensor:
+    """Embed every layer-local K/V direction independently in group feature space.
+
+    Unlike ``mapped_group_causal_basis``, directions do not need to be aligned or
+    share a rank across layers. The protected rank is the sum of layer-local ranks.
+    """
+    if not key_bases or len(key_bases) != len(value_bases):
+        raise ValueError("key and value basis lists must match")
+    width = key_bases[0].shape[0]
+    if any(
+        key.ndim != 2 or value.shape != key.shape or key.shape[0] != width
+        for key, value in zip(key_bases, value_bases)
+    ):
+        raise ValueError("each layer must provide matching [width, rank] K/V bases")
+    feature_width = 2 * len(key_bases) * width
+    columns = []
+    for layer, (key, value) in enumerate(zip(key_bases, value_bases)):
+        for direction in range(key.shape[1]):
+            column = key.new_zeros(feature_width)
+            start = 2 * layer * width
+            column[start : start + width] = key[:, direction]
+            column[start + width : start + 2 * width] = value[:, direction]
+            columns.append(column)
+    if not columns:
+        return key_bases[0].new_zeros((feature_width, 0))
+    stacked = torch.stack(columns, dim=1).float()
+    basis, _ = torch.linalg.qr(stacked, mode="reduced")
+    return basis
+
+
 def reduced_attention(
     query: torch.Tensor,
     code: torch.Tensor,

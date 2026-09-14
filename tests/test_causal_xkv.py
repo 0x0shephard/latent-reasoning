@@ -5,6 +5,7 @@ from src.mech.causal_xkv import (
     compress_reconstruct_cache,
     concatenate_group_cache,
     mapped_group_causal_basis,
+    mapped_group_variable_causal_basis,
     reduced_attention,
     split_group_cache,
     truncated_svd_factorization,
@@ -50,6 +51,14 @@ def test_mapped_group_basis_and_reduced_attention_identity():
     assert torch.allclose(
         reduced_attention(query, code, key_decoder, value_decoder), expected, atol=2e-5
     )
+
+
+def test_variable_group_basis_keeps_every_layer_local_direction():
+    keys = [torch.eye(8)[:, :1], torch.eye(8)[:, :3]]
+    values = [torch.eye(8)[:, 1:2], torch.eye(8)[:, 3:6]]
+    protected = mapped_group_variable_causal_basis(keys, values)
+    assert protected.shape == (32, 4)
+    assert torch.allclose(protected.T @ protected, torch.eye(4), atol=1e-5)
 
 
 def test_legacy_cache_compression_preserves_shape_and_reports_modelled_storage():
