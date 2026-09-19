@@ -93,6 +93,8 @@ def official_codi_row_is_eligible(row: dict) -> bool:
 def align_official_codi_gsm8k_eval_rows(
     raw_rows: Sequence[dict],
     normalized_rows: Sequence[dict],
+    *,
+    examples: int | None = None,
 ) -> list[dict]:
     """Attach GSM8K teacher traces to normalized held-out evaluation rows.
 
@@ -115,8 +117,15 @@ def align_official_codi_gsm8k_eval_rows(
     def normalized_question(value: object) -> str:
         return " ".join(str(value).split()).casefold()
 
+    selected_examples = len(normalized_rows) if examples is None else int(examples)
+    if selected_examples < 1 or selected_examples > len(normalized_rows):
+        raise ValueError(
+            "requested GSM8K evaluation examples must be between 1 and "
+            f"{len(normalized_rows)}, got {selected_examples}"
+        )
+
     aligned = []
-    for index in range(len(normalized_rows)):
+    for index in range(selected_examples):
         raw = raw_rows[index]
         normalized = normalized_rows[index]
         try:

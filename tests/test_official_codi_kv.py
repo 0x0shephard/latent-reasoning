@@ -43,6 +43,21 @@ def test_gsm8k_eval_alignment_rejects_order_or_gold_drift():
         )
 
 
+def test_gsm8k_eval_alignment_validates_only_requested_evaluation_prefix():
+    rows = align_official_codi_gsm8k_eval_rows(
+        [
+            {"question": "Used", "answer": "reason\n#### 7"},
+            {"question": "Not used", "answer": "reason\n#### -1"},
+        ],
+        [
+            {"question": "Used", "gold": 7},
+            {"question": "Not used", "gold": -1},
+        ],
+        examples=1,
+    )
+    assert [row["question"] for row in rows] == ["Used"]
+
+
 class CharacterTokenizer:
     bos_token_id = None
     eos_token_id = 99_999

@@ -537,7 +537,11 @@ def run(args):
         split=str(eval_spec.get("split", "test")),
         verification_mode="no_checks",
     )
-    teacher_test = align_official_codi_gsm8k_eval_rows(raw_test, test)
+    teacher_test = align_official_codi_gsm8k_eval_rows(
+        raw_test,
+        test,
+        examples=args.test_examples,
+    )
     confirm_rows, calibration_rows, sampling = _validate_and_split_rows(
         train, test, source, previous_summary, args
     )
@@ -591,7 +595,7 @@ def run(args):
         seed=args.seed + 5000,
     )
 
-    evaluation_rows = teacher_test[: args.test_examples]
+    evaluation_rows = teacher_test
     generation_rows = evaluation_rows[: args.generation_examples]
     dense_losses, dense_logits, dense_targets = _evaluate(
         model, tokenizer, evaluation_rows, latent_positions, args.batch_size, device
