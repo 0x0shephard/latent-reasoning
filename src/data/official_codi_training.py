@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from src.data.answer_extract import normalize_gold
+
 
 OFFICIAL_CODI_SOURCE_REVISION = "2c2314662c63e9f482ebc46614ffe9af17a241e5"
 OFFICIAL_SEGMENT_MAX_LENGTH = 256
@@ -86,6 +88,74 @@ def official_codi_row_is_eligible(row: dict) -> bool:
     except (KeyError, TypeError, ValueError):
         return False
     return True
+
+
+def align_official_codi_gsm8k_eval_rows(
+    raw_rows: Sequence[dict],
+    normalized_rows: Sequence[dict],
+) -> list[dict]:
+    """Attach GSM8K teacher traces to normalized held-out evaluation rows.
+
+    ``load_eval_set`` intentionally exposes only ``question`` and ``gold``.  The
+    official CODI teacher-forced loss path additionally needs the public GSM8K
+    rationale and final answer to reconstruct its answer-token boundary.  This
+    adapter joins the two views by row index, then verifies both the question and
+    numeric gold so a dataset-order or schema change cannot silently corrupt the
+    evaluation.
+
+    The returned rationale is used only by the dense teacher-forced scoring path;
+    the CODI student/cache input remains the question alone.
+    """
+    if len(raw_rows) != len(normalized_rows):
+        raise ValueError(
+            "raw and normalized GSM8K evaluation rows have different lengths: "
+            f"{len(raw_rows)} != {len(normalized_rows)}"
+        )
+
+    def normalized_question(value: object) -> str:
+        return " ".join(str(value).split()).casefold()
+
+    aligned = []
+    for index in range(len(normalized_rows)):
+        raw = raw_rows[index]
+        normalized = normalized_rows[index]
+        try:
+            question = str(raw["question"])
+            raw_answer = str(raw["answer"])
+            expected_question = str(normalized["question"])
+            gold = normalized["gold"]
+        except (KeyError, TypeError) as exc:
+            raise ValueError(
+                f"GSM8K evaluation row {index} is missing its canonical fields"
+            ) from exc
+        if normalized_question(question) != normalized_question(expected_question):
+            raise ValueError(
+                f"GSM8K evaluation question mismatch at row {index}"
+            )
+        if "####" not in raw_answer:
+            raise ValueError(
+                f"GSM8K evaluation row {index} has no #### answer delimiter"
+            )
+        cot, final = raw_answer.rsplit("####", 1)
+        cot = cot.strip()
+        final = final.strip().replace(",", "")
+        if not cot:
+            raise ValueError(f"GSM8K evaluation row {index} has an empty rationale")
+        if not official_codi_answer_is_eligible(final):
+            raise ValueError(
+                f"GSM8K evaluation row {index} has an ineligible final answer"
+            )
+        if normalize_gold(final, "gsm8k_main") != normalize_gold(gold, "gsm8k_main"):
+            raise ValueError(f"GSM8K evaluation gold mismatch at row {index}")
+        aligned.append(
+            {
+                "question": question,
+                "cot": cot,
+                "answer": final,
+                "gold": gold,
+            }
+        )
+    return aligned
 
 
 def _tokenize_segment(tokenizer, text: str) -> list[int]:

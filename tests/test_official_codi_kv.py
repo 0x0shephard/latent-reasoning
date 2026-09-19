@@ -4,10 +4,43 @@ import pytest
 
 from src.data.official_codi_training import (
     OFFICIAL_ANSWER_PROMPT,
+    align_official_codi_gsm8k_eval_rows,
     encode_official_codi_row,
     format_official_codi_row,
     official_codi_row_is_eligible,
 )
+
+
+def test_gsm8k_eval_alignment_restores_teacher_fields_and_checks_gold():
+    rows = align_official_codi_gsm8k_eval_rows(
+        [
+            {
+                "question": "How many widgets?",
+                "answer": "First compute twelve.\nThen total it.\n#### 1,234",
+            }
+        ],
+        [{"question": "How many widgets?", "gold": 1234}],
+    )
+    assert rows == [
+        {
+            "question": "How many widgets?",
+            "cot": "First compute twelve.\nThen total it.",
+            "answer": "1234",
+            "gold": 1234,
+        }
+    ]
+
+
+def test_gsm8k_eval_alignment_rejects_order_or_gold_drift():
+    raw = [{"question": "Question A", "answer": "reason\n#### 7"}]
+    with pytest.raises(ValueError, match="question mismatch"):
+        align_official_codi_gsm8k_eval_rows(
+            raw, [{"question": "Question B", "gold": 7}]
+        )
+    with pytest.raises(ValueError, match="gold mismatch"):
+        align_official_codi_gsm8k_eval_rows(
+            raw, [{"question": "Question A", "gold": 8}]
+        )
 
 
 class CharacterTokenizer:

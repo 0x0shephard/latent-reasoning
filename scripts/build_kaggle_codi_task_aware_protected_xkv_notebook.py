@@ -157,6 +157,7 @@ subprocess.run([
     "tests/test_direct_cache_task_subspace.py",
     "tests/test_preanswer_kv_subspace.py",
     "tests/test_causal_xkv.py",
+    "tests/test_official_codi_kv.py",
 ], check=True)
 ''')
 

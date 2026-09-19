@@ -40,6 +40,7 @@ from scripts.run_codi_preanswer_kv_subspace_discovery import (
     _sha,
 )
 from src.data.datasets import load_eval_set
+from src.data.official_codi_training import align_official_codi_gsm8k_eval_rows
 from src.data.prompts import PromptStyle
 from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import official_answers_match
@@ -525,6 +526,18 @@ def run(args):
         raise RuntimeError("GSM8K train count drifted")
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
+    eval_spec = data_cfg.eval.gsm8k
+    if str(eval_spec.kind) != "gsm8k_main" or not eval_spec.get("data_file"):
+        raise RuntimeError(
+            "task-aware xKV requires the pinned raw GSM8K test JSONL"
+        )
+    raw_test = load_dataset(
+        str(eval_spec.hf_id),
+        data_files={str(eval_spec.get("split", "test")): str(eval_spec.data_file)},
+        split=str(eval_spec.get("split", "test")),
+        verification_mode="no_checks",
+    )
+    teacher_test = align_official_codi_gsm8k_eval_rows(raw_test, test)
     confirm_rows, calibration_rows, sampling = _validate_and_split_rows(
         train, test, source, previous_summary, args
     )
@@ -578,7 +591,7 @@ def run(args):
         seed=args.seed + 5000,
     )
 
-    evaluation_rows = test[: args.test_examples]
+    evaluation_rows = teacher_test[: args.test_examples]
     generation_rows = evaluation_rows[: args.generation_examples]
     dense_losses, dense_logits, dense_targets = _evaluate(
         model, tokenizer, evaluation_rows, latent_positions, args.batch_size, device
@@ -902,6 +915,10 @@ def run(args):
         "evaluation": {
             "teacher_forced_examples": len(evaluation_rows),
             "generation_examples": len(generation_rows),
+            "questions_sha256": _sha(
+                [_normalized_question(row["question"]) for row in evaluation_rows]
+            ),
+            "teacher_forced_schema": "question+public_gsm8k_cot+answer+gold",
             "ranks": ranks,
             "generation_ranks": sorted(generation_ranks),
             "max_new_tokens": args.max_new_tokens,

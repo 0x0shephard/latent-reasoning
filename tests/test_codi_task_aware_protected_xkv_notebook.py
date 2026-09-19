@@ -36,4 +36,5 @@ def test_notebook_invokes_focused_tensor_tests_before_the_experiment():
     text = _notebook_text()
     assert "tests/test_task_aware_xkv.py" in text
     assert "tests/test_direct_cache_task_subspace.py" in text
+    assert "tests/test_official_codi_kv.py" in text
     assert "subprocess.run(command, check=True)" in text
