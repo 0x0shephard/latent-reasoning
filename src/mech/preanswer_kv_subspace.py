@@ -130,8 +130,19 @@ def official_codi_preanswer_kv_forward(
         latent = model.prj(latent_output.hidden_states[-1][:, -1, :].unsqueeze(1))
 
     # Normalize once and then use these exact tensors as both the decoder inputs and
-    # the autograd targets. Conversion after decoding would create disconnected views.
+    # the autograd targets. For gradient runs, leaf copies preserve the exact cache
+    # values while making the answer loss differentiable even if all model parameters
+    # are frozen. They also avoid retaining the prompt/latent construction graph.
     legacy_cache = cache_as_legacy_tuple(cache)
+    if return_gradients:
+        legacy_cache = tuple(
+            (
+                entry[0].detach().requires_grad_(True),
+                entry[1].detach().requires_grad_(True),
+                *entry[2:],
+            )
+            for entry in legacy_cache
+        )
     key_states, value_states = latent_cache_tensor(
         legacy_cache, latent_positions=latent_positions
     )

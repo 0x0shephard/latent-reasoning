@@ -73,6 +73,8 @@ def test_exact_cache_gradients_are_connected_and_keep_last_latent_positions():
 
 def test_preanswer_forward_differentiates_the_same_cache_used_by_answer_decoder():
     model = TinyContextCODI()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
     batch = SimpleNamespace(
         student_question_ids=torch.tensor([[3, 4], [5, 6]]),
         student_question_mask=torch.ones(2, 2, dtype=torch.long),
