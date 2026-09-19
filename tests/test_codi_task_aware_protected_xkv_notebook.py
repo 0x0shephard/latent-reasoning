@@ -16,7 +16,7 @@ def _notebook_text():
 def test_notebook_contains_confirmatory_split_and_predecessor_lineage_checks():
     text = _notebook_text()
     assert "__RUN_COMMIT__" not in text
-    assert "f717b1673890f2abc491609eebedaf2e3a472ed1" in text
+    assert "5d57f520e2a7902d24824f45d3e28cefe51a2b25" in text
     assert "CONFIRM_EXAMPLES = 512" in text
     assert "CALIBRATION_EXAMPLES = 512" in text
     assert "SOURCE_WAS_RERUN" in text

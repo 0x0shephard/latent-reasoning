@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_task_aware_protected_xkv.ipynb"
-RUN_COMMIT = "f717b1673890f2abc491609eebedaf2e3a472ed1"
+RUN_COMMIT = "5d57f520e2a7902d24824f45d3e28cefe51a2b25"
 nb = nbf.v4.new_notebook()
 cells = []
 
