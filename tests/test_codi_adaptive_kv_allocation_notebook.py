@@ -19,6 +19,9 @@ def test_notebook_is_pinned_and_uses_the_failed_predecessor_contract():
     assert "official_codi_fidelity_residual_xkv_holdout_v1" in text
     assert 'previous["decision"]["screen_passed"] is False' in text
     assert 'previous["final_replication"] is None' in text
+    assert '([explicit] if explicit else []) + all_candidates("summary.json")' in text
+    assert "Attached summary.json contracts:" in text
+    assert "older rank-16 predecessor-artifacts" in text
 
 
 def test_notebook_freezes_the_disjoint_splits_and_candidate_grid():

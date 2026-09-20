@@ -170,14 +170,29 @@ def discover_file(explicit, suffix):
     return candidates[0] if candidates else None
 
 def discover_json_contract(explicit, contract):
-    candidates = [explicit] if explicit else all_candidates("summary.json")
+    # A stale guessed path should not disable automatic discovery.  Try it first,
+    # then inspect every attached summary and report the contracts Kaggle exposes.
+    candidates = ([explicit] if explicit else []) + all_candidates("summary.json")
+    observed = []
+    seen = set()
     for candidate in filter(None, candidates):
+        if candidate in seen:
+            continue
+        seen.add(candidate)
         try:
             record = json.loads(pathlib.Path(candidate).read_text())
-            if record.get("contract") == contract:
+            candidate_contract = record.get("contract")
+            observed.append((str(candidate), candidate_contract))
+            if candidate_contract == contract:
                 return str(candidate)
-        except Exception:
-            continue
+        except Exception as error:
+            observed.append((str(candidate), f"UNREADABLE: {error!r}"))
+    print("Expected predecessor contract:", contract)
+    print("Attached summary.json contracts:")
+    for candidate, candidate_contract in observed:
+        print(" -", candidate_contract, "::", candidate)
+    if not observed:
+        print(" - none found under /kaggle/input or /kaggle/working")
     return None
 
 REPRODUCTION_SUMMARY = discover_file(
@@ -190,7 +205,12 @@ PREVIOUS_SUMMARY = discover_json_contract(
 )
 assert REPRODUCTION_SUMMARY, "Attach the completed official CODI reproduction dataset"
 assert PREVIOUS_SUMMARY, (
-    "Attach the published output directory from the fidelity-residual experiment"
+    "Missing summary.json with contract "
+    "official_codi_fidelity_residual_xkv_holdout_v1. "
+    "Attach the published /kaggle/working/codi_fidelity_residual_xkv output "
+    "from kaggle_codi_fidelity_residual_xkv.ipynb, or paste its exact summary.json "
+    "path into PREVIOUS_SUMMARY_INPUT. The older rank-16 predecessor-artifacts "
+    "dataset is not this experiment."
 )
 previous = json.loads(pathlib.Path(PREVIOUS_SUMMARY).read_text())
 assert previous["decision"]["screen_passed"] is False
