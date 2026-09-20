@@ -142,6 +142,30 @@ subprocess.run([
 md("### Resolve the three frozen inputs")
 code(r'''
 import torch
+import zipfile
+
+def repack_kaggle_torch_archive(candidate):
+    """Restore a torch.save ZIP that Kaggle expanded into a .pt directory."""
+    path = pathlib.Path(candidate)
+    if path.is_file():
+        return str(path)
+    if not path.is_dir() or not (path / "data.pkl").is_file():
+        return None
+    restored_root = pathlib.Path("/kaggle/working/restored_torch_artifacts")
+    restored_root.mkdir(parents=True, exist_ok=True)
+    restored = restored_root / path.name
+    temporary = restored.with_suffix(restored.suffix + ".tmp")
+    archive_prefix = path.stem
+    with zipfile.ZipFile(
+        temporary, "w", compression=zipfile.ZIP_STORED, allowZip64=True
+    ) as handle:
+        for source in sorted(path.rglob("*")):
+            if source.is_file():
+                relative = source.relative_to(path).as_posix()
+                handle.write(source, arcname=f"{archive_prefix}/{relative}")
+    temporary.replace(restored)
+    print("restored Kaggle-expanded torch artifact", path, "->", restored)
+    return str(restored)
 
 def discover_file(explicit, suffix):
     if explicit:
@@ -154,16 +178,21 @@ def discover_file(explicit, suffix):
     return sorted(set(candidates), key=lambda value: (len(pathlib.Path(value).parts), value))[0] if candidates else None
 
 def discover_torch_contract(explicit, suffix, contract):
-    candidates = [discover_file(explicit, suffix)] if explicit else []
+    candidates = [explicit] if explicit else []
     if not explicit:
         for root in ("/kaggle/working", "/kaggle/input"):
             candidates.extend(glob.glob(f"{root}/**/{suffix}", recursive=True))
     for candidate in filter(None, candidates):
         try:
-            artifact = torch.load(candidate, map_location="cpu", weights_only=False)
+            loadable = repack_kaggle_torch_archive(candidate)
+            if loadable is None:
+                continue
+            artifact = torch.load(loadable, map_location="cpu", weights_only=False)
             if artifact.get("contract") == contract:
-                return candidate
-        except Exception:
+                return loadable
+            print("ignored artifact with contract", artifact.get("contract"), loadable)
+        except Exception as error:
+            print("could not load artifact", candidate, repr(error))
             continue
     return None
 
@@ -383,14 +412,11 @@ for warning in summary["warnings"]:
 
 md("### Save the complete audit trail")
 code(r'''
-import shutil
-archive = shutil.make_archive(
-    "/kaggle/working/codi_rank16_xkv_confirmation",
-    "zip",
-    root_dir="/kaggle/working",
-    base_dir=pathlib.Path(OUTPUT_DIR).name,
-)
-print(archive)
+output = pathlib.Path(OUTPUT_DIR)
+assert (output / "summary.json").is_file()
+assert (output / "rank16_xkv_confirmation.pt").is_file()
+print("Kaggle output directory", output)
+print("Publish this directory directly; no same-named archive is created.")
 ''')
 
 nb["cells"] = cells

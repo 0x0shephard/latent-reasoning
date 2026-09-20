@@ -36,3 +36,11 @@ def test_notebook_runs_preflight_tests_and_the_gated_runner():
     assert "run_codi_rank16_xkv_mechanism_confirmation.py" in text
     assert "Mechanism stage correctly stopped" in text
     assert "final slice remains untouched" in text
+
+
+def test_notebook_repairs_kaggle_expanded_torch_archives_without_export_collision():
+    text = _text()
+    assert "repack_kaggle_torch_archive" in text
+    assert "zipfile.ZIP_STORED" in text
+    assert "restored_torch_artifacts" in text
+    assert "shutil.make_archive" not in text
