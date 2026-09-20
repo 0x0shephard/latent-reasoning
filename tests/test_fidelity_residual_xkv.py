@@ -23,6 +23,17 @@ def test_margin_gradient_bases_are_orthonormal_and_truncatable():
     assert all(basis.shape == (8, 2) for basis in truncated.values())
 
 
+def test_margin_gradient_basis_caps_randomized_svd_width_to_matrix_shape():
+    generator = torch.Generator().manual_seed(13)
+    key = torch.randn(2, 1, 2, 3, generator=generator)
+    value = torch.randn(2, 1, 2, 3, generator=generator)
+    bases, _ = fit_margin_gradient_bases(
+        key, value, maximum_rank=3, seed=17
+    )
+    assert bases[(0, "key")].shape == (3, 3)
+    assert bases[(0, "value")].shape == (3, 3)
+
+
 def test_residual_selection_prefers_compression_then_fidelity():
     records = [
         {

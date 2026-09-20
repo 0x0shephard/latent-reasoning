@@ -34,7 +34,7 @@ def fit_margin_gradient_bases(
             matrix = gradients[:, layer].reshape(-1, gradients.shape[-1]).float()
             if not bool(torch.isfinite(matrix).all()) or not float(matrix.norm()):
                 raise ValueError(f"invalid {kind} gradients at layer {layer}")
-            q = min(matrix.shape, int(maximum_rank) + 4)
+            q = min(matrix.shape[0], matrix.shape[1], int(maximum_rank) + 4)
             with torch.random.fork_rng():
                 torch.manual_seed(int(seed) + 100 * layer + kind_index)
                 _, singular, vectors = torch.pca_lowrank(
