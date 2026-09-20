@@ -23,6 +23,8 @@ class PreAnswerKVResult:
     key_gradients: torch.Tensor | None
     value_gradients: torch.Tensor | None
     gradient_connected: torch.Tensor | None
+    full_key_gradients: torch.Tensor | None = None
+    full_value_gradients: torch.Tensor | None = None
 
 
 def cache_as_legacy_tuple(cache) -> tuple:
@@ -66,13 +68,27 @@ def latent_cache_tensor(cache, *, latent_positions: int) -> tuple[torch.Tensor, 
     return torch.stack(keys, dim=1), torch.stack(values, dim=1)
 
 
+def full_cache_tensor(cache) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return matching ``[B,L,T,D]`` views of every cache row."""
+    legacy = cache_as_legacy_tuple(cache)
+    keys, values = [], []
+    for entry in legacy:
+        key, value = entry[:2]
+        if key.ndim != 4 or value.shape != key.shape:
+            raise ValueError("cache layers must contain matching [B,H,T,Dh] K/V")
+        batch, heads, tokens, head_width = key.shape
+        keys.append(key.permute(0, 2, 1, 3).reshape(batch, tokens, heads * head_width))
+        values.append(value.permute(0, 2, 1, 3).reshape(batch, tokens, heads * head_width))
+    return torch.stack(keys, dim=1), torch.stack(values, dim=1)
+
+
 def _cache_gradients(
     loss: torch.Tensor,
     legacy_cache: tuple,
     *,
     latent_positions: int,
     batch_scale: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     targets = tuple(tensor for entry in legacy_cache for tensor in entry[:2])
     raw = torch.autograd.grad(loss, targets, allow_unused=True)
     key_rows, value_rows, connected = [], [], []
@@ -87,10 +103,11 @@ def _cache_gradients(
             value_gradient = torch.zeros_like(value_target)
         key_rows.append(key_gradient * int(batch_scale))
         value_rows.append(value_gradient * int(batch_scale))
-    key, value = latent_cache_tensor(
-        tuple(zip(key_rows, value_rows)), latent_positions=latent_positions
-    )
-    return key, value, torch.tensor(connected, dtype=torch.bool)
+    gradient_cache = tuple(zip(key_rows, value_rows))
+    full_key, full_value = full_cache_tensor(gradient_cache)
+    key = full_key[:, :, -latent_positions:, :]
+    value = full_value[:, :, -latent_positions:, :]
+    return key, value, torch.tensor(connected, dtype=torch.bool), full_key, full_value
 
 
 def official_codi_preanswer_kv_forward(
@@ -101,6 +118,7 @@ def official_codi_preanswer_kv_forward(
     return_gradients: bool = False,
     gradient_objective: str = "answer_nll",
     kv_intervention=None,
+    return_full_cache_gradients: bool = False,
 ) -> PreAnswerKVResult:
     """Score the answer using the exact pre-answer cache and optionally differentiate it.
 
@@ -170,6 +188,7 @@ def official_codi_preanswer_kv_forward(
     if gradient_objective not in {"answer_nll", "first_token_margin"}:
         raise ValueError(f"unknown cache-gradient objective {gradient_objective!r}")
     key_gradients = value_gradients = connected = None
+    full_key_gradients = full_value_gradients = None
     if return_gradients:
         gradient_loss = per_example.mean()
         if gradient_objective == "first_token_margin":
@@ -180,11 +199,19 @@ def official_codi_preanswer_kv_forward(
             top = first_logits.gather(1, top_two[:, :1]).squeeze(1)
             runner_up = first_logits.gather(1, top_two[:, 1:2]).squeeze(1)
             gradient_loss = -(top - runner_up).mean()
-        key_gradients, value_gradients, connected = _cache_gradients(
+        (
+            key_gradients,
+            value_gradients,
+            connected,
+            full_key_gradients,
+            full_value_gradients,
+        ) = _cache_gradients(
             gradient_loss, legacy_cache,
             latent_positions=latent_positions,
             batch_scale=per_example.shape[0],
         )
+        if not return_full_cache_gradients:
+            full_key_gradients = full_value_gradients = None
     return PreAnswerKVResult(
         per_example_loss=per_example,
         mean_loss=per_example.mean(),
@@ -195,6 +222,8 @@ def official_codi_preanswer_kv_forward(
         key_gradients=key_gradients,
         value_gradients=value_gradients,
         gradient_connected=connected,
+        full_key_gradients=full_key_gradients,
+        full_value_gradients=full_value_gradients,
     )
 
 

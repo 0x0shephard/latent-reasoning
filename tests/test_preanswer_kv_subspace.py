@@ -60,12 +60,14 @@ def test_exact_cache_gradients_are_connected_and_keep_last_latent_positions():
     cache = tuple(zip(keys, values))
     loss = sum((key[:, :, -2:] ** 2).mean() + (value[:, :, -2:] ** 2).mean()
                for key, value in cache)
-    key_gradient, value_gradient, connected = _cache_gradients(
+    key_gradient, value_gradient, connected, full_key, full_value = _cache_gradients(
         loss, cache, latent_positions=2, batch_scale=1
     )
     assert key_gradient.shape == (2, 3, 2, 8)
     assert value_gradient.shape == (2, 3, 2, 8)
     assert connected.shape == (3, 2)
+    assert full_key.shape == (2, 3, 5, 8)
+    assert full_value.shape == (2, 3, 5, 8)
     assert bool(connected.all())
     assert float(key_gradient.abs().sum()) > 0
     assert float(value_gradient.abs().sum()) > 0
@@ -118,6 +120,31 @@ def test_preanswer_forward_supports_label_free_top1_margin_gradients():
     assert bool(output.gradient_connected.all())
     assert float(output.key_gradients.abs().sum()) > 0
     assert float(output.value_gradients.abs().sum()) > 0
+
+
+def test_preanswer_forward_can_return_full_cache_gradients_for_allocation():
+    model = TinyContextCODI()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    batch = SimpleNamespace(
+        student_question_ids=torch.tensor([[3, 4], [5, 6]]),
+        student_question_mask=torch.ones(2, 2, dtype=torch.long),
+        teacher_ids=torch.tensor([[3, 7, 20, 21, 99], [5, 8, 22, 23, 99]]),
+        teacher_mask=torch.ones(2, 5, dtype=torch.long),
+        teacher_trace_end=torch.tensor([2, 2]),
+        teacher_answer_start=torch.tensor([3, 3]),
+    )
+    output = official_codi_preanswer_kv_forward(
+        model,
+        batch,
+        latent_positions=2,
+        return_gradients=True,
+        return_full_cache_gradients=True,
+    )
+    assert output.full_key_gradients.shape == (2, 1, 4, 4)
+    assert output.full_value_gradients.shape == (2, 1, 4, 4)
+    assert torch.allclose(output.key_gradients, output.full_key_gradients[:, :, -2:])
+    assert torch.allclose(output.value_gradients, output.full_value_gradients[:, :, -2:])
 
 
 def test_cache_conversion_preserves_tensor_identity():
