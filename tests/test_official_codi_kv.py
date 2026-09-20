@@ -58,6 +58,31 @@ def test_gsm8k_eval_alignment_validates_only_requested_evaluation_prefix():
     assert [row["question"] for row in rows] == ["Used"]
 
 
+def test_gsm8k_eval_alignment_supports_signed_answers_on_locked_eval_slices():
+    rows = align_official_codi_gsm8k_eval_rows(
+        [
+            {"question": "Discovery", "answer": "reason\n#### 2"},
+            {"question": "Confirmation", "answer": "reason\n#### -1"},
+        ],
+        [
+            {"question": "Discovery", "gold": 2},
+            {"question": "Confirmation", "gold": -1},
+        ],
+        start=1,
+        examples=1,
+        enforce_answer_eligibility=False,
+    )
+    assert rows[0]["question"] == "Confirmation"
+    assert rows[0]["answer"] == "-1"
+    encoded = encode_official_codi_row(
+        CharacterTokenizer(),
+        rows[0],
+        bot_token_id=50_258,
+        enforce_answer_eligibility=False,
+    )
+    assert ord("-") in encoded.teacher_ids
+
+
 class CharacterTokenizer:
     bos_token_id = None
     eos_token_id = 99_999

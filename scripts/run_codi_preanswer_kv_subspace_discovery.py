@@ -104,12 +104,25 @@ def _collect_selection(model, tokenizer, rows, latent_positions, batch_size, dev
     )
 
 
-def _evaluate(model, tokenizer, rows, latent_positions, batch_size, device, intervention=None):
+def _evaluate(
+    model,
+    tokenizer,
+    rows,
+    latent_positions,
+    batch_size,
+    device,
+    intervention=None,
+    *,
+    enforce_answer_eligibility=True,
+):
     losses, logits, targets = [], [], []
     with torch.no_grad():
         for start in range(0, len(rows), batch_size):
             batch = collate_official_codi_kv_rows(
-                tokenizer, rows[start : start + batch_size], bot_token_id=model.bot_id
+                tokenizer,
+                rows[start : start + batch_size],
+                bot_token_id=model.bot_id,
+                enforce_answer_eligibility=enforce_answer_eligibility,
             ).to(device)
             output = official_codi_preanswer_kv_forward(
                 model, batch, latent_positions=latent_positions,

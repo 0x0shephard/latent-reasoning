@@ -64,13 +64,17 @@ class OfficialCODIKVBatch:
         return OfficialCODIKVBatch(**values)
 
 
-def format_official_codi_row(row: dict) -> OfficialCODIFormattedRow:
+def format_official_codi_row(
+    row: dict,
+    *,
+    enforce_answer_eligibility: bool = True,
+) -> OfficialCODIFormattedRow:
     """Apply the public GPT-2 ``icot`` formatting and anti-shortcut rule."""
     question = str(row["question"])
     cot_parts = str(row["cot"]).split(" ")
     cot = " ".join(cot_parts[:-1])
     raw_answer = str(row["answer"]).split(" ")[-1]
-    if not official_codi_answer_is_eligible(row["answer"]):
+    if enforce_answer_eligibility and not official_codi_answer_is_eligible(row["answer"]):
         raise ValueError("the official CODI loader drops non-digit-leading answers")
     answer = f"{OFFICIAL_ANSWER_PROMPT} {raw_answer}".replace("####", "")
     return OfficialCODIFormattedRow(question=question, cot=cot, answer=answer)
@@ -95,6 +99,8 @@ def align_official_codi_gsm8k_eval_rows(
     normalized_rows: Sequence[dict],
     *,
     examples: int | None = None,
+    start: int = 0,
+    enforce_answer_eligibility: bool = True,
 ) -> list[dict]:
     """Attach GSM8K teacher traces to normalized held-out evaluation rows.
 
@@ -117,15 +123,18 @@ def align_official_codi_gsm8k_eval_rows(
     def normalized_question(value: object) -> str:
         return " ".join(str(value).split()).casefold()
 
-    selected_examples = len(normalized_rows) if examples is None else int(examples)
-    if selected_examples < 1 or selected_examples > len(normalized_rows):
+    start = int(start)
+    selected_examples = (
+        len(normalized_rows) - start if examples is None else int(examples)
+    )
+    if start < 0 or selected_examples < 1 or start + selected_examples > len(normalized_rows):
         raise ValueError(
-            "requested GSM8K evaluation examples must be between 1 and "
-            f"{len(normalized_rows)}, got {selected_examples}"
+            "requested GSM8K evaluation slice is outside the dataset: "
+            f"start={start}, examples={selected_examples}, rows={len(normalized_rows)}"
         )
 
     aligned = []
-    for index in range(selected_examples):
+    for index in range(start, start + selected_examples):
         raw = raw_rows[index]
         normalized = normalized_rows[index]
         try:
@@ -150,7 +159,7 @@ def align_official_codi_gsm8k_eval_rows(
         final = final.strip().replace(",", "")
         if not cot:
             raise ValueError(f"GSM8K evaluation row {index} has an empty rationale")
-        if not official_codi_answer_is_eligible(final):
+        if enforce_answer_eligibility and not official_codi_answer_is_eligible(final):
             raise ValueError(
                 f"GSM8K evaluation row {index} has an ineligible final answer"
             )
@@ -188,9 +197,13 @@ def encode_official_codi_row(
     row: dict,
     *,
     bot_token_id: int,
+    enforce_answer_eligibility: bool = True,
 ) -> OfficialCODIEncodedRow:
     """Tokenize one calibration row exactly as the released training data path."""
-    formatted = format_official_codi_row(row)
+    formatted = format_official_codi_row(
+        row,
+        enforce_answer_eligibility=enforce_answer_eligibility,
+    )
     if len(
         tokenizer.encode(
             str(row["question"]) + str(row["cot"]) + str(row["answer"])
@@ -277,6 +290,7 @@ def collate_official_codi_kv_rows(
     rows: Sequence[dict],
     *,
     bot_token_id: int,
+    enforce_answer_eligibility: bool = True,
 ) -> OfficialCODIKVBatch:
     """Build left-padded student and right-padded teacher batches."""
     import torch
@@ -288,6 +302,7 @@ def collate_official_codi_kv_rows(
             tokenizer,
             row,
             bot_token_id=bot_token_id,
+            enforce_answer_eligibility=enforce_answer_eligibility,
         )
         for row in rows
     ]

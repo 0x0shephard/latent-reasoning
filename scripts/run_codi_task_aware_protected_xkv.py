@@ -410,10 +410,11 @@ def _topk_overlap(logits, dense_logits, k=5):
 
 def _teacher_forced_arm(
     model, tokenizer, rows, latent_positions, batch_size, device,
-    dense_losses, dense_logits, factorizer
+    dense_losses, dense_logits, factorizer, *, enforce_answer_eligibility=True
 ):
     losses, logits, targets = _evaluate(
-        model, tokenizer, rows, latent_positions, batch_size, device, factorizer
+        model, tokenizer, rows, latent_positions, batch_size, device, factorizer,
+        enforce_answer_eligibility=enforce_answer_eligibility,
     )
     metrics = _metrics(losses, logits, targets, dense_losses, dense_logits)
     serializable = {
