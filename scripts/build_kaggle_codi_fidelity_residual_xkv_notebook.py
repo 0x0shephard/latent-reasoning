@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_fidelity_residual_xkv.ipynb"
-RUN_COMMIT = "9edade1401b8cf8b67e4d1ac424fd7cf8100573a"
+RUN_COMMIT = "2cf904dc0d65ddf5e207f76ae4e134fe55c91b82"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -134,6 +134,12 @@ print("code commit", subprocess.run(
 
 md("### Install the checkpoint-compatible environment and run focused tests")
 code(r'''
+# TPOT is preinstalled in some Kaggle images but unused here.  Removing it
+# avoids a resolver warning when datasets installs its compatible dill version.
+subprocess.run(
+    [sys.executable, "-m", "pip", "uninstall", "-y", "tpot"],
+    check=False,
+)
 subprocess.run([
     sys.executable, "-m", "pip", "install", "-q",
     "transformers==4.52.4", "datasets==3.6.0", "peft==0.15.2",

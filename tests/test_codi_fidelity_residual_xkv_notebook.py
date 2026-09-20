@@ -15,7 +15,7 @@ def _text():
 
 def test_notebook_pins_core_commit_and_required_inputs():
     text = _text()
-    assert "9edade1401b8cf8b67e4d1ac424fd7cf8100573a" in text
+    assert "2cf904dc0d65ddf5e207f76ae4e134fe55c91b82" in text
     assert "direct_cache_task_subspaces.pt" in text
     assert "task_aware_protected_xkv.pt" in text
     assert "official_codi_xkv_fidelity_frontier_holdout_v1" in text
@@ -34,6 +34,7 @@ def test_notebook_freezes_fresh_splits_and_candidate_grid():
 
 def test_notebook_runs_focused_tests_and_gated_runner():
     text = _text()
+    assert '"pip", "uninstall", "-y", "tpot"' in text
     assert "tests/test_fidelity_residual_xkv.py" in text
     assert "tests/test_fidelity_residual_xkv_runner.py" in text
     assert "run_codi_fidelity_residual_xkv.py" in text
