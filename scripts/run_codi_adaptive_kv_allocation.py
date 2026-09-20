@@ -29,6 +29,7 @@ from scripts.run_codi_fidelity_residual_xkv import CONTRACT as PREDECESSOR_CONTR
 from scripts.run_codi_preanswer_kv_subspace_discovery import _sha
 from scripts.run_codi_task_aware_protected_xkv import FinalLatentTaskAwareFactorizer
 from scripts.run_codi_xkv_fidelity_frontier import (
+    CONTRACT as FRONTIER_CONTRACT,
     _complete_generation_screen,
     _dense_generation,
     _dense_teacher,
@@ -68,6 +69,12 @@ BASELINE_RANKS = (48, 64, 80)
 ANSWER_WEIGHTS = (0.0, 0.5, 1.0)
 MAXIMUM_COMPONENT_RANK = 96
 PER_LAYER_GROUPS = tuple((layer,) for layer in range(12))
+# Frozen predecessor chain: 2,432 direct-cache source rows, 512 native-KV
+# confirmation rows, 1,024 task-aware confirmation/calibration rows, and 1,024
+# fidelity-residual fit/screen rows. Every stage inherited the direct-cache
+# source's frozen sampling seed, 20260916.
+RECONSTRUCTED_PREDECESSOR_EXAMPLES = 4_992
+RECONSTRUCTED_SAMPLING_SEED = 20_260_916
 
 
 def _parse_ints(value: str) -> tuple[int, ...]:
@@ -83,17 +90,21 @@ def _with_gold(rows):
 
 
 def _fresh_train_rows(
-    train, test, predecessor, *, calibration_examples: int, screen_examples: int
+    train, test, *, used_examples: int, seed: int,
+    calibration_examples: int, screen_examples: int,
+    expected_sampling: dict | None = None,
 ):
-    used_examples = int(predecessor["sampling"]["selected_examples"])
-    seed = int(predecessor["sampling"]["sampling_seed"])
     test_questions = {_normalized_question(row["question"]) for row in test}
     used_rows, used_audit = sample_gsm8k_train_calibration(
         train, test_questions=test_questions, examples=used_examples, seed=seed
     )
-    for key in ("selected_source_indices_sha256", "selected_normalized_questions_sha256"):
-        if used_audit[key] != predecessor["sampling"][key]:
-            raise RuntimeError("could not reconstruct the predecessor train prefix")
+    if expected_sampling is not None:
+        for key in (
+            "selected_source_indices_sha256",
+            "selected_normalized_questions_sha256",
+        ):
+            if used_audit[key] != expected_sampling[key]:
+                raise RuntimeError("could not reconstruct the predecessor train prefix")
     total = used_examples + int(calibration_examples) + int(screen_examples)
     rows, sampling = sample_gsm8k_train_calibration(
         train, test_questions=test_questions, examples=total, seed=seed
@@ -257,15 +268,50 @@ def run(args):
 
     cfg = load_config(args.config)
     reproduction = verify_full_reproduction_gate(args.reproduction_summary, cfg)
-    predecessor = json.loads(args.previous_summary.read_text())
-    if predecessor.get("contract") != PREDECESSOR_CONTRACT:
-        raise RuntimeError("wrong fidelity-residual predecessor summary")
-    if predecessor["decision"]["screen_passed"]:
-        raise RuntimeError("this experiment is preregistered for the failed residual screen")
-    if predecessor.get("selected_candidate") is not None:
-        raise RuntimeError("the failed predecessor unexpectedly selected a candidate")
-    if predecessor.get("final_replication") is not None:
-        raise RuntimeError("the locked final slice was already opened")
+    predecessor = (
+        json.loads(args.previous_summary.read_text())
+        if args.previous_summary is not None else None
+    )
+    frontier = (
+        json.loads(args.previous_frontier_summary.read_text())
+        if args.previous_frontier_summary is not None else None
+    )
+    if predecessor is not None:
+        if predecessor.get("contract") != PREDECESSOR_CONTRACT:
+            raise RuntimeError("wrong fidelity-residual predecessor summary")
+        if predecessor["decision"]["screen_passed"]:
+            raise RuntimeError("this experiment is preregistered for the failed residual screen")
+        if predecessor.get("selected_candidate") is not None:
+            raise RuntimeError("the failed predecessor unexpectedly selected a candidate")
+        if predecessor.get("final_replication") is not None:
+            raise RuntimeError("the locked final slice was already opened")
+        used_examples = int(predecessor["sampling"]["selected_examples"])
+        sampling_seed = int(predecessor["sampling"]["sampling_seed"])
+        expected_sampling = predecessor["sampling"]
+        expected_final_hash = predecessor["split_hashes"]["final"]
+        expected_checkpoint_sha256 = predecessor["checkpoint_sha256"]
+        lineage_mode = "verified_fidelity_residual_summary"
+    else:
+        if not args.allow_protocol_fallback:
+            raise RuntimeError(
+                "--previous-summary is required unless --allow-protocol-fallback is set"
+            )
+        if frontier is None or frontier.get("contract") != FRONTIER_CONTRACT:
+            raise RuntimeError(
+                "protocol fallback requires the failed fidelity-frontier summary"
+            )
+        if frontier["decision"]["development_passed"]:
+            raise RuntimeError("protocol fallback requires the failed frontier screen")
+        if frontier.get("selected_candidate") is not None:
+            raise RuntimeError("the failed frontier unexpectedly selected a candidate")
+        if frontier.get("final_replication") is not None:
+            raise RuntimeError("the frontier final slice was already opened")
+        used_examples = RECONSTRUCTED_PREDECESSOR_EXAMPLES
+        sampling_seed = RECONSTRUCTED_SAMPLING_SEED
+        expected_sampling = None
+        expected_final_hash = frontier["split_hashes"]["final"]
+        expected_checkpoint_sha256 = frontier["checkpoint_sha256"]
+        lineage_mode = "protocol_reconstructed_without_residual_summary"
 
     device = select_device(args.device)
     dtype = resolve_torch_dtype(args.precision, device)
@@ -282,7 +328,7 @@ def run(args):
     load_report = load_official_checkpoint(
         model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256)
     )
-    if load_report.checkpoint_sha256 != predecessor["checkpoint_sha256"]:
+    if load_report.checkpoint_sha256 != expected_checkpoint_sha256:
         raise RuntimeError("loaded checkpoint does not match predecessor lineage")
     model.to(device=device, dtype=dtype).eval()
     for parameter in model.parameters():
@@ -299,9 +345,10 @@ def run(args):
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
     calibration_rows, screen_rows, sampling = _fresh_train_rows(
-        train, test, predecessor,
+        train, test, used_examples=used_examples, seed=sampling_seed,
         calibration_examples=FRESH_CALIBRATION_EXAMPLES,
         screen_examples=FRESH_SCREEN_EXAMPLES,
+        expected_sampling=expected_sampling,
     )
     spec = data_cfg.eval.gsm8k
     raw_test = load_dataset(
@@ -313,7 +360,7 @@ def run(args):
         enforce_answer_eligibility=False,
     )
     final_hash = _sha([_normalized_question(row["question"]) for row in final_rows])
-    if final_hash != predecessor["split_hashes"]["final"]:
+    if final_hash != expected_final_hash:
         raise RuntimeError("could not reconstruct the untouched final slice")
 
     latent_positions = int(cfg.eval.latent_iterations)
@@ -443,8 +490,19 @@ def run(args):
         "checkpoint_sha256": load_report.checkpoint_sha256,
         "reproduction_gate": reproduction,
         "lineage": {
-            "previous_summary_sha256": _file_sha256(args.previous_summary),
+            "mode": lineage_mode,
+            "previous_summary_sha256": (
+                _file_sha256(args.previous_summary)
+                if args.previous_summary is not None else None
+            ),
             "previous_contract": PREDECESSOR_CONTRACT,
+            "frontier_summary_sha256": (
+                _file_sha256(args.previous_frontier_summary)
+                if args.previous_frontier_summary is not None else None
+            ),
+            "frontier_contract": FRONTIER_CONTRACT if frontier is not None else None,
+            "reconstructed_predecessor_examples": used_examples,
+            "reconstructed_sampling_seed": sampling_seed,
         },
         "preregistration": {
             "baseline_ranks": list(BASELINE_RANKS),
@@ -501,7 +559,10 @@ def run(args):
             "The 551-question final test slice is opened exactly once and only after the fresh screen passes.",
             "Budget padding is counted as cache storage, so adaptive and ordinary arms have identical modeled bits.",
             "This is a dense-reconstruction and modeled-storage proxy, not a native xKV latency benchmark.",
-        ],
+        ] + ([
+            "The fidelity-residual summary was unavailable; its 4,992-row seed-20260916 train prefix was reconstructed from the frozen protocol.",
+            "The attached failed frontier proves the final slice was locked before the residual run, but the missing residual summary prevents machine-verifying that run's outcome; this fallback is explicitly weaker lineage evidence.",
+        ] if predecessor is None else []),
     }
     if selected is None:
         _save(args, summary, tensors, outputs, predictions)
@@ -624,7 +685,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("configs/official_codi_gpt2.yaml"))
     parser.add_argument("--reproduction-summary", type=Path, required=True)
-    parser.add_argument("--previous-summary", type=Path, required=True)
+    parser.add_argument("--previous-summary", type=Path)
+    parser.add_argument("--previous-frontier-summary", type=Path)
+    parser.add_argument("--allow-protocol-fallback", action="store_true")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--checkpoint-path", type=Path)
     parser.add_argument("--baseline-ranks", default=",".join(map(str, BASELINE_RANKS)))

@@ -6,6 +6,8 @@ from scripts.run_codi_adaptive_kv_allocation import (
     FRESH_SCREEN_EXAMPLES,
     MAXIMUM_COMPONENT_RANK,
     PER_LAYER_GROUPS,
+    RECONSTRUCTED_PREDECESSOR_EXAMPLES,
+    RECONSTRUCTED_SAMPLING_SEED,
     _candidate_name,
 )
 
@@ -18,6 +20,8 @@ def test_adaptive_allocation_protocol_is_frozen():
     assert ANSWER_WEIGHTS == (0.0, 0.5, 1.0)
     assert MAXIMUM_COMPONENT_RANK == 96
     assert PER_LAYER_GROUPS == tuple((layer,) for layer in range(12))
+    assert RECONSTRUCTED_PREDECESSOR_EXAMPLES == 4_992
+    assert RECONSTRUCTED_SAMPLING_SEED == 20_260_916
 
 
 def test_adaptive_allocation_names_are_stable():
