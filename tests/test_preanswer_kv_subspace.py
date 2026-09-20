@@ -96,6 +96,30 @@ def test_preanswer_forward_differentiates_the_same_cache_used_by_answer_decoder(
     assert float(output.value_gradients.abs().sum()) > 0
 
 
+def test_preanswer_forward_supports_label_free_top1_margin_gradients():
+    model = TinyContextCODI()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    batch = SimpleNamespace(
+        student_question_ids=torch.tensor([[3, 4], [5, 6]]),
+        student_question_mask=torch.ones(2, 2, dtype=torch.long),
+        teacher_ids=torch.tensor([[3, 7, 20, 21, 99], [5, 8, 22, 23, 99]]),
+        teacher_mask=torch.ones(2, 5, dtype=torch.long),
+        teacher_trace_end=torch.tensor([2, 2]),
+        teacher_answer_start=torch.tensor([3, 3]),
+    )
+    output = official_codi_preanswer_kv_forward(
+        model,
+        batch,
+        latent_positions=2,
+        return_gradients=True,
+        gradient_objective="first_token_margin",
+    )
+    assert bool(output.gradient_connected.all())
+    assert float(output.key_gradients.abs().sum()) > 0
+    assert float(output.value_gradients.abs().sum()) > 0
+
+
 def test_cache_conversion_preserves_tensor_identity():
     key = torch.randn(1, 2, 3, 4, requires_grad=True)
     value = torch.randn(1, 2, 3, 4, requires_grad=True)

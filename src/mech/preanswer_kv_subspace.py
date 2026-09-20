@@ -99,6 +99,7 @@ def official_codi_preanswer_kv_forward(
     *,
     latent_positions: int,
     return_gradients: bool = False,
+    gradient_objective: str = "answer_nll",
     kv_intervention=None,
 ) -> PreAnswerKVResult:
     """Score the answer using the exact pre-answer cache and optionally differentiate it.
@@ -166,10 +167,21 @@ def official_codi_preanswer_kv_forward(
     first_logits = decoded.logits[rows, first_positions]
     first_targets = answer_targets[rows, first_positions]
 
+    if gradient_objective not in {"answer_nll", "first_token_margin"}:
+        raise ValueError(f"unknown cache-gradient objective {gradient_objective!r}")
     key_gradients = value_gradients = connected = None
     if return_gradients:
+        gradient_loss = per_example.mean()
+        if gradient_objective == "first_token_margin":
+            # Preserve the dense model's own top-1 decision without using a gold
+            # answer label.  The top-two identities are treated as fixed while
+            # autograd measures cache directions that support their logit margin.
+            top_two = first_logits.detach().topk(2, dim=-1).indices
+            top = first_logits.gather(1, top_two[:, :1]).squeeze(1)
+            runner_up = first_logits.gather(1, top_two[:, 1:2]).squeeze(1)
+            gradient_loss = -(top - runner_up).mean()
         key_gradients, value_gradients, connected = _cache_gradients(
-            per_example.mean(), legacy_cache,
+            gradient_loss, legacy_cache,
             latent_positions=latent_positions,
             batch_scale=per_example.shape[0],
         )
