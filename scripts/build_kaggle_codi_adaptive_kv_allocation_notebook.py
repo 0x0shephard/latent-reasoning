@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_adaptive_kv_allocation.ipynb"
-RUN_COMMIT = "0198274e165b7434c52b4e581d1fd82e134f41a4"
+RUN_COMMIT = "dac09573310156bf70eb6ff359d61399e33ae308"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -45,6 +45,12 @@ is the wrong way to spend a fixed cache budget.
 - Open the untouched 551-question final test slice only if a fresh candidate
   passes the complete gate.
 
+The fidelity-residual summary is preferred but no longer mandatory. If it is
+missing, the notebook reconstructs its frozen 4,992-question, seed-20260916
+training prefix and verifies the final-slice identity against the attached
+failed fidelity-frontier summary. That fallback is explicitly marked as weaker
+lineage evidence in the result.
+
 This is a dense-reconstruction quality and modeled-storage experiment, not a
 native compressed-attention latency benchmark.
 """)
@@ -74,8 +80,9 @@ A candidate must satisfy all five preregistered checks:
 
 ### Key Assumptions
 
-- The attached predecessor summary is the failed fidelity-residual run and its
-  final test field is still null.
+- Prefer the failed fidelity-residual summary. If it is unavailable, use the
+  attached failed fidelity-frontier summary plus the frozen predecessor split
+  sizes and seed; the output records that weaker audit mode.
 - Train sampling is deterministic, so the predecessor prefix and two new slices
   can be reconstructed exactly.
 - Static utility curves are model metadata; every request-specific factor and
@@ -97,6 +104,9 @@ REPRODUCTION_SUMMARY_INPUT = (
 # Attach the published output directory from
 # kaggle_codi_fidelity_residual_xkv.ipynb. Leave blank for contract discovery.
 PREVIOUS_SUMMARY_INPUT = ""
+# Used only when the fidelity-residual summary is unavailable. The user's
+# existing "can-xkv-without-giving-up-its-storage-advantage" dataset contains it.
+PREVIOUS_FRONTIER_SUMMARY_INPUT = ""
 OUTPUT_DIR = "/kaggle/working/codi_adaptive_kv_allocation"
 
 FRESH_CALIBRATION_EXAMPLES = 512
@@ -169,7 +179,7 @@ def discover_file(explicit, suffix):
     candidates = all_candidates(suffix)
     return candidates[0] if candidates else None
 
-def discover_json_contract(explicit, contract):
+def discover_json_contract(explicit, contract, *, report_missing=True):
     # A stale guessed path should not disable automatic discovery.  Try it first,
     # then inspect every attached summary and report the contracts Kaggle exposes.
     candidates = ([explicit] if explicit else []) + all_candidates("summary.json")
@@ -187,12 +197,15 @@ def discover_json_contract(explicit, contract):
                 return str(candidate)
         except Exception as error:
             observed.append((str(candidate), f"UNREADABLE: {error!r}"))
-    print("Expected predecessor contract:", contract)
-    print("Attached summary.json contracts:")
-    for candidate, candidate_contract in observed:
-        print(" -", candidate_contract, "::", candidate)
-    if not observed:
-        print(" - none found under /kaggle/input or /kaggle/working")
+    if report_missing:
+        print("Expected contract:", contract)
+        print("No match among", len(observed), "attached summary.json files")
+        for candidate, candidate_contract in observed[:25]:
+            print(" -", candidate_contract, "::", candidate)
+        if len(observed) > 25:
+            print(" - ...", len(observed) - 25, "additional summaries omitted")
+        if not observed:
+            print(" - none found under /kaggle/input or /kaggle/working")
     return None
 
 REPRODUCTION_SUMMARY = discover_file(
@@ -202,22 +215,31 @@ REPRODUCTION_SUMMARY = discover_file(
 PREVIOUS_SUMMARY = discover_json_contract(
     PREVIOUS_SUMMARY_INPUT,
     "official_codi_fidelity_residual_xkv_holdout_v1",
+    report_missing=False,
+)
+PREVIOUS_FRONTIER_SUMMARY = discover_json_contract(
+    PREVIOUS_FRONTIER_SUMMARY_INPUT,
+    "official_codi_xkv_fidelity_frontier_holdout_v1",
+    report_missing=PREVIOUS_SUMMARY is None,
 )
 assert REPRODUCTION_SUMMARY, "Attach the completed official CODI reproduction dataset"
-assert PREVIOUS_SUMMARY, (
-    "Missing summary.json with contract "
-    "official_codi_fidelity_residual_xkv_holdout_v1. "
-    "Attach the published /kaggle/working/codi_fidelity_residual_xkv output "
-    "from kaggle_codi_fidelity_residual_xkv.ipynb, or paste its exact summary.json "
-    "path into PREVIOUS_SUMMARY_INPUT. The older rank-16 predecessor-artifacts "
-    "dataset is not this experiment."
-)
-previous = json.loads(pathlib.Path(PREVIOUS_SUMMARY).read_text())
-assert previous["decision"]["screen_passed"] is False
-assert previous["final_replication"] is None
 print("reproduction", REPRODUCTION_SUMMARY)
-print("failed fidelity-residual predecessor", PREVIOUS_SUMMARY)
-print("predecessor final slice remains locked", previous["split_hashes"]["final"])
+if PREVIOUS_SUMMARY is not None:
+    previous = json.loads(pathlib.Path(PREVIOUS_SUMMARY).read_text())
+    assert previous["decision"]["screen_passed"] is False
+    assert previous["final_replication"] is None
+    print("verified fidelity-residual predecessor", PREVIOUS_SUMMARY)
+    print("predecessor final slice remains locked", previous["split_hashes"]["final"])
+else:
+    assert PREVIOUS_FRONTIER_SUMMARY, (
+        "Attach either the fidelity-residual output or the failed fidelity-frontier "
+        "summary. The latter enables the explicit protocol-reconstruction fallback."
+    )
+    frontier = json.loads(pathlib.Path(PREVIOUS_FRONTIER_SUMMARY).read_text())
+    assert frontier["decision"]["development_passed"] is False
+    assert frontier["final_replication"] is None
+    print("using protocol fallback from failed frontier", PREVIOUS_FRONTIER_SUMMARY)
+    print("reconstructing 4,992 predecessor train rows with sampling seed 20260916")
 ''')
 
 md("## Results — fresh allocation screen and one locked final replication")
@@ -226,7 +248,6 @@ command = [
     sys.executable, "-u", "scripts/run_codi_adaptive_kv_allocation.py",
     "--config", "configs/official_codi_gpt2.yaml",
     "--reproduction-summary", REPRODUCTION_SUMMARY,
-    "--previous-summary", PREVIOUS_SUMMARY,
     "--output-dir", OUTPUT_DIR,
     "--baseline-ranks", BASELINE_RANKS,
     "--answer-weights", ANSWER_WEIGHTS,
@@ -242,6 +263,13 @@ command = [
     "--generation-batch-size", "8",
     "--precision", "float32", "--device", "cuda",
 ]
+if PREVIOUS_SUMMARY is not None:
+    command.extend(["--previous-summary", PREVIOUS_SUMMARY])
+else:
+    command.extend([
+        "--previous-frontier-summary", PREVIOUS_FRONTIER_SUMMARY,
+        "--allow-protocol-fallback",
+    ])
 subprocess.run(command, check=True)
 summary = json.loads((pathlib.Path(OUTPUT_DIR) / "summary.json").read_text())
 print(summary["decision"])

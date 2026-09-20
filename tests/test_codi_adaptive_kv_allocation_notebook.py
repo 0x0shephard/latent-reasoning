@@ -13,15 +13,18 @@ def _notebook_text() -> str:
     return "\n".join("".join(cell["source"]) for cell in notebook["cells"])
 
 
-def test_notebook_is_pinned_and_uses_the_failed_predecessor_contract():
+def test_notebook_is_pinned_and_supports_verified_or_reconstructed_lineage():
     text = _notebook_text()
-    assert 'RUN_COMMIT = "0198274e165b7434c52b4e581d1fd82e134f41a4"' in text
+    assert 'RUN_COMMIT = "dac09573310156bf70eb6ff359d61399e33ae308"' in text
     assert "official_codi_fidelity_residual_xkv_holdout_v1" in text
+    assert "official_codi_xkv_fidelity_frontier_holdout_v1" in text
     assert 'previous["decision"]["screen_passed"] is False' in text
     assert 'previous["final_replication"] is None' in text
+    assert 'frontier["decision"]["development_passed"] is False' in text
+    assert 'frontier["final_replication"] is None' in text
     assert '([explicit] if explicit else []) + all_candidates("summary.json")' in text
-    assert "Attached summary.json contracts:" in text
-    assert "older rank-16 predecessor-artifacts" in text
+    assert "--allow-protocol-fallback" in text
+    assert "reconstructing 4,992 predecessor train rows with sampling seed 20260916" in text
 
 
 def test_notebook_freezes_the_disjoint_splits_and_candidate_grid():
