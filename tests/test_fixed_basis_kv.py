@@ -227,9 +227,23 @@ def test_collect_kv_second_moments_covers_every_row_type():
         collector.detach()
     counts = result["row_counts"]
     assert len(result["outputs"]) == 3
-    assert counts["question"] == sum(len(q.split()) + 1 for q in questions)
+    # Derive the expectation from the tokenizer rather than from whitespace: what
+    # matters is that left padding is excluded, so the moments never see pad rows.
+    expected_question = 0
+    padded_positions = 0
+    for start in range(0, len(questions), 2):
+        chunk = questions[start : start + 2]
+        encoded = tokenizer(
+            chunk, return_tensors="pt", padding="longest", add_special_tokens=False
+        )
+        expected_question += int(encoded["attention_mask"].sum()) + len(chunk)
+        padded_positions += int((encoded["attention_mask"] == 0).sum())
+    assert padded_positions > 0, "the fixture must exercise left padding"
+    assert counts["question"] == expected_question
     assert counts["latent"] == 2 * 3
-    assert counts["cue"] == 3 * 3
+    # The cue pass caches one <eot> marker plus however many pieces the cue makes.
+    cue_ids = tokenizer(" w12 w13", add_special_tokens=False)["input_ids"]
+    assert counts["cue"] == 3 * (1 + len(cue_ids))
     # The first answer token is produced by the cue pass, and the tiny random model
     # may emit EOS at any later step, so only the bound is determined.
     assert 0 <= counts["answer"] <= 3 * 2
