@@ -1,6 +1,6 @@
 # Research context ledger
 
-Last updated: 2026-08-27 (rev 3)
+Last updated: 2026-09-21 (rev 4)
 
 ## Purpose
 
@@ -10,9 +10,11 @@ experiment. It records the original question, the instructor's criticism, the
 TSV-inspired pivot, completed experimental gates, current evidence, and the next
 decision.
 
-The latest result is a completed full-GSM8K causal intervention on the official CODI
-checkpoint. Learned rank-four KV directions did **not** show greater causal value than
-energy-matched random rank-four directions.
+Entries §60–§82 reconstruct the September 2026 work that ran without ledger
+updates: the answer-readout compression track that grew out of §59's "route 2"
+(§61–§68) and the KV-cache compression track (§69–§81), with §82 recording the
+assessment. §83 is the first experiment run after that assessment, and it closes the
+KV track with a mechanistic finding rather than another null. Read §82 and §83 first.
 
 ## 1. Original problem and research question
 
@@ -2504,3 +2506,564 @@ The rank-k answer-readout microbenchmark measured the full lm_head projection at
 retention arms (rank 32 keeps 94.4% of exact match). The two findings-derived
 efficiency corollaries are therefore: a free M=5 inference budget, and an
 11×-faster answer readout at a 2.4-point accuracy cost.
+
+## 60. September 2026: two tracks ran without ledger entries
+
+Between 2026-08-29 and 2026-09-21 the project ran roughly twenty Kaggle experiments
+in two tracks and recorded none of them here. Entries §61–§81 were reconstructed on
+2026-09-21 from the protocol docs, the notebook preambles (each restates its
+predecessor's outcome), the completed global-head report
+(`scripts/build_completed_global_low_rank_head_report.py`, which hard-codes the
+immutable run values), and the run transcripts of the last three experiments. Where a
+Kaggle `summary.json` was never transcribed into the repository the outcome is marked
+**not recorded**; those cells must be filled from the Kaggle datasets before any of
+them is cited.
+
+- **Track 1 (§61–§68)** pursued §59's second efficiency route: replace the full
+  50,257-way vocabulary head with a low-rank head at every visible answer position.
+- **Track 2 (§69–§81)** pursued KV-cache compression: find answer-causal K/V
+  directions, protect them inside xKV-style cross-layer factorization, then spend a
+  fixed cache budget unevenly across layers, components, and requests.
+
+Neither track advanced the CODI-versus-KaVa question (§1). §82 assesses why both
+stalled and states the decision point.
+
+## 61. Eigenspace-distilled readout: eigen-init works, the 98% gate fails
+
+`kaggle_codi_eigenspace_distilled_readout.ipynb` (2026-09-01), full 1,319-question
+GSM8K test, frozen backbone, head-only training on question-disjoint train states.
+Fixed forced-cue baseline 43.366% (572/1,319).
+
+| head | exact match | of dense | isolated head | end-to-end |
+|---|---:|---:|---:|---:|
+| full | 43.366% | 100% | 637 µs | 1.000× |
+| fixed eigen rank 32 (§40 basis reused at every position) | 5.080% | 11.7% | — | — |
+| learned random-init rank 32 | 22.517% | 51.9% | — | — |
+| learned eigen-init rank 32 | 40.334% | 93.0% | 128 µs | 1.136× |
+| learned eigen-init rank 64 | 42.002% | 96.85% | 139 µs | 1.122× |
+
+The preregistered 98% retention gate failed at both ranks. Two facts survive: the
+§40 answer subspace is a strong *initialization* (eigen-init beats random-init by 18
+points at equal rank and equal training), and the fixed colon basis cannot be reused
+at later answer positions (5.08%). A later notebook preamble quotes the end-to-end
+gain as "about 6%"; the report records 1.122×. The two measurements were not
+reconciled.
+
+## 62. Qwen generalization of the answer eigenspace: run, outcome not recorded
+
+`kaggle_eigenspace_readout_generalization_qwen.ipynb` (v1 2026-09-01, corrected v2
+2026-09-02) tested whether the readout-aware eigenspace selection transfers to
+`Qwen/Qwen2.5-Math-1.5B-Instruct`. v1 measured prompt-endpoint states and was
+declared invalid because CODI's measured state is post-reasoning, pre-answer; v2
+measured the state before Qwen's final answer token, with rank 192 endpoint locality
+and a distilled full-generation head as separate gates. A Kaggle dataset exists
+(`does-the-answer-eigenspace-generalize-beyond-codi`). **Outcome not recorded** in
+the repository.
+
+## 63. Position-conditioned readout: v1 failed safely, v2 outcome not recorded
+
+`OFFICIAL_CODI_POSITION_CONDITIONED_READOUT.md` (2026-09-04). Version 1 stopped at
+state collection: the 1,024-question fit split held 1,024 `p0`, 1,024 `p1`, 169 `p2`,
+92 position-3–5 and 2 position-6+ states, so a tail expert was unidentifiable. Version
+2 pooled to `p0 / p1 / p2_plus` and ran. The only trace of its result is the fast-path
+doc's sentence that "a much cheaper vocabulary head produces only a small
+complete-model speedup." Whether the locality gate (on-policy local head beats
+`same_pc4_31_everywhere`, `learned_global_r32`, and the permuted-expert control)
+passed is **not recorded**.
+
+## 64. Systems fast path: lossless arms adopted, numbers not recorded
+
+`OFFICIAL_CODI_SYSTEMS_FASTPATH.md` (2026-09-05). Nine cumulative arms from the
+released eager path (B0) through body-only decoding without discarded logits (B1),
+merged LoRA (B2), fast tokenizer (B3), length bucketing (B4), FP16 (B5), M=5 (B6),
+numeric vocabulary (B7), and `torch.compile` (B8). Every later notebook in both tracks
+runs on the merged-LoRA, body-only decoder with a decoded-string parity gate, so B1–B2
+were adopted as lossless infrastructure. The B3 (≥1.20× batch-one) and B6 (≥1.50× at
+≥98% accuracy) gate outcomes are **not recorded**. This is the only experiment in the
+September set that targeted the transformer rather than the head or the cache.
+
+## 65. Trajectory-whitened global head: rank 96 retains 98.43%
+
+`kaggle_global_low_rank_lm_head.ipynb` (2026-09-05), Kaggle dataset
+`trajectory-whitened-global-low-rank-lm-head`. One head shared across every visible
+answer position; initialization by randomized SVD of `W S` (activation-whitened);
+KL + top-token CE + ranking-margin distillation; nested rank 32/64/96 prefixes; one
+on-policy recovery round; 1,024 / 256 / 256 question-disjoint train splits; test
+opened once. Validation top-token agreement went 91.44% → 93.29% (clean) → 93.46%
+(recovery).
+
+| arm | correct | exact match | of dense | paired 95% CI vs dense |
+|---|---:|---:|---:|---|
+| dense | 572 | 43.366% | 100% | — |
+| rank 32 | 539 | 40.864% | 94.23% | [−4.018, −0.910] pp |
+| rank 64 | 559 | 42.381% | 97.73% | [−2.123, +0.076] pp |
+| **rank 96** | **563** | **42.684%** | **98.43%** | [−1.744, +0.379] pp |
+| adaptive 32→64 | 560 | 42.456% | 97.90% | [−1.971, +0.227] pp |
+
+Rank 96 passed the 98% retention gate. This is the quality ceiling of route 2 on this
+checkpoint: a 7.9× arithmetic reduction of the head at a nine-question cost.
+
+## 66. Deployment benchmark: no end-to-end speedup; route 2 closed as a systems route
+
+`kaggle_global_head_deployment_benchmark.ipynb` (2026-09-05), frozen rank-96
+artifact, merged-LoRA FP16 body-only decoder, dense vs eager vs compiled vs Triton
+projection-plus-blockwise-argmax.
+
+| batch | dense head | rank-96 head | head speedup | dense end-to-end | rank-96 end-to-end | e2e speedup |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 355.15 µs | 87.58 µs | 4.06× | 92,685.59 µs | 92,317.57 µs | 1.004× |
+| 8 | 416.95 µs | 133.43 µs | 3.12× | 12,417.29 µs | 12,364.39 µs | 1.004× |
+| 32 | 535.97 µs | 136.03 µs | 3.94× | 3,301.34 µs | 3,336.08 µs | 0.990× |
+
+Compiled rank 96: 0.999×. Triton rank 96: 1.001× at 42.305% (97.72%, below the
+gate). Deployed storage grew from 263.83 MB to 273.73 MB because GPT-2 ties the output
+matrix to the input embeddings, which stay dense. The ≥1.10× batch-one gate failed in
+every arm. The head is a small fraction of CODI's latency once the body is optimized,
+so no head-only change can move the end-to-end number; §59's "11× faster readout"
+was a component figure and does not compose into a deployment result.
+
+## 67. U28-to-rank-96 bridge: the learned head relies on the causal band
+
+`kaggle_codi_28_to_global96_bridge.ipynb` (2026-09-06, commit `0d04b20`). No
+training; connects §40's U28 (PCs 4–31 at the answer colon) with §65's rank-96 head.
+
+- Row-space capture of U28 by the learned rank-96 down-projection: **58.58%**,
+  against 12.5% isotropic expectation and above the 200-control null.
+- Rank 96 with only U28 retained at answer position 0: 39.121% (91.65% of rank 96).
+- Rank 96 with U28 removed at position 0: 8.491% (a 34.19-point loss).
+- The fixed U28 head used at every position "failed completely at later answer
+  positions", confirming §61's 5.08%.
+
+All three preregistered conditions for a shared mechanism held. This is the one
+positive mechanistic result of track 1: a head trained only on trajectory logit
+fidelity rediscovers and depends on the band that §40 found by intervention. It is
+also the last point at which track 1 produced new knowledge.
+
+## 68. Track 1 remainder: report written, two experiments built and not run
+
+- `output/documents/CODI_Global_Low_Rank_LM_Head_Report.docx` and its PDF
+  (2026-09-08) report §65–§67 with the systems and quality results separated.
+- `CODI_CONSTRAINED_U28_GLOBAL_HEAD.md` (2026-09-06): freeze U28 as the first 28
+  bottleneck columns and learn the residual 36 or 68 orthogonal directions, against an
+  energy-matched random-28 constraint and an equal-budget unconstrained continuation.
+  Implemented (`src/mech/constrained_global_head.py`, notebook, tests), **uncommitted,
+  never run**.
+- `kaggle_cross_model_global_head_benchmark.ipynb` (2026-09-12): the §65 method
+  against weight-SVD, ASVD-style, and SVD-LLM-style baselines on WikiText-fitted heads
+  evaluated across seven corpora, per-model shards. Built; **outcome not recorded**.
+
+Track 1 status: closed as a systems route (§66); the constrained-U28 question is open
+but low value, since §66 already shows that no rank-64 head changes latency.
+
+## 69. Layerwise U28 transport and causal xKV: flat, superseded
+
+`CODI_LAYERWISE_U28_CAUSAL_XKV.md` (2026-09-12). Ridge-transported U28 into every
+block, then protected it as a core inside cross-layer SVD at matched total rank. The
+first-token retain/remove screen produced a flat binary-only result that the next
+notebook calls "the insensitive binary-only test that produced the previous flat
+plot." Superseded before any compression claim.
+
+## 70. Direct layerwise KV: invalid, disconnected gradients
+
+`CODI_DIRECT_LAYERWISE_KV_EXPERIMENT.md` (2026-09-13). Hooked `ln_1` outputs were
+differentiated against the answer loss, but under the active Transformers cache path
+those tensors were disconnected from the loss. The reported rank-28 lists were forced
+candidates, not validated directions. Recorded as an implementation error, not a
+null.
+
+## 71. Pre-answer KV subspaces: connected, but no single eigenvector survives
+
+`CODI_PREANSWER_KV_SUBSPACE_EXPERIMENT.md` (2026-09-14). Exact gradients on the
+real pre-answer K/V tensors (100% connectivity gate passed), per-block covariance
+eigenvectors mapped through LoRA-aware `W_K`/`W_V`, variable-rank selection with
+split stability and Benjamini–Hochberg correction across 9,216 layer-direction
+hypotheses. **No individual covariance eigenvector passed.** Compression stayed
+blocked.
+
+## 72. Task-sensitive hidden-space subspaces: projector mismatch, superseded
+
+`CODI_TASK_SENSITIVE_KV_SUBSPACE.md` (2026-09-14). Built the symmetric task matrix
+`M = −½ E[x gᵀ + g xᵀ]` in the 768-dimensional `ln_1` space so linear combinations of
+covariance directions could carry the signal. The hidden-to-cache mapping and separate
+orthonormalization changed the projector the causal intervention actually tested, so
+the run was set aside rather than interpreted.
+
+## 73. Direct native-cache task subspaces: candidates found
+
+`CODI_DIRECT_CACHE_TASK_SUBSPACES.md` (2026-09-14). Same task matrix, fitted
+directly in each block's cached key and value vectors with independent K and V ranks;
+four disjoint train splits (1,024 / 1,024 / 256 / 128); family-wise corrected paired
+bootstrap across 12 layers. Produced the chain's frozen candidates: **layer 11 value
+rank 1** as primary and layers 2, 3, 5 as secondary.
+
+## 74. Native-KV confirmation: layer 11 imported downstream as confirmed
+
+`CODI_NATIVE_KV_CONFIRM_AND_COMPRESS.md` (2026-09-14). The next 512 questions in the
+deterministic sampling order confirmed layer 11 / value rank 1 against four
+energy-matched random bases with fold consistency, ≥95% retain-only first-token
+agreement, and ≤0.10 retain-only NLL rise. Every later runner imports "the completed
+layer-11 confirmation" and its frozen basis, so the primary gate is treated as passed;
+the interval itself is **not recorded** here. The same run produced exploratory
+layer-2 `(K8, V48)` and layer-3 `(K16, V64)` candidates.
+
+## 75. Task-aware protected xKV: a rank-16 discovery on the first 256 test rows
+
+`CODI_TASK_AWARE_PROTECTED_XKV.md` (2026-09-14, fixed through 2026-09-20 for
+frozen-model gradient calibration and evaluation-slice alignment). Arms at ranks 16,
+32, 48: per-layer SVD, grouped xKV, answer-Fisher-weighted xKV, sparse causal residual
+on the six latent rows, and the full weighted + layer-adaptive + protected method;
+20 random protected controls at rank 32; INT8/INT4 proxies. The confirmatory
+layer-2/3 outcome is **not recorded**. The run's carried-forward result: on GSM8K
+**test rows 0:256** the full method beat ordinary xKV at rank 16, which became the
+frozen hypothesis for §76. Note that this is the first experiment in the project to
+use GSM8K test rows for discovery; the chain then partitioned the test set into
+discovery 0:256, confirmation 256:768, and final 768:1319.
+
+## 76. Rank-16 confirmation: better NLL and accuracy, fidelity gate failed
+
+`kaggle_codi_rank16_xkv_mechanism_confirmation.ipynb` (2026-09-20), rows 256:768,
+everything imported unchanged. The full method again beat ordinary xKV in answer NLL
+and GSM8K accuracy, but dense first-token top-1 agreement fell below the frozen 95%
+requirement, so the compound gate failed, the mechanism ablations did not run, and
+rows 768:1319 stayed locked. The chain's only positive compression signal therefore
+lives at a rank where the compressed model no longer makes the dense model's
+decisions.
+
+## 77. Fidelity frontier: no candidate reaches 95% fidelity
+
+`kaggle_codi_xkv_fidelity_frontier.ipynb` (2026-09-20). Fifteen frozen candidates,
+ranks {16, 24, 32, 40, 48} × answer-Fisher weight {0, 0.5, 1}, each with the layer-11
+protected basis, selected on the already-open rows 256:768. **None passed**; even rank
+48 reached only about 85% dense first-token agreement in this grouped cross-layer
+factorization. Execution stopped; final rows untouched. Kaggle dataset
+`can-xkv-without-giving-up-its-storage-advantage`.
+
+## 78. Fidelity residual: comparator switched to per-layer xKV, no candidate passed
+
+`kaggle_codi_fidelity_residual_xkv.ipynb` (2026-09-20). Changed mechanism: ordinary
+**per-layer** xKV at ranks {48, 64, 80, 96} plus a label-free residual of rank
+{1, 2, 4} aligned with the dense top-1-versus-runner-up margin gradient, stored only
+for the six latent rows; screened on a fresh 512-question train slice. No candidate
+passed the five-check fresh screen; final rows untouched. Note the comparator change:
+§75–§77 factorized grouped cross-layer caches, §78–§81 factorize per layer. Per-layer
+rank 64 sits near dense (§79), whereas grouped rank 48 sat at 85% fidelity (§77). The
+two "ordinary xKV" baselines are not the same object.
+
+## 79. Adaptive per-component allocation: screen passed, final interval crossed zero
+
+`kaggle_codi_adaptive_kv_allocation.ipynb` (2026-09-20/21), Kaggle dataset
+`can-adaptive-beat-uniform-per-layer-xkv`. Rank-utility curves per layer × K/V from
+exact answer-NLL gradients on 512 fresh train questions; nine candidates (budget rank
+{48, 64, 80} × Fisher blend {0, 0.5, 1}) screened on another 512; padding charged so
+modeled bits match ordinary per-layer xKV exactly. The screen selected
+`adaptive_kv_r64_w1` (rank-64 budget, pure answer-Fisher) at **1.48× modeled
+compression** with NLL advantage +0.0108, CI [+0.0034, +0.0191], first-token fidelity
+97.46%. This opened the final 551 test rows for the first time.
+
+| final slice (551) | value |
+|---|---:|
+| NLL advantage over ordinary xKV | +0.00387 |
+| paired 95% CI | [−0.00728, +0.01495] |
+| first-token fidelity | 98.19% |
+| adaptive accuracy | 43.38% |
+| dense accuracy | 43.38% |
+| ordinary per-layer xKV accuracy | 43.01% |
+
+Every gate passed except the NLL lower bound, so the decision is
+`STOP: the adaptive allocation did not replicate on the locked final slice`.
+Descriptive mechanism from the utility curves: answer sensitivity concentrates in
+layers 6–11, layer 11 is important but not uniquely so, keys carry more sensitivity
+than values, and rank 16 captures over 90% of the Fisher utility for most components.
+The full GSM8K test set is now opened for this chain.
+
+## 80. Request-adaptive profile router on SVAMP: nothing left to route
+
+`CODI_REQUEST_ADAPTIVE_XKV_ROUTER.md` (2026-09-21). Multi-output ridge router over
+twelve pre-answer lexical features, choosing per request among the three frozen rank-64
+profiles (reconstruction, hybrid, answer-Fisher); SVAMP 1,000 rows (700 train + 300
+test, after a fix that had loaded only the 300-row split) hash-split 400 fit / 300
+screen / 300 final. Screen result: answer-Fisher KL from dense ≈ 1×10⁻⁶, hybrid ≈
+3.9×10⁻⁵, reconstruction ≈ 1.7×10⁻⁴; every arm at exactly 45% accuracy and 100%
+first-token fidelity; router matched the per-question oracle 50% of the time; routed
+minus global-Fisher KL improvement −1.51×10⁻⁷, CI [−4.24×10⁻⁷, +4.35×10⁻⁹]. Screen
+failed; final 300 locked. The fixed answer-Fisher rank-64 profile is already
+indistinguishable from dense, so routing among rank-64 profiles measured noise.
+
+## 81. Cache-risk rank router: built, uncommitted, not run
+
+`CODI_CACHE_RISK_RANK_ROUTER.md` (2026-09-21). Keeps the answer-Fisher profile and
+routes **rank** {48, 64, 80} per request under a fixed rank-64 aggregate bit budget,
+using 27 spectral tail-energy features of the dense pre-answer cache plus question
+features; GSM-Hard 1,319 rows split 600 / 400 / 319; requires the failed §79 artifact
+as predecessor. Implemented with tests and a notebook builder; nothing committed and
+no run executed. §82 recommends not running it as designed.
+
+## 82. Assessment and decision point (2026-09-21)
+
+### What the September work established
+
+1. **Route 2 is closed as a systems route.** A rank-96 trajectory-trained head keeps
+   98.43% of accuracy (§65) and relies on the §40 band (§67), but delivers 1.004×
+   end-to-end (§66) and increases stored bytes. The §59 microbenchmark did not
+   compose into a deployment gain because the head is a small share of latency.
+2. **The cache holds a readable answer-sensitivity structure** (layer 11 value
+   direction, layers 6–11 concentration, keys over values, low-rank Fisher utility;
+   §73, §74, §79), and protecting it improves NLL at rank 16 (§75, §76). But every
+   compression scheme that reaches dense-level fidelity does so at a rank where
+   ordinary per-layer xKV is already dense-equivalent (§79, §80).
+3. **Neither track touched the CODI-versus-KaVa question.** §55 named
+   trajectory-level supervision as the natural continuation; it was not pursued.
+
+### Why the KV track circled
+
+- **No headroom at the operating point.** Per-layer rank-64 answer-Fisher xKV is
+  indistinguishable from dense CODI (§79, §80). Allocation and routing experiments at
+  that budget can only measure noise, and §81 repeats the choice.
+- **Gates on quantities nobody would cite.** Decision rules were paired intervals on
+  NLL or KL differences of a few thousandths or less; the accuracy comparisons that
+  matter tied exactly. With the §79 final-slice interval half-width ≈ 0.011 at n = 551
+  the per-question SD is ≈ 0.13, and detecting the screen's +0.0108 at 80% power
+  needs roughly 1,300 paired questions. The screen-to-final shrinkage (+0.0108 →
+  +0.0039) is ordinary winner's curse from selecting on the screen, not a near miss.
+- **1.48× modeled compression of a 12-layer, 768-wide, ~100-token cache is not a
+  deployment result**, and every protocol doc already disclaims latency. The track
+  used systems vocabulary while producing mechanistic observations, then judged itself
+  by systems criteria it could not meet.
+- **Benchmarks were spent one per experiment.** GSM8K test is fully opened (§75–§79);
+  700 of 1,000 SVAMP rows are opened (§80); §81 would open GSM-Hard, where dense CODI
+  is weak enough that accuracy non-inferiority passes trivially.
+- **Hard predecessor-artifact chaining** (§78–§81 each require the previous failed
+  summary) pinned every follow-up to the same operating point and made most of the
+  last day's commits plumbing fixes.
+- **The ledger lapsed on 2026-08-28.** The step that forces "what did we learn, what
+  is the decision" was skipped for the entire period in which the circling occurred.
+
+### Standing additions to §17
+
+- Do not run allocation, routing, or residual experiments at a budget where the
+  ordinary comparator already matches dense first-token decisions within a point.
+- Gate compression claims on paired exact-match accuracy at matched storage, or on
+  storage at matched accuracy. Do not preregister an NLL or KL interval as the primary
+  gate without a pilot-based minimum-detectable-effect check for the planned n.
+- Do not open a new external benchmark for a method-development follow-up. One
+  reserved benchmark, opened once, after an accuracy-gated screen.
+- Do not describe reconstructed-cache, modeled-bit results as compression or latency
+  results outside the mechanism framing.
+- Do not build a follow-up whose runner hard-requires a failed predecessor artifact
+  unless the follow-up changes the operating point.
+- Append a ledger entry before building the next experiment, not after.
+
+### Decision point
+
+> Do not run §81 as designed. Choose one of:
+>
+> (a) **One decisive allocation test at a degraded operating point.** Take the rank at
+> which ordinary per-layer xKV loses at least five accuracy points on the §77/§79
+> curves, test §79's Fisher allocation there with a paired exact-match gate at matched
+> storage, on the reserved benchmark, once. Close the KV line either way.
+>
+> (b) **Write the KV track up as mechanism**, not systems: where CODI's
+> answer-sensitive K/V information lives (§73, §74, §79) and the rank-16 protection
+> effect with its fidelity limit (§75–§77).
+>
+> (c) **Return to the thesis question with trajectory-level supervision.** §55 shows
+> the odd thoughts' value slots hold the intermediates; a KaVa-style distillation loss
+> that scores those slots against teacher intermediates is the first training
+> experiment that reconnects the mechanistic findings to §1. This is the only option
+> that can produce a chapter rather than another null on the frozen checkpoint.
+>
+> Recommendation: (c), with (b) as the write-up of what already exists. (a) only if a
+> compression claim is required for the semester deliverable.
+
+Housekeeping before any of the above: commit or delete the uncommitted §68 and §81
+files; fill the **not recorded** cells in §62, §63, §64, §74, §75 from their Kaggle
+summaries; add a README pointer to §60–§82.
+
+## 83. Completed fixed per-head K/V basis experiment: `selection_not_passed`, test unread
+
+Kaggle run 2026-09-21, code pinned at `9d44081`, notebook `84cb90a`, protocol in
+[`CODI_FIXED_BASIS_KV.md`](CODI_FIXED_BASIS_KV.md). This is the experiment §82
+should have replaced §69 with: it asks whether the cache has a *fixed*,
+question-independent low-dimensional subspace per attention head, in the sense that
+§40 and §67 established for the final hidden state. One orthonormal basis per (layer,
+kind, head) was fitted from uncentred second moments on 1,024 GSM8K-train questions
+(seed 20260921) over every cached row type; every key and value was then projected
+onto its head's leading `r` directions. GPT-2 has no rotary embedding on keys, so the
+projection is algebraically an `r`-dimensional per-head attention, not a proxy.
+Storage is `head_dim / r` per component and does not decay at short context, which
+was the whole reason to ask the question at CODI's scale. Only the reproduction
+summary was attached; no xKV-chain artifact was required.
+
+The frozen selection rule required, on the disjoint 256-question selection split,
+at least 98% of dense exact match and at least 95% dense first-token agreement. No
+rank in the grid `{8, 16, 24, 32, 40, 48}` passed, so the runner stopped and the
+GSM8K test set was **not read**. Dense selection-split accuracy was 66.8% (train
+questions; the checkpoint was trained on a GSM8K-derived set).
+
+| rank / head | storage | uniform retained | first-token agreement | energy-allocated retained | random retained (2 seeds) |
+|---:|---:|---:|---:|---:|---:|
+| 48 | 1.33× | 93.0% | 77.7% | 35.1% | 32.7 / 35.7% |
+| 40 | 1.60× | 86.5% | 69.5% | 24.0% | 9.4 / 9.4% |
+| 32 | 2.00× | 75.4% | 57.8% | 11.7% | 2.9 / 2.3% |
+| 24 | 2.67× | 58.5% | 41.4% | 5.3% | 4.1 / 1.8% |
+| 16 | 4.00× | 17.5% | 14.1% | 4.1% | 0.6 / 2.9% |
+| 8 | 8.00× | 5.3% | 3.5% | 2.9% | 2.3 / 2.3% |
+
+Head-averaged rank needed to retain a given fraction of second-moment energy
+(head width 64):
+
+| target | keys, range over layers | values, range over layers |
+|---|---|---|
+| 90% | 14.3 (layer 2) to 39.6 (layer 11) | 36.9 to 46.6 |
+| 95% | 26.9 to 49.7 | 47.1 to 54.6 |
+| 99% | 50.3 to 60.6 | 59.3 to 62.1 |
+
+Row-type subspace agreement (fraction of the question-row subspace captured, mean
+over heads; isotropic expectation `r/64` in parentheses): latent rows 0.42 (0.25) at
+rank 16 and 0.62 (0.50) at rank 32; answer rows 0.38 and 0.59; cue rows 0.46 and
+0.63. The workspace rows share the question-row geometry only partially.
+
+### What this establishes
+
+1. **The per-head basis is real but the cache is not low-rank in it.** The fitted
+   basis beats random bases by 40 to 70 points at ranks 24 to 40, so heads do write
+   into question-independent directions. But 95% of energy needs roughly 34 to 50
+   key directions and 47 to 55 value directions out of 64, there is no knee, and
+   keeping 48 of 64 still loses 7 points of accuracy and 22% of first-token
+   decisions. The fixed 28-dimensional structure of the output (§40) has no
+   analogue inside the cache at head level.
+2. **The cache's compressibility is per-request, not fixed-basis.** Per-request
+   xKV at rank 64 per layer was dense-equivalent at 1.48× (§79); the fixed basis at
+   1.33× is not. The low-rank structure xKV exploits lives across the tokens of one
+   request, in the token-side factor, not in a direction set shared across requests.
+   This is the empirical answer to "why not SVD each layer's space once": it loses.
+3. **Values are less compressible than keys** at every layer and every energy
+   target, and early-layer keys are the most compressible of all. Together with
+   §79 (keys carry more *answer-specific* sensitivity) the picture is consistent:
+   keys need only the directions queries probe, values must carry the content that
+   is summed into the residual stream.
+4. **Allocating rank across heads by raw eigenvalue is wrong.** The energy-greedy
+   arm was exactly optimal for retained energy and landed near random (35% versus
+   uniform's 93% at rank 48). Raw eigenvalues across heads are dominated by
+   activation scale, so the rule strips rank from small-norm heads the computation
+   depends on. Any cross-component allocation must use per-component energy
+   fraction or a loss-based marginal utility.
+
+### Caveats
+
+The selection split is GSM8K train (dense 66.8%, not the 43.4% of test), so
+retention fractions on test could differ; the energy tables make the direction of
+the conclusion robust to that. The moments are uncentred and include the
+first-position token, whose keys carry very large norm in GPT-2; that can inflate one
+leading direction per head, costing one rank unit, not the twenty separating this
+result from the gate. PCA keeps the directions a head *writes*; a basis fitted under
+the query metric (keys) or the output-projection metric (values) would keep what
+attention *reads*, and could be sharper. That is the one remaining diagnostic in this
+line (§83 decision point); it is not expected to reach the gate.
+
+### Standing additions to §17
+
+- Do not allocate rank across attention heads or layers by raw eigenvalue or raw
+  reconstruction energy; scales differ by component. Use energy fraction or a
+  loss-based marginal utility.
+- Do not propose further fixed-basis KV compression of this checkpoint at the
+  accuracy gate; the per-head variance spectrum has no knee below rank ~50.
+- Treat the cache's low-rank structure as per-request (token-side) unless a
+  read-side (query- or output-weighted) basis shows otherwise.
+
+### Decision point
+
+> The KV track is closed as a compression line and complete as a mechanism line.
+> Write it up as one section: answer sensitivity in layers 6–11 and in keys (§79),
+> the causally specific layer-11 value direction (§74), rank-16 protection that
+> helps NLL but breaks fidelity (§76–§77), per-request rather than fixed-basis
+> compressibility (§83), near-full-rank per-head geometry (§83).
+>
+> Optional single diagnostic, uniform ranks 24 and 32 only, no new gates: refit the
+> bases under the query metric for keys and the output-projection metric for values,
+> to ask whether the cache is full-rank in what heads write or also in what queries
+> read. It must not delay the next item.
+>
+> Next experiment: trajectory-level supervision (§55, §82 option c). Append its
+> ledger entry before building it.
+
+## 84. Preregistered: trajectory-level supervision with mechanism-selected targets
+
+Written before any code, per the §83 standing rule. Protocol in
+[`CODI_TRAJECTORY_SUPERVISION.md`](CODI_TRAJECTORY_SUPERVISION.md); contract
+`official_codi_trajectory_supervision_v1`.
+
+### Question
+
+§1 asked whether KaVa's KV-trajectory supervision improves on CODI's endpoint
+distillation under matched conditions. §55 established what CODI's trajectory
+*holds*: the odd latent slots (0-based 1, 3, 5) store the solution's intermediate
+values, unordered. This experiment asks the §1 question with that finding as the
+selector: does supervising the value-holding slots toward the teacher positions
+that emit intermediate values improve on (a) endpoint-only CODI, (b) KaVa's
+redundancy-selected targets, and (c) matched controls that differ only in which
+positions or which slots are supervised?
+
+### Arms, all warm-started from the frozen official checkpoint
+
+Identical data, order, optimizer, steps, and base objective (student gold-answer
+NLL plus the official endpoint hidden loss at the answer cue, smooth-L1 over all 13
+states with teacher-std normalisation). Every auxiliary term has its gradient norm
+matched to the endpoint term's gradient norm each step, so arms differ in *what*
+they supervise, not how hard.
+
+| arm | auxiliary target | teacher positions | student slots |
+|---|---|---|---|
+| `codi` | none | — | — |
+| `kava` | K and V, L1 | R-KV (λ = 0.1), per layer and head | all six |
+| `value_odd` | K and V, L1 | first token of each `<<…=v>>` result in the truncated trace | 1, 3, 5 |
+| `random_odd` | K and V, L1 | seeded random trace positions, count matched per example | 1, 3, 5 |
+| `value_even` | K and V, L1 | as `value_odd` | 0, 2, 4 |
+| `recon_odd` | cross-entropy of the slot's own readout toward the value's first token | as `value_odd` | 1, 3, 5 |
+
+Slot-to-value assignment is a per-example minimum-cost injective matching on the
+detached loss, because §55 showed the store is unordered. Examples with fewer values
+than slots leave the surplus slots unsupervised; examples with more let the matching
+choose. `recon_odd` is the generative-objective comparison and is the arm §58 warns
+about: it trains the readable component directly.
+
+### Frozen budget
+
+GSM8k-Aug (`eq_only`, the released training distribution), unique questions,
+digit-leading answers, at least two equations so the truncated trace has one
+value: 8,192 training and 256 selection rows, data seed 20260922. Batch 8, one epoch
+(1,024 steps), AdamW, learning rate 2e-5 constant, weight decay 0, gradient clip 1.0,
+float32, training seeds 1, 2, 3. Trainable parameters are the released LoRA
+adapters and the projector, as in §30. The teacher path is frozen (no teacher CE),
+identically for every arm.
+
+### Screen, then one test read
+
+After `codi` seed 1 trains, its selection-split accuracy must be within 3 points of
+the frozen checkpoint's on the same split. Failure means the learning rate wrecked
+the model; the run stops and the test set is not read. On pass, every arm and seed
+is evaluated once on the full 1,319-question GSM8K test with the official native
+decoding protocol, plus the frozen checkpoint as reference.
+
+### Gates (paired bootstrap over questions on per-question seed-mean correctness)
+
+1. **H1, KaVa versus CODI:** `kava − codi` lower bound > 0.
+2. **H2, selector:** `value_odd − kava` lower bound > 0 **and** `value_odd −
+   random_odd` lower bound > 0.
+3. **H3, slot specificity:** `value_odd − value_even` lower bound > 0.
+4. **H4, objective:** `recon_odd − value_odd`, reported two-sided, no gate.
+
+The headline claim "mechanism-selected trajectory supervision helps" requires H2
+and `value_odd − codi` lower bound > 0. Per-seed accuracies, the selector-overlap
+diagnostic (fraction of R-KV picks that land on value tokens), assignment statistics,
+and gradient-scale records are reported regardless.
+
+### Stated expectations
+
+Modest effects at best. §17 records that R-KV was not better than uniform selection
+in the pilot, and on equation-only traces the value tokens are plausibly among the
+least redundant tokens, so the selectors may largely coincide; the overlap
+diagnostic measures exactly that. Nulls are informative here: they would say the
+§1 question is not decided by which trajectory positions are supervised at this
+budget. The 1,024-step warm start is a cheap held-out gate (§17 rule 6), not the
+final word on longer training.
