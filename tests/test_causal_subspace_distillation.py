@@ -161,10 +161,42 @@ def test_teacher_states_and_student_step_on_tiny_model():
     pca = fit_teacher_pca(torch.randn(64, 16))
     target = build_target(pca, torch.randn(64, 16), [0, 1, 2])
     parameters = [p for p in model.parameters() if p.requires_grad]
-    step = student_training_step(model, batch, states, target, parameters, latent_positions=6)
+    step = student_training_step(model, [batch], [states], target, parameters, latent_positions=6)
     assert len(step.gradients) == len(parameters)
     assert all(g is None or torch.isfinite(g).all() for g in step.gradients)
     assert step.answer_loss > 0 and step.distillation_loss is not None and step.distillation_scale > 0
-    plain = student_training_step(model, batch, states, None, parameters, latent_positions=6)
+    plain = student_training_step(model, [batch], [states], None, parameters, latent_positions=6)
     assert plain.distillation_loss is None and plain.distillation_scale is None
+
+
+def test_micro_batch_accumulation_matches_the_single_batch_step():
+    model, tokenizer = _tiny_model(), CharTokenizer()
+    # Equal-length questions keep the student's left padding identical in the full
+    # batch and in each half.  The released GPT-2 path is not padding invariant
+    # (absolute positions shift with the pad width), so unequal lengths would
+    # differ at the 1e-3 level for reasons unrelated to accumulation.
+    rows = [
+        {"question": "What is 2 + 3?", "cot": "<<2+2=4>> <<4+1=5>> <<5+0=5>>", "answer": "#### 5"},
+        {"question": "What is 4 + 1?", "cot": "<<4+0=4>> <<4+1=5>> <<5+0=5>>", "answer": "#### 5"},
+        {"question": "What is 3 + 3?", "cot": "<<3+3=6>> <<6+0=6>>", "answer": "#### 6"},
+        {"question": "What is 1 + 5?", "cot": "<<1+5=6>> <<6+0=6>> <<6+0=6>>", "answer": "#### 6"},
+    ]
+    full = collate_official_codi_kv_rows(tokenizer, rows, bot_token_id=model.bot_id)
+    halves = [collate_official_codi_kv_rows(tokenizer, rows[i : i + 2], bot_token_id=model.bot_id)
+              for i in (0, 2)]
+    states, _ = teacher_decision_states(model, full)
+    pca = fit_teacher_pca(torch.randn(64, 16))
+    target = build_target(pca, torch.randn(64, 16), [0, 1, 2])
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    model.eval()  # dropout off so the two paths are deterministic
+    one = student_training_step(model, [full], [states], target, parameters, latent_positions=6)
+    two = student_training_step(model, halves, [states[:2], states[2:]], target, parameters, latent_positions=6)
+    assert one.answer_loss == pytest.approx(two.answer_loss, rel=1e-4)
+    assert one.distillation_loss == pytest.approx(two.distillation_loss, rel=1e-4)
+    assert one.distillation_scale == pytest.approx(two.distillation_scale, rel=1e-3)
+    for a, b in zip(one.gradients, two.gradients):
+        if a is None or b is None:
+            assert a is None and b is None
+            continue
+        assert torch.allclose(a, b, atol=1e-5, rtol=1e-3)
     assert READOUT_STATE == -1

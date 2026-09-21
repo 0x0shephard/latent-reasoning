@@ -333,25 +333,58 @@ class StudentStep:
     distillation_scale: float | None
 
 
-def student_training_step(model, batch, teacher_state12: torch.Tensor,
-                          target: DistillationTarget | None, parameters: Sequence[torch.Tensor],
-                          *, latent_positions: int) -> StudentStep:
-    """Answer cross-entropy plus a norm-matched state-12 distillation term."""
-    student = student_trajectory_forward(model, batch, latent_positions=latent_positions)
+def _accumulate(total, part, scale: float):
+    if total is None:
+        return tuple(None if g is None else g.detach() * scale for g in part)
+    return tuple(
+        (None if g is None else g.detach() * scale) if t is None
+        else (t if g is None else t + g.detach() * scale)
+        for t, g in zip(total, part)
+    )
+
+
+def student_training_step(model, batches, teacher_states, target: DistillationTarget | None,
+                          parameters: Sequence[torch.Tensor], *, latent_positions: int) -> StudentStep:
+    """Answer cross-entropy plus a norm-matched state-12 distillation term.
+
+    ``batches`` and ``teacher_states`` are equally sized micro-batches of one
+    optimisation step.  Base and distillation gradients are accumulated separately
+    (each micro-batch weighted by 1/n) and norm-matched once, so the result equals
+    the single-batch step while the peak memory is one micro-batch's graph.  The
+    only residual difference is the released GPT-2 path's left-padding sensitivity
+    (pad width shifts absolute positions); every arm shares the same micro-batch
+    composition, so the comparison between arms is unaffected.
+    """
+    if len(batches) != len(teacher_states) or not batches:
+        raise ValueError("micro-batches and teacher states must align and be non-empty")
+    scale = 1.0 / len(batches)
+    base_total = aux_total = None
+    answer_losses, distill_losses = [], []
+    for batch, teacher_state12 in zip(batches, teacher_states):
+        student = student_trajectory_forward(model, batch, latent_positions=latent_positions)
+        answer_losses.append(float(student.mean_loss.detach()))
+        if target is None:
+            base = autograd_gradients(student.mean_loss, parameters, retain_graph=False)
+            base_total = _accumulate(base_total, base, scale)
+            continue
+        base = autograd_gradients(student.mean_loss, parameters, retain_graph=True)
+        base_total = _accumulate(base_total, base, scale)
+        state = student.answer_endpoint_hidden[:, READOUT_STATE, :]
+        loss = distillation_loss(state, teacher_state12.to(state.device), target)
+        distill_losses.append(float(loss.detach()))
+        raw = autograd_gradients(loss, parameters, retain_graph=False)
+        aux_total = _accumulate(aux_total, raw, scale)
+        del student, state, loss, raw
+    answer_loss = sum(answer_losses) / len(answer_losses)
     if target is None:
-        base = autograd_gradients(student.mean_loss, parameters, retain_graph=False)
-        return StudentStep(combine_gradients(base), float(student.mean_loss.detach()), None, None)
-    base = autograd_gradients(student.mean_loss, parameters, retain_graph=True)
-    state = student.answer_endpoint_hidden[:, READOUT_STATE, :]
-    loss = distillation_loss(state, teacher_state12.to(state.device), target)
-    raw = autograd_gradients(loss, parameters, retain_graph=False)
-    if any(g is not None and bool(g.abs().sum() > 0) for g in raw):
-        matched, matching = match_gradient_norm(raw, base)
-        scale = float(matching["auxiliary_scale"])
-        total = combine_gradients(base, matched)
+        return StudentStep(combine_gradients(base_total), answer_loss, None, None)
+    if any(g is not None and bool(g.abs().sum() > 0) for g in aux_total):
+        matched, matching = match_gradient_norm(aux_total, base_total)
+        scale_used = float(matching["auxiliary_scale"])
+        total = combine_gradients(base_total, matched)
     else:
-        scale, total = 0.0, combine_gradients(base)
-    return StudentStep(total, float(student.mean_loss.detach()), float(loss.detach()), scale)
+        scale_used, total = 0.0, combine_gradients(base_total)
+    return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses), scale_used)
 
 
 def cosine_lr(step: int, *, total_steps: int, base: float, warmup: int) -> float:

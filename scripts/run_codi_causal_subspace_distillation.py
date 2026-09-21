@@ -79,6 +79,7 @@ CONTRACT = "official_codi_causal_subspace_distillation_v1"
 FIT_EXAMPLES = SELECT_EXAMPLES = VALIDATE_EXAMPLES = 2_048
 STEPS = 10_000
 BATCH_SIZE = 16
+MICRO_BATCH_SIZE = 8  # memory only; the optimisation step is always the full batch
 TRAIN_EXAMPLES = STEPS * BATCH_SIZE
 SELECTION_EXAMPLES = 256
 LEARNING_RATE = 1e-4
@@ -253,6 +254,8 @@ def run(args):
     contract = CONTRACT + ("_smoke" if smoke else "")
     if not smoke and args.batch_size != BATCH_SIZE:
         raise ValueError("the preregistered batch size cannot be changed")
+    if args.batch_size % args.micro_batch_size:
+        raise ValueError("micro-batch size must divide the batch size")
     started = time.perf_counter()
 
     out = args.output_dir
@@ -399,6 +402,7 @@ def run(args):
         "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
         "preregistration": {
             "arms": list(arms), "seeds_this_run": list(seeds), "steps": steps, "batch_size": args.batch_size,
+            "micro_batch_size": args.micro_batch_size,
             "train_examples": train_n, "fit_select_validate": [fit_n, select_n, validate_n],
             "selection_examples": selection_n, "learning_rate": LEARNING_RATE, "warmup_steps": WARMUP_STEPS,
             "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "rank_grid": list(RANK_GRID),
@@ -487,10 +491,13 @@ def run(args):
             for group in optimizer.param_groups:
                 group["lr"] = cosine_lr(step, total_steps=steps, base=LEARNING_RATE, warmup=WARMUP_STEPS)
             indices = order[step * args.batch_size : (step + 1) * args.batch_size]
-            batch = collate_official_codi_kv_rows(tokenizer, [train_rows[i] for i in indices],
-                                                  bot_token_id=model.bot_id).to(device)
-            teacher_state = train_states[indices].to(device, torch.float32)
-            result = student_training_step(model, batch, teacher_state, target, parameters,
+            micro = args.micro_batch_size
+            batches = [collate_official_codi_kv_rows(tokenizer, [train_rows[i] for i in indices[k : k + micro]],
+                                                     bot_token_id=model.bot_id).to(device)
+                       for k in range(0, len(indices), micro)]
+            teacher_states = [train_states[indices[k : k + micro]].to(device, torch.float32)
+                              for k in range(0, len(indices), micro)]
+            result = student_training_step(model, batches, teacher_states, target, parameters,
                                            latent_positions=latent_positions)
             optimizer.zero_grad(set_to_none=True)
             for parameter, gradient in zip(parameters, result.gradients):
@@ -512,7 +519,7 @@ def run(args):
                 print("curve", name, curve[-1])
             if done % checkpoint_every == 0 and done < steps:
                 save_ckpt(done)
-            del batch, result
+            del batches, teacher_states, result
         training_seconds = elapsed + time.perf_counter() - t0
         optimizer.zero_grad(set_to_none=True)
         del optimizer
@@ -609,6 +616,8 @@ def main():
     parser.add_argument("--aggregate-only", action="store_true")
     parser.add_argument("--max-seconds", type=float, default=30_600)
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--micro-batch-size", type=int, default=MICRO_BATCH_SIZE,
+                        help="memory-only split of each step; gradients are accumulated exactly")
     parser.add_argument("--eval-batch-size", type=int, default=32)
     parser.add_argument("--teacher-batch-size", type=int, default=TEACHER_BATCH)
     parser.add_argument("--bootstrap-samples", type=int, default=10_000)

@@ -120,6 +120,7 @@ OTHER_ACCOUNT_OUTPUT_INPUT = ""  # attached copy of the other account's finished
 import glob, json, os, pathlib, subprocess, sys
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 assert len(RUN_COMMIT) == 40
 if not pathlib.Path(REPO_DIR).exists():
     subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
@@ -210,7 +211,7 @@ def runner_command(output_dir, *extra):
         "--config", "configs/official_codi_gpt2.yaml",
         "--reproduction-summary", REPRODUCTION_SUMMARY,
         "--output-dir", output_dir,
-        "--batch-size", "16", "--eval-batch-size", "32",
+        "--batch-size", "16", "--micro-batch-size", "8", "--eval-batch-size", "32",
         "--bootstrap-samples", "10000",
         "--precision", "float32", "--device", "cuda",
         *extra,
