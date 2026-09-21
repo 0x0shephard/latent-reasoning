@@ -3067,3 +3067,119 @@ diagnostic measures exactly that. Nulls are informative here: they would say the
 §1 question is not decided by which trajectory positions are supervised at this
 budget. The 1,024-step warm start is a cheap held-out gate (§17 rule 6), not the
 final word on longer training.
+
+## 85. Completed trajectory-level supervision: `STOP`, a null bounded by its own weighting
+
+Kaggle run 2026-09-22, code `12f5eac`, notebook `bbf3f87`. Screen passed (continued
+CODI 84.8% versus frozen 82.4% on the selection split). Full test, three seeds per
+arm, native decoding:
+
+| arm | test mean | vs frozen 43.44% |
+|---|---:|---:|
+| codi | 43.54% | +0.10 |
+| recon_odd | 43.62% | +0.18 |
+| random_odd | 43.14% | −0.30 |
+| value_odd | 43.14% | −0.30 |
+| value_even | 43.11% | −0.33 |
+| kava | 42.96% | −0.48 |
+
+All fifteen paired intervals cross zero; every gate failed. The training curves are
+the finding: answer NLL and endpoint loss show no trend over 1,024 steps and
+continued CODI ended 0.1 points from the frozen model. Auxiliary gradients were
+matched to the endpoint term's gradient norm, and that term is at its optimum for
+the released checkpoint, so every auxiliary was neutered equally. The null bounds
+the weighting and the budget, not the selectors. Two facts survive: only 18.8% of
+R-KV picks land on value tokens, so the selectors do not coincide (§84's stated
+prior was wrong), and direct readout cross-entropy on the value slots neither
+helped nor hurt. Standing addition to §17: never norm-match an auxiliary loss to a
+reference term that is already converged; a warm start of a converged checkpoint
+cannot discriminate training targets.
+
+## 86. Preregistered: causal versus variance selection of the distillation subspace
+
+Written before any code. Protocol in
+[`CODI_CAUSAL_SUBSPACE_DISTILLATION.md`](CODI_CAUSAL_SUBSPACE_DISTILLATION.md);
+contract `official_codi_causal_subspace_distillation_v1`.
+
+### Question
+
+Subspace distillation methods (LoRi, June 2026; Flex-KD; SubDistill; SPREAD) choose
+the subspace by teacher variance, second moments, or gradient relevance. §40 showed
+that at CODI's decision state the top-variance directions are inert and accuracy
+lives in a low-variance band; "Function Lives Where Variance Doesn't" (September
+2026) makes the same point generally; and §43–§52 showed gradient-selected
+directions repeatedly failed matched causal tests. Nobody has asked whether a
+variance- or relevance-selected distillation target wastes its rank on directions
+the answer never uses.
+
+> When a latent student is distilled toward a rank-r subspace of the teacher's
+> decision state, does selecting that subspace by causal retain-and-remove on the
+> teacher transfer more accuracy than selecting it by variance, by gradient
+> relevance, or at random, at matched rank?
+
+### Design
+
+**Teacher.** The frozen official CODI checkpoint in its explicit-CoT teacher mode.
+Its post-`ln_f` colon state (state 12) is precomputed for every row used. All
+subspaces are index sets over the teacher's own principal components at state 12,
+fitted on 2,048 train rows, so arms differ only in *which* PCs are kept:
+
+- `variance`: the first r PCs (LoRi-style).
+- `relevance`: the r PCs with the largest Fisher score E[(g·v)²], g the gradient of
+  the gold first-token NLL at state 12 through the readout (Flex-KD-style).
+- `causal`: greedy forward selection over the top-128 PCs maximising retain-only
+  first-token accuracy, ties broken by mean answer margin, on a disjoint 2,048-row
+  split, the §36 analytic tier. (Amended before the first run: the draft optimised
+  mean gold log-probability, which a synthetic test showed is dominated by
+  confident errors under sharp logits, so partially restored states scored below
+  the constant mean state and greedy drifted to inert directions. Accuracy and
+  margin do not saturate.)
+- `random`: r seeded PCs.
+- `full`: all 768 dimensions (single-state CODI).
+- `none`: answer cross-entropy only.
+
+Rank is chosen on the teacher, on a third disjoint 2,048-row split, from {8, 12, 16}:
+the smallest r whose causal set retains at least 75% of the teacher's dense
+first-token accuracy under retain-only and beats the variance set by at least five
+points. If no rank satisfies both, the selectors are not distinguishable on the
+teacher and the run stops before any training.
+
+**Student.** Base GPT-2 with the checkpoint's embedding table (so the special tokens
+and the shared readout are meaningful), fresh LoRA r = 128 adapters (A random, B
+zero) and a fresh projector: the latent task is learned from scratch, the readout is
+shared with the teacher. Loss: answer cross-entropy plus the state-12 distillation
+term, smooth-L1 over the selected coordinates scaled by the teacher's coordinate
+standard deviation, with the distillation gradient norm-matched to the
+cross-entropy gradient each step (the reference term is being learned, not
+converged, so §85's failure mode does not apply). Six arms, two training seeds split
+across two Kaggle accounts, 10,000 steps at batch 16 (160,000 GSM8k-Aug rows, about
+0.4 epoch), AdamW at 1e-4 cosine with 500 warm-up steps, weight decay 0.1, gradient
+clip 2.0, float32. Runs checkpoint every 500 steps and resume across sessions.
+
+### Outcomes and gates
+
+Selection-split curve every 1,000 steps: teacher-forced answer NLL, first-token
+accuracy, exact match on 256 rows. Final: full GSM8K test once per run, native
+decoding, exact match primary, teacher-forced NLL secondary. Paired bootstrap over
+questions on per-question seed-mean correctness:
+
+1. **S1, sanity:** `full − none` lower bound > 0. If distillation itself is not
+   detectable at this budget the subspace comparisons are uninformative and the
+   claim is `STOP: distillation signal not detectable`.
+2. **H1:** `causal − variance` lower bound > 0.
+3. **H2:** `causal − relevance` lower bound > 0.
+4. **H3:** `causal − random` lower bound > 0; `variance − random` reported.
+5. `causal − full` two-sided: whether a rank-r causal target matches the 768-d one.
+
+Headline requires S1, H1 and H3. Teacher-side retention of each set, set overlaps,
+gradient scales and curves are reported regardless.
+
+### Stated expectations and risks
+
+From-scratch adapters at 0.4 epoch may reach low absolute accuracy (the §2 pilot
+reached 13% after one epoch of joint training), so the primary comparison may be
+underpowered even though n = 1,319; the selection-split NLL curve is the sensitive
+secondary. The teacher-side rank rule protects against the §84 mistake: if the
+variance and causal sets barely differ, nothing is trained. A positive result is a
+targeted correction to a June 2026 method; a null with S1 passing says the inert
+directions cost nothing during training, which is also worth knowing.
