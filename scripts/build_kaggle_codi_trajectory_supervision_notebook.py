@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_trajectory_supervision.ipynb"
-RUN_COMMIT = "83423c67f4687aa3372b2ada96b1d31ea962caf5"
+RUN_COMMIT = "12f5eacb438d25ff83db29fe51caa3ef15ad7d3b"
 nb = nbf.v4.new_notebook()
 cells = []
 
