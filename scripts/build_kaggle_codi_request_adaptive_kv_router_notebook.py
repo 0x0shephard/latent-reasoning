@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_request_adaptive_kv_router.ipynb"
-RUN_COMMIT = "8562322ff8441236d825e301bbdc5f8b8451a74f"
+RUN_COMMIT = "8019ed3dad59167d000eb96db15d766cb488a219"
 nb = nbf.v4.new_notebook()
 cells = []
 
