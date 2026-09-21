@@ -80,3 +80,12 @@ def test_gates_and_claims():
     assert claim_from(gate).startswith("NULL")
     gate = gates_from(_comparisons(full_minus_none=0.01))
     assert claim_from(gate).startswith("STOP: causal selection")
+
+
+def test_training_window_keeps_only_scalars():
+    import ast, inspect
+    import scripts.run_codi_causal_subspace_distillation as runner
+    source = inspect.getsource(runner)
+    assert "window.append(result)" not in source
+    assert 'window.append({"answer_loss": result.answer_loss' in source
+    assert "del batches, teacher_states, result" in source

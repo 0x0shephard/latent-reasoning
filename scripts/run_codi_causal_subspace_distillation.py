@@ -504,22 +504,27 @@ def run(args):
                 parameter.grad = None if gradient is None else gradient.detach()
             torch.nn.utils.clip_grad_norm_(parameters, GRAD_CLIP)
             optimizer.step()
-            window.append(result)
+            # Keep scalars only: a StepResult holds the full gradient tuple on the GPU
+            # (~57 MB), and a window of them until the next curve point would exhaust
+            # the card in a few hundred steps.
+            window.append({"answer_loss": result.answer_loss,
+                           "distillation_loss": result.distillation_loss,
+                           "distillation_scale": result.distillation_scale})
+            del batches, teacher_states, result
             done = step + 1
             if done % curve_every == 0 or done == steps:
                 metrics, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
                 model.train()
                 curve.append({"step": done, **metrics,
-                              "train_answer_loss": sum(r.answer_loss for r in window) / len(window),
-                              "train_distillation_loss": (sum(r.distillation_loss for r in window) / len(window)
-                                                          if window[0].distillation_loss is not None else None),
-                              "distillation_scale": (sum(r.distillation_scale for r in window) / len(window)
-                                                     if window[0].distillation_scale is not None else None)})
+                              "train_answer_loss": sum(r["answer_loss"] for r in window) / len(window),
+                              "train_distillation_loss": (sum(r["distillation_loss"] for r in window) / len(window)
+                                                          if window[0]["distillation_loss"] is not None else None),
+                              "distillation_scale": (sum(r["distillation_scale"] for r in window) / len(window)
+                                                     if window[0]["distillation_scale"] is not None else None)})
                 window = []
                 print("curve", name, curve[-1])
             if done % checkpoint_every == 0 and done < steps:
                 save_ckpt(done)
-            del batches, teacher_states, result
         training_seconds = elapsed + time.perf_counter() - t0
         optimizer.zero_grad(set_to_none=True)
         del optimizer
