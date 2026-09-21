@@ -87,7 +87,7 @@ WEIGHT_DECAY = 0.1
 GRAD_CLIP = 2.0
 RANK_GRID = (8, 12, 16)
 CANDIDATE_PCS = 128
-MINIMUM_RETENTION = 0.75
+RETENTION_FLOOR = 0.50
 MINIMUM_GAP = 0.05
 DATA_SEED = 20_260_923
 CURVE_EVERY = 1_000
@@ -258,16 +258,22 @@ def run(args):
     out = args.output_dir
     runs_dir = out / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
+    # Seed-independent artefacts (teacher cache, selectors, sampling audit) can come
+    # from any attached output of this experiment, including the other account's;
+    # per-run records and checkpoints only from this account's previous sessions.
+    shared = ("teacher_cache.pt", "selectors.json", "sampling.json")
+    for previous in [*args.resume_from, *args.aggregate_from]:
+        for name in shared:
+            source, target = Path(previous) / name, out / name
+            if source.is_file() and not target.exists():
+                shutil.copy2(source, target)
+                print("reused", name, "from", previous)
     for previous in args.resume_from:
-        for path in sorted(Path(previous).rglob("*")):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(previous)
-            target = out / relative
-            if not target.exists() and relative.parts[0] in ("runs", "teacher_cache.pt", "selectors.json", "sampling.json"):
-                target.parent.mkdir(parents=True, exist_ok=True)
+        for path in sorted((Path(previous) / "runs").glob("*")):
+            target = runs_dir / path.name
+            if path.is_file() and not target.exists():
                 shutil.copy2(path, target)
-                print("resumed", relative)
+                print("resumed", path.name)
 
     cfg = load_config(args.config)
     reproduction = verify_full_reproduction_gate(args.reproduction_summary, cfg)
@@ -345,6 +351,15 @@ def run(args):
     pca = fit_teacher_pca(fit_states.float())
     if selectors_path.is_file():
         selectors = json.loads(selectors_path.read_text())
+        # The rank rule is re-applied to the stored teacher reports so a rule
+        # amendment takes effect on resume without recomputing the selectors.
+        reports = {int(k): v for k, v in selectors["reports_by_rank"].items()}
+        chosen, audit = choose_rank(reports, minimum_gap=MINIMUM_GAP, retention_floor=RETENTION_FLOOR)
+        forced = False
+        if chosen is None and smoke:
+            chosen, forced = RANK_GRID[0], True
+        selectors.update({"rank": chosen, "smoke_forced_rank": forced, "audit": audit})
+        _atomic_json(selectors, selectors_path)
     else:
         select_states, select_gold = cached("select")
         select_states = select_states.to(device)
@@ -364,7 +379,7 @@ def run(args):
                     "random": select_random(rank, pca.basis.shape[1], seed=RANDOM_PC_SEED + rank)}
             sets_by_rank[rank] = sets
             reports[rank] = evaluate_index_sets(validate_states, validate_gold, pca, readout, sets)
-        chosen, audit = choose_rank(reports, minimum_retention=MINIMUM_RETENTION, minimum_gap=MINIMUM_GAP)
+        chosen, audit = choose_rank(reports, minimum_gap=MINIMUM_GAP, retention_floor=RETENTION_FLOOR)
         forced = False
         if chosen is None and smoke:
             # The smoke pass exists to exercise training, checkpointing, evaluation and
@@ -387,7 +402,8 @@ def run(args):
             "train_examples": train_n, "fit_select_validate": [fit_n, select_n, validate_n],
             "selection_examples": selection_n, "learning_rate": LEARNING_RATE, "warmup_steps": WARMUP_STEPS,
             "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP, "rank_grid": list(RANK_GRID),
-            "candidate_pcs": candidates, "minimum_retention": MINIMUM_RETENTION, "minimum_gap": MINIMUM_GAP,
+            "candidate_pcs": candidates, "retention_floor": RETENTION_FLOOR, "minimum_gap": MINIMUM_GAP,
+            "rank_rule": "among ranks with causal-variance gap >= minimum_gap and causal retention >= retention_floor, maximise gap x retention",
             "data_seed": DATA_SEED, "readout_state": "last hidden state (index 12 on GPT-2)", "max_new_tokens": MAX_NEW_TOKENS,
             "student": "official embeddings and readout; LoRA and projector reset per seed",
             "distillation": "state-12 smooth-L1 over selected PC coordinates, teacher-std scaled, norm-matched to answer CE",

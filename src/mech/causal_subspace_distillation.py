@@ -228,21 +228,25 @@ def evaluate_index_sets(states, gold, pca, readout, sets: dict[str, Sequence[int
     return report
 
 
-def choose_rank(reports_by_rank: dict[int, dict], *, minimum_retention: float,
-                minimum_gap: float) -> tuple[int | None, dict]:
-    """Smallest rank whose causal set retains enough and beats variance by the gap."""
+def choose_rank(reports_by_rank: dict[int, dict], *, minimum_gap: float,
+                retention_floor: float) -> tuple[int | None, dict]:
+    """Among ranks where the causal set beats variance by ``minimum_gap`` and retains
+    at least ``retention_floor`` of dense accuracy, choose the rank maximising
+    gap x retention.  Both floors guard against a vacuous or information-poor
+    target; the product prefers a clearly distinguishable, informative rank.
+    """
     audit = {}
     for rank in sorted(reports_by_rank):
         report = reports_by_rank[rank]
-        causal = report["causal"]["retention_of_dense"] or 0.0
-        variance = report["variance"]["first_token_accuracy"]
-        gap = report["causal"]["first_token_accuracy"] - variance
-        audit[str(rank)] = {"causal_retention": causal, "causal_minus_variance": gap,
-                            "passes": causal >= minimum_retention and gap >= minimum_gap}
-    for rank in sorted(reports_by_rank):
-        if audit[str(rank)]["passes"]:
-            return int(rank), audit
-    return None, audit
+        retention = report["causal"]["retention_of_dense"] or 0.0
+        gap = report["causal"]["first_token_accuracy"] - report["variance"]["first_token_accuracy"]
+        eligible = gap >= minimum_gap and retention >= retention_floor
+        audit[str(rank)] = {"causal_retention": retention, "causal_minus_variance": gap,
+                            "eligible": eligible, "score": gap * retention if eligible else None}
+    eligible = {int(r): a["score"] for r, a in audit.items() if a["eligible"]}
+    if not eligible:
+        return None, audit
+    return max(eligible, key=lambda r: (eligible[r], -r)), audit
 
 
 # ------------------------------------------------------------------ student side

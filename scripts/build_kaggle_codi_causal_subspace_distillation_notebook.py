@@ -46,9 +46,9 @@ CODI teacher's decision state, selected four ways, and asks which transfers accu
 
 **Student:** the checkpoint's embeddings and readout, fresh LoRA and projector. The
 distillation gradient is **norm-matched** to the answer cross-entropy every step.
-**Rank** is chosen on the teacher only: the smallest r ∈ {8, 12, 16} whose causal set
-retains ≥75% of dense first-token accuracy and beats the variance set by ≥5 points.
-If none does, nothing is trained.
+**Rank** is chosen on the teacher only: among r ∈ {8, 12, 16} where the causal set
+beats the variance set by ≥5 points and retains ≥50% of dense first-token accuracy,
+the rank maximising gap × retention. If none qualifies, nothing is trained.
 
 ### Running across two accounts and several sessions
 
@@ -336,8 +336,12 @@ print("Status:", summary["status"])
 print("Decision:", summary["decision"]["claim"])
 if summary["status"] == "paused":
     print("\nNEXT: publish", OUTPUT_DIR, "as a Kaggle dataset, attach it to a new session, and Run All again.")
+elif summary["status"] == "stopped":
+    print("\nThe teacher-side rank rule stopped the run before training; see the selector table above.")
 elif summary.get("test") is None:
     print("\nNEXT: the other account must finish its seed; then attach both outputs and rerun to aggregate.")
+print("\nTIP: publishing this output lets the other account reuse teacher_cache.pt and selectors.json"
+      " (about 35 minutes of GPU time) by attaching it; discovery picks it up automatically.")
 for warning in summary["warnings"]:
     print("WARNING:", warning)
 ''')

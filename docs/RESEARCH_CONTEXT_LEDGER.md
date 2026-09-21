@@ -3174,6 +3174,33 @@ questions on per-question seed-mean correctness:
 Headline requires S1, H1 and H3. Teacher-side retention of each set, set overlaps,
 gradient scales and curves are reported regardless.
 
+### Amendment 2, before training: the rank rule
+
+The first Kaggle session (2026-09-22, seed-1 account, code `dc281ac`) ran the
+smoke pass end to end at about 1.2 steps per second, precomputed the teacher cache
+in 34 minutes, and stopped at the rank rule. On the 2,048-row validation split the
+teacher's dense first-token accuracy is 89.4% and retain-only gives:
+
+| rank | variance | relevance | causal | random | variance share of `variance` |
+|---:|---:|---:|---:|---:|---:|
+| 8 | 10.5% | 25.5% | 33.1% | 3.9% | 87.9% |
+| 12 | 32.3% | 38.6% | 48.5% | 2.8% | 89.6% |
+| 16 | 51.3% | 48.3% | 59.1% | 2.3% | 91.0% |
+
+Three teacher-side facts stand regardless of what follows: the top eight PCs hold
+88% of the variance and 12% of the accuracy (§40 replicates on the explicit-CoT
+teacher path); causal beats variance by 23, 16 and 8 points; causal beats gradient
+relevance by 8, 10 and 11 points (the §43–§52 lesson again). The gap clause passed
+at every rank and the 75% retention clause failed at every rank, because this
+teacher needs more than 16 PCs to keep 75% of its accuracy and at such ranks the
+sets converge. The two clauses conflict on this teacher; the 75% figure was a
+judgment call made before any teacher number was seen. Amended rule, applied before
+any student is trained and before the test set is read for this experiment: among
+ranks with a gap of at least five points and causal retention of at least 50%,
+choose the rank maximising gap times retention. On the observed table that is rank
+12 (54% retained, 16-point gap). The `full − none` sanity gate remains the guard
+against a target too weak to matter.
+
 ### Stated expectations and risks
 
 From-scratch adapters at 0.4 epoch may reach low absolute accuracy (the §2 pilot

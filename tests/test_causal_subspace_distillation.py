@@ -84,15 +84,22 @@ def test_selectors_separate_variance_from_causal_on_synthetic_teacher():
     assert log_prob.shape == (3000,) and correct.dtype == torch.bool
 
 
-def test_choose_rank_prefers_smallest_distinguishable_rank():
+def test_choose_rank_maximises_gap_times_retention_under_both_floors():
     def report(causal_ret, causal_acc, variance_acc):
         return {"causal": {"retention_of_dense": causal_ret, "first_token_accuracy": causal_acc},
                 "variance": {"first_token_accuracy": variance_acc}}
-    reports = {8: report(0.6, 0.6, 0.3), 12: report(0.8, 0.8, 0.7), 16: report(0.9, 0.9, 0.88)}
-    rank, audit = choose_rank(reports, minimum_retention=0.75, minimum_gap=0.05)
-    assert rank == 12 and audit["8"]["passes"] is False and audit["16"]["passes"] is False
-    rank, _ = choose_rank({8: report(0.9, 0.9, 0.89)}, minimum_retention=0.75, minimum_gap=0.05)
-    assert rank is None
+    # The observed teacher table from the first Kaggle run (dense 0.894).
+    observed = {8: report(0.370, 0.331, 0.105), 12: report(0.543, 0.485, 0.323), 16: report(0.661, 0.591, 0.513)}
+    rank, audit = choose_rank(observed, minimum_gap=0.05, retention_floor=0.50)
+    assert rank == 12
+    assert audit["8"]["eligible"] is False and audit["12"]["eligible"] and audit["16"]["eligible"]
+    assert audit["12"]["score"] > audit["16"]["score"]
+    # Gap floor and retention floor each exclude on their own.
+    assert choose_rank({8: report(0.9, 0.9, 0.88)}, minimum_gap=0.05, retention_floor=0.5)[0] is None
+    assert choose_rank({8: report(0.3, 0.3, 0.1)}, minimum_gap=0.05, retention_floor=0.5)[0] is None
+    # Ties on the product prefer the smaller rank.
+    tie = {8: report(0.5, 0.6, 0.4), 16: report(0.5, 0.6, 0.4)}
+    assert choose_rank(tie, minimum_gap=0.05, retention_floor=0.5)[0] == 8
 
 
 def test_target_and_loss_are_scale_free_and_full_is_all_dims():

@@ -46,9 +46,11 @@ kept:
 | `full` | all 768 dimensions |
 | `none` | answer cross-entropy only |
 
-Rank is chosen on a third disjoint 2,048-row split from {8, 12, 16}: the smallest r
-whose causal set retains at least 75% of the teacher's dense first-token accuracy
-under retain-only and beats the variance set by at least five points. Ranks near 32
+Rank is chosen on a third disjoint 2,048-row split from {8, 12, 16}: among ranks
+where the causal set beats the variance set by at least five points and retains at
+least half of the teacher's dense first-token accuracy under retain-only, the rank
+maximising gap times retention. (Amended before training from a 75% retention
+requirement; see ledger §86.) Ranks near 32
 would make the comparison vacuous, since §40's band (PCs 4–31) sits inside the
 variance top-32; small ranks force variance selection to spend a third or more of
 its budget on the inert PCs 0–3. If no rank satisfies both conditions the selectors

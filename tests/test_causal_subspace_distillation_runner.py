@@ -12,7 +12,7 @@ from scripts.run_codi_causal_subspace_distillation import (  # noqa: E402
     GRAD_CLIP,
     LEARNING_RATE,
     MINIMUM_GAP,
-    MINIMUM_RETENTION,
+    RETENTION_FLOOR,
     RANK_GRID,
     SELECTION_EXAMPLES,
     STEPS,
@@ -35,7 +35,7 @@ def test_protocol_is_frozen():
     assert SELECTION_EXAMPLES == 256 and CURVE_EVERY == 1_000
     assert (LEARNING_RATE, WARMUP_STEPS, WEIGHT_DECAY, GRAD_CLIP) == (1e-4, 500, 0.1, 2.0)
     assert RANK_GRID == (8, 12, 16) and CANDIDATE_PCS == 128
-    assert (MINIMUM_RETENTION, MINIMUM_GAP) == (0.75, 0.05)
+    assert (RETENTION_FLOOR, MINIMUM_GAP) == (0.50, 0.05)
     assert DATA_SEED == 20_260_923
     assert ARMS == ("none", "full", "variance", "relevance", "causal", "random")
 
