@@ -352,6 +352,7 @@ def generate_official_codi(
     force_answer_cue: bool = False,
     return_endpoint_metadata: bool = False,
     answer_state_observer=None,
+    answer_logit_observer=None,
 ) -> list[str] | tuple[list[str], dict]:
     """Greedy generation matching the released path, with optional causal KV edits.
 
@@ -359,6 +360,10 @@ def generate_official_codi(
     normalized state used to predict each answer token, the active-row mask, and the
     zero-based answer-token position. The default path remains byte-for-byte
     unchanged and does not request hidden states.
+
+    ``answer_logit_observer`` receives the corresponding vocabulary logits, active
+    rows, and answer-token position.  It is intended for read-only fidelity audits;
+    tensors are detached before the callback and generation decisions are unchanged.
     """
     if latent_iterations <= 0:
         raise ValueError("latent_iterations must be positive")
@@ -455,6 +460,12 @@ def generate_official_codi(
                     ~finished,
                     0,
                 )
+            if answer_logit_observer is not None:
+                answer_logit_observer(
+                    decoded.logits[:, -1, : model.eot_id].detach(),
+                    ~finished,
+                    0,
+                )
             next_token = decoded.logits[:, -1, : model.eot_id].argmax(dim=-1)
             for row, token_id in enumerate(next_token.tolist()):
                 generated[row].append(int(token_id))
@@ -511,6 +522,12 @@ def generate_official_codi(
             if answer_state_observer is not None:
                 answer_state_observer(
                     decoded.hidden_states[-1][:, -1, :],
+                    ~finished,
+                    int(answer_position),
+                )
+            if answer_logit_observer is not None:
+                answer_logit_observer(
+                    decoded.logits[:, -1, : model.eot_id].detach(),
                     ~finished,
                     int(answer_position),
                 )
