@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_causal_subspace_distillation.ipynb"
-RUN_COMMIT = "97fe779db66cbe8f2e06a744c321eccf53163f20"
+RUN_COMMIT = "30a7731a4f9e1c72c2da1788c7e1aa8768afa812"
 nb = nbf.v4.new_notebook()
 cells = []
 
