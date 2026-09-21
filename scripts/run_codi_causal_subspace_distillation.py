@@ -365,7 +365,12 @@ def run(args):
             sets_by_rank[rank] = sets
             reports[rank] = evaluate_index_sets(validate_states, validate_gold, pca, readout, sets)
         chosen, audit = choose_rank(reports, minimum_retention=MINIMUM_RETENTION, minimum_gap=MINIMUM_GAP)
-        selectors = {"rank": chosen, "audit": audit, "greedy_trace": trace,
+        forced = False
+        if chosen is None and smoke:
+            # The smoke pass exists to exercise training, checkpointing, evaluation and
+            # aggregation; on 64 rows the selectors need not be distinguishable.
+            chosen, forced = RANK_GRID[0], True
+        selectors = {"rank": chosen, "smoke_forced_rank": forced, "audit": audit, "greedy_trace": trace,
                      "reports_by_rank": {str(k): v for k, v in reports.items()},
                      "sets": {str(k): v for k, v in sets_by_rank.items()},
                      "eigenvalue_share_top4": float(pca.eigenvalues[:4].sum() / pca.eigenvalues.sum())}

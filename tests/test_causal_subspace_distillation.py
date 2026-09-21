@@ -41,6 +41,16 @@ def _synthetic_teacher(n=3000, d=16, vocab=40, seed=0):
     return latent, gold, readout
 
 
+def test_pca_accepts_fewer_samples_than_dimensions():
+    states = torch.randn(40, 96)
+    pca = fit_teacher_pca(states)
+    assert pca.basis.shape == (96, 96)
+    assert torch.allclose(pca.basis.T @ pca.basis, torch.eye(96, dtype=torch.float64), atol=1e-8)
+    assert float(pca.eigenvalues[40:].abs().max()) < 1e-6
+    with pytest.raises(ValueError):
+        fit_teacher_pca(torch.randn(1, 96))
+
+
 def test_pca_is_descending_and_orthonormal():
     states, _, _ = _synthetic_teacher()
     pca = fit_teacher_pca(states)

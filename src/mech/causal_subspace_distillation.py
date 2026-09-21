@@ -56,8 +56,11 @@ class TeacherPCA:
 
 
 def fit_teacher_pca(states: torch.Tensor) -> TeacherPCA:
-    if states.ndim != 2 or states.shape[0] < states.shape[1]:
-        raise ValueError("need at least D states of width D to fit the PCA")
+    if states.ndim != 2 or states.shape[0] < 2:
+        raise ValueError("need at least two states to fit the PCA")
+    # Fewer samples than dimensions gives a rank-deficient covariance whose trailing
+    # eigenvalues are zero; that is acceptable for a smoke pass and the protocol run
+    # fits on 2,048 rows for 768 dimensions.
     values = states.double()
     mean = values.mean(0)
     centered = values - mean
