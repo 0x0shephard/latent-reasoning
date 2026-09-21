@@ -30,4 +30,7 @@ def test_runner_records_external_holdout_status_and_locked_gate():
     assert "positive_kl_gain_interval" in text
     assert "nondegenerate_routing" in text
     assert "answer_logit_observer" in text
+    assert 'official_data_cfg = load_config(str(cfg.data_config))' in text
+    assert 'load_eval_set("svamp", official_data_cfg.eval.svamp)' in text
+    assert "official SVAMP protocol requires" in text
     ast.parse(text)

@@ -319,8 +319,19 @@ def run(args):
     for parameter in model.parameters():
         parameter.requires_grad_(False)
 
-    data_cfg = load_config(str(cfg.endpoint_retention.data_config))
-    all_rows = load_eval_set("svamp", data_cfg.eval.svamp)
+    # The endpoint diagnostics use configs/data.yaml, whose SVAMP entry is the
+    # 300-row test split.  This transfer protocol instead follows the released
+    # CODI evaluation config and must concatenate the pinned 700 train + 300
+    # test rows.  Keep the prompt style separate because the official data-only
+    # config intentionally contains no training prompt section.
+    official_data_cfg = load_config(str(cfg.data_config))
+    prompt_data_cfg = load_config(str(cfg.endpoint_retention.data_config))
+    all_rows = load_eval_set("svamp", official_data_cfg.eval.svamp)
+    expected_svamp = int(cfg.eval.expected_counts.svamp)
+    if len(all_rows) != expected_svamp:
+        raise RuntimeError(
+            f"official SVAMP protocol requires {expected_svamp} rows, observed {len(all_rows)}"
+        )
     fit_rows, screen_rows, final_rows = deterministic_question_split(
         all_rows, seed=SPLIT_SEED,
         sizes=(FIT_EXAMPLES, SCREEN_EXAMPLES, FINAL_EXAMPLES),
@@ -329,7 +340,7 @@ def run(args):
         name: _sha([" ".join(row["question"].strip().split()) for row in rows])
         for name, rows in (("fit", fit_rows), ("screen", screen_rows), ("final", final_rows))
     }
-    style = PromptStyle.from_config(data_cfg.prompt)
+    style = PromptStyle.from_config(prompt_data_cfg.prompt)
     latent_positions = int(cfg.eval.latent_iterations)
 
     fit_features = prompt_feature_matrix([row["question"] for row in fit_rows])
