@@ -100,9 +100,17 @@ def prepare_row(tokenizer, row: dict, *, bot_token_id: int) -> dict | None:
     positions = value_token_indices(tokenizer, formatted.cot, cot_ids)
     if not positions:
         return None
+    # The official scorer strips thousands separators from the model's text before
+    # comparing numbers; the gold side must be normalised the same way, and a gold
+    # that is still not a number cannot be scored, so the row is excluded.
+    gold = str(row["answer"]).split(" ")[-1].replace("####", "").replace(",", "").strip()
+    try:
+        float(gold)
+    except ValueError:
+        return None
     return {
         "question": str(row["question"]), "cot": str(row["cot"]), "answer": str(row["answer"]),
-        "gold": str(row["answer"]).split(" ")[-1].replace("####", "").strip(),
+        "gold": gold,
         "value_positions": [int(p) for p in positions],
         "value_token_ids": [int(cot_ids[p]) for p in positions],
     }

@@ -45,6 +45,11 @@ def test_prepare_row_localises_values_and_applies_filters():
     assert prepare_row(tokenizer, {**row, "cot": "<<2+3=5>>"}, bot_token_id=61) is None
     assert prepare_row(tokenizer, {**row, "answer": "#### -5"}, bot_token_id=61) is None
     assert prepare_row(tokenizer, {**row, "cot": "no equations here at all"}, bot_token_id=61) is None
+    # Thousands separators in the gold must be normalised the way the scorer
+    # normalises generated text, and a non-numeric gold excludes the row.
+    comma = prepare_row(tokenizer, {**row, "answer": "#### 333,333.33"}, bot_token_id=61)
+    assert comma["gold"] == "333333.33"
+    assert prepare_row(tokenizer, {**row, "answer": "#### 5abc"}, bot_token_id=61) is None
 
 
 class FakeDataset:
