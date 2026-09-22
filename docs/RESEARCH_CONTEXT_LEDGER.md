@@ -3257,3 +3257,58 @@ are about 1.3% of NLL; the claim concerns early training dynamics under equal
 gradient pressure, not final accuracy, since no student approached CODI's 43%; part
 of the tax is the equal-pressure design itself. Seed 2 (second account) runs the
 identical protocol; the finding stands only if the ordering replicates.
+
+## 88. Completed §86, two seeds: the cost pattern replicates, the novel contrast is a tie
+
+Seed 2 (second account, code `dfc4836`, identical protocol, rank 12 re-selected
+from the same teacher table) completed 2026-09-23. Exact match is noise in both
+seeds (3.1–4.3%); S1 fails twice; the preregistered primary is `STOP`. The
+secondary, teacher-forced test NLL, across seeds (positive favours the second arm):
+
+| comparison | seed 1 | seed 2 | verdict |
+|---|---|---|---|
+| none − full | −0.042 [−.058, −.027] | −0.040 [−.055, −.026] | replicated |
+| none − variance | −0.038 [−.050, −.025] | −0.023 [−.036, −.009] | replicated |
+| none − causal | −0.010 [−.022, +.000] | −0.015 [−.025, −.004] | replicated, smaller |
+| random − causal | +0.015 [+.003, +.028] | +0.017 [+.006, +.028] | replicated |
+| full − causal | +0.032 [+.017, +.048] | +0.026 [+.012, +.040] | replicated |
+| variance − causal | +0.027 [+.014, +.040] | +0.008 [−.006, +.022] | **not replicated** |
+| relevance − causal | +0.008 [−.003, +.019] | −0.001 [−.012, +.009] | tie, twice |
+| random − variance | −0.012 [−.024, +.000] | +0.009 [−.004, +.022] | sign flipped |
+
+### What stands
+
+1. **Negative transfer from variance and full-state targets.** Under norm-matched
+   pressure at 0.4 epoch, distilling toward all 768 dimensions or toward the twelve
+   highest-variance PCs of the teacher's decision state raises the student's answer
+   NLL relative to no distillation, in both seeds with intervals excluding zero.
+   Extends §40 from "the high-variance directions are inert" to "pulling a learning
+   student toward them conflicts with learning the answer."
+2. **Intervention- and relevance-selected targets avoid most of that cost** and beat
+   random and full in both seeds.
+3. **Causal versus relevance is a tie** in both seeds. H2, the one comparison not
+   already in the literature (Circuit Distillation selects components by ablation;
+   Flex-KD and SubDistill select directions by score; no one had put ablation-selected
+   directions against score-selected ones), returns a null at this budget: for this
+   purpose the gradient proxy is as good as the intervention it approximates.
+4. **Causal versus variance** is directionally consistent but the effect fell from
+   0.027 to 0.008 between seeds; with two seeds the seed-level variance is not
+   estimable and the honest description is "probably small."
+
+### Bounds
+
+Two training seeds; effects of 0.5–1.7% of NLL; early-training regime only, no
+student approached CODI's accuracy; the equal-pressure design is itself part of the
+tax. Pooled per-question aggregate over both seeds pending (attach both outputs and
+rerun the aggregation).
+
+### Decision point
+
+> The KV, head, warm-start and distillation-subspace lines are all closed. Remaining
+> quota, if spent at all, goes to one thirty-minute gradient-alignment diagnostic
+> (angle between the answer gradient and each target's distillation gradient along
+> an early `none` trajectory) to give finding 1 a mechanism. No more seeds, no longer
+> training, no new arms. Then write: the mechanistic audit (§40, §55, §58, §83) as the
+> body, §85 and §86–§88 as the training-side coda, with finding 1 as the one new
+> training-side fact and finding 3 as the honest close of the tested-versus-scored
+> question.
