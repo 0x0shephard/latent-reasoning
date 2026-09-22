@@ -582,6 +582,22 @@ def aggregate(args, summary, test_rows, out):
             nll_comparisons[f"{b}_minus_{a}_nll"] = _paired(mean_nll[b], mean_nll[a], seed=args.seed + 50 + i, samples=args.bootstrap_samples)
     required = ("full_minus_none", "causal_minus_variance", "causal_minus_relevance", "causal_minus_random", "variance_minus_random")
     gate = gates_from(comparisons) if all(k in comparisons for k in required) else None
+    # Preregistered secondary outcome (teacher-forced NLL, lower is better): the same
+    # pairs read on the continuous measure.  Reported, never used as a gate.
+    secondary = None
+    nll_required = ("none_minus_full_nll", "variance_minus_causal_nll", "relevance_minus_causal_nll",
+                    "random_minus_causal_nll", "random_minus_variance_nll")
+    if all(k in nll_comparisons for k in nll_required):
+        lb = lambda k: nll_comparisons[k]["bootstrap_95ci"][0]
+        ub = lambda k: nll_comparisons[k]["bootstrap_95ci"][1]
+        secondary = {
+            "distillation_helps_nll": lb("none_minus_full_nll") > 0,
+            "distillation_hurts_nll": ub("none_minus_full_nll") < 0,
+            "causal_beats_variance_nll": lb("variance_minus_causal_nll") > 0,
+            "causal_beats_relevance_nll": lb("relevance_minus_causal_nll") > 0,
+            "causal_beats_random_nll": lb("random_minus_causal_nll") > 0,
+            "variance_beats_random_nll": lb("random_minus_variance_nll") > 0,
+        }
     arm_results = {a: {"seeds": sorted(r["seed"] for r in rs),
                        "test_accuracy_by_seed": [r["test"]["accuracy"] for r in rs],
                        "test_accuracy_mean": float(torch.tensor(mean_correct[a]).mean()),
@@ -592,10 +608,19 @@ def aggregate(args, summary, test_rows, out):
     summary["runs"] = {k: {kk: vv for kk, vv in v.items() if kk not in ("test_correct", "test_nll", "test_outputs")}
                        for k, v in runs.items()}
     summary["test"] = {"examples": n, "arms": arm_results, "comparisons": comparisons,
-                       "nll_comparisons": nll_comparisons, "gate": gate}
+                       "nll_comparisons": nll_comparisons, "gate": gate, "secondary_nll": secondary}
     summary["status"] = "aggregated"
+    claim = claim_from(gate) if gate else f"partial aggregate over arms {sorted(by_arm)}; gates need all five comparisons"
+    if secondary is not None:
+        notes = []
+        if secondary["distillation_hurts_nll"]:
+            notes.append("distillation toward the full state raises answer NLL at this budget")
+        if secondary["causal_beats_variance_nll"] and secondary["causal_beats_random_nll"]:
+            notes.append("the causal subspace has the lowest NLL cost, beating variance and random with intervals excluding zero")
+        if notes:
+            claim += " | secondary NLL: " + "; ".join(notes)
     summary["decision"] = {"selectors_distinguishable": True, "final_passed": bool(gate["headline"]) if gate else None,
-                           "claim": claim_from(gate) if gate else f"partial aggregate over arms {sorted(by_arm)}; gates need all five comparisons"}
+                           "claim": claim}
     _atomic_json(summary, out / "summary.json")
     _atomic_torch_save({**summary, "test_correct": mean_correct, "test_nll": mean_nll,
                         "per_run_test_correct": {k: v["test_correct"] for k, v in runs.items()}},

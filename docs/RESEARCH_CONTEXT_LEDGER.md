@@ -3210,3 +3210,50 @@ secondary. The teacher-side rank rule protects against the §84 mistake: if the
 variance and causal sets barely differ, nothing is trained. A positive result is a
 targeted correction to a June 2026 method; a null with S1 passing says the inert
 directions cost nothing during training, which is also worth knowing.
+
+## 87. Interim, seed 1 of §86: primary STOP, secondary ordering favours causal selection
+
+Kaggle run 2026-09-22, seed-1 account, code `dfc4836`, six arms, 10,000 steps each,
+rank 12 chosen by the amended rule (causal set PCs 5–19 skipping 8, 16, 18; variance
+set PCs 0–11; Jaccard 0.33). Two out-of-memory failures preceded it: batch 16 in
+float32 did not fit a T4 (fixed by exact micro-batch accumulation) and the training
+loop retained per-step gradient tuples in its logging window (fixed; standing
+lesson: never keep step results that hold GPU tensors).
+
+**Primary (exact match, 1,319 test questions).** Every arm sits at 3.8–4.2%; all
+intervals cross zero; `full − none` fails, so the preregistered claim is
+`STOP: distillation signal not detectable at this budget`.
+
+**Secondary (teacher-forced answer NLL, lower is better).**
+
+| arm | test NLL |
+|---|---:|
+| none | 2.348 |
+| causal | 2.358 |
+| relevance | 2.366 |
+| random | 2.373 |
+| variance | 2.385 |
+| full | 2.390 |
+
+Paired intervals: `variance − causal` +0.027 [+0.014, +0.040]; `full − causal` +0.032
+[+0.017, +0.048]; `random − causal` +0.015 [+0.003, +0.028]; `relevance − causal`
++0.008 [−0.003, +0.019]; `none − full` −0.042 [−0.058, −0.027]; `none − causal`
+−0.010 [−0.022, +0.000]. The selection-split curves show the same ordering from
+step 4,000, and final selection exact match splits causal and none at 7.4%,
+relevance and random at 6.6%, full and variance at 5%.
+
+**Reading.** At 0.4 epoch under norm-matched pressure, distillation is a tax on
+answer learning: matching the full state or the variance subspace raises NLL
+relative to no distillation, matching the causal subspace costs nothing detectable,
+and causal beats variance, full and random with intervals excluding zero. H1 and H3
+hold on the secondary while S1 inverts. This extends §40: the inert high-variance
+directions are not merely useless to the readout; pulling a learning student toward
+them conflicts with learning the answer, and intervention-selected directions avoid
+the conflict. Relevance selection, half-overlapping the causal set, sits in between
+and is not separable from it.
+
+**Bounds.** One training seed; the bootstrap covers question sampling only; effects
+are about 1.3% of NLL; the claim concerns early training dynamics under equal
+gradient pressure, not final accuracy, since no student approached CODI's 43%; part
+of the tax is the equal-pressure design itself. Seed 2 (second account) runs the
+identical protocol; the finding stands only if the ordering replicates.
