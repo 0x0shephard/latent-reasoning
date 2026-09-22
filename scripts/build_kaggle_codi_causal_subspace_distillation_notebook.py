@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_causal_subspace_distillation.ipynb"
-RUN_COMMIT = "dfc4836a1fcbbe3a4a36e5c275a6a069036f1dbb"
+RUN_COMMIT = "05cd6e86eb0c96f58d195b3f92c13ec3dca93fb6"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -329,6 +329,9 @@ else:
                           for k, v in test["nll_comparisons"].items()]))
     if test["gate"]:
         display(pd.DataFrame([test["gate"]]))
+    if test.get("secondary_nll"):
+        print("secondary outcome (teacher-forced NLL, reported not gated):")
+        display(pd.DataFrame([test["secondary_nll"]]))
 ''')
 
 md("## Takeaways")
