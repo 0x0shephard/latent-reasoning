@@ -3312,3 +3312,68 @@ rerun the aggregation).
 > body, §85 and §86–§88 as the training-side coda, with finding 1 as the one new
 > training-side fact and finding 3 as the honest close of the tested-versus-scored
 > question.
+
+## 89. Preregistered: is the variance-target tax transient or permanent? (templated task)
+
+Written before any code. Protocol in
+[`CODI_TEMPLATED_SUBSPACE_DISTILLATION.md`](CODI_TEMPLATED_SUBSPACE_DISTILLATION.md);
+contract `official_codi_templated_subspace_distillation_v1`.
+
+### Question
+
+§88 established, in two seeds, that distilling an early-stage student toward the
+teacher's variance-selected decision-state directions raises its answer NLL above
+no distillation, while intervention-selected directions cost far less. On GSM8K no
+student reached usable accuracy, so whether that cost persists once the student can
+solve the task, or washes out, is unknown. This experiment keeps the official teacher,
+GPT-2 and its pretrained geometry, and replaces GSM8K with templated two- and
+three-step arithmetic word problems in the equation-only format the teacher was
+trained on, so fresh-adapter students reach real accuracy within a few thousand
+steps and exact match becomes the primary again.
+
+> Once a latent student can solve the task, does variance-selected distillation
+> leave a final-accuracy deficit relative to no distillation, and does
+> intervention-selected distillation avoid it?
+
+### Go/no-go on the teacher, before training
+
+1. The official teacher's explicit-CoT generation must reach at least 80% exact
+   match on 500 held-out templated problems, otherwise its decision states on this
+   task are not trustworthy targets.
+2. The teacher-side selector table is recomputed on the templated task (2,048 fit,
+   2,048 select, 2,048 validate rows) and the §86 amended rank rule must select a rank
+   (causal − variance ≥ 5 points, causal retention ≥ 50%, maximise the product).
+3. Dense first-token accuracy at the colon must be at least 80%.
+
+Any failure stops the run with no training.
+
+### Design
+
+Three arms, `none`, `variance`, `causal` (`relevance` dropped: §88 showed it ties
+causal; `full` and `random` dropped for budget), five training seeds, 3,000 steps at
+batch 16 (two micro-batches of eight), AdamW 1e-4 cosine with 150 warm-up steps,
+weight decay 0.1, clip 2.0, float32, same student construction and norm-matched
+distillation as §86. Data: 48,000 unique generated training problems, 256 selection,
+2,000 held-out generated test problems; no GSM8K row is touched. Curve every 300
+steps on the selection split. Runs checkpoint and resume; seeds split across accounts;
+`--aggregate-from` pools.
+
+### Gates (paired bootstrap over test questions on seed-mean correctness)
+
+- **T1, persistence:** `none − variance` lower bound > 0 means the tax is permanent
+  at this budget; upper bound < 0 means variance distillation has become a benefit;
+  an interval covering zero means it washed out.
+- **H1:** `causal − variance` lower bound > 0.
+- **H1b:** `causal − none`, two-sided, reported.
+- **Secondary:** steps to first reach 30% selection-split exact match, per run.
+
+Claims: `PERMANENT` if T1 lower bound > 0 and H1 lower bound > 0; `TRANSIENT` if T1
+and H1 both cover zero; otherwise `PARTIAL` with the surviving comparisons named.
+
+### Expectations
+
+Minimum detectable difference is roughly 2.5 points per seed and about 1.5 with
+five seeds. The §88 NLL effects were 0.5–1.7% of the loss; if they translate to
+under a point of accuracy this returns `TRANSIENT` or a null, cleanly. The result is
+a statement about training dynamics on a task the student can finish, not about
+GSM8K difficulty. This is the last training experiment the quota allows.
