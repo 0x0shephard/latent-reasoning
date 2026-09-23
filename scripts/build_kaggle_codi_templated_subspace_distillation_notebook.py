@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_templated_subspace_distillation.ipynb"
-RUN_COMMIT = "2bc825c48157e39d27df51f5bf7a046b1414707d"
+RUN_COMMIT = "0d5150acafb3812f23790f10aa7d1d06d9434b3a"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -100,7 +100,7 @@ Claims: **PERMANENT** = T1 ∧ H1; **PARTIAL** = one of them; **REVERSED**; **TR
 md("## Data and setup")
 code(f'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "{RUN_COMMIT}"
+RUN_COMMIT = "0d5150acafb3812f23790f10aa7d1d06d9434b3a"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = (
