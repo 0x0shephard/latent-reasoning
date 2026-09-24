@@ -350,6 +350,34 @@ else:
     print("No completed runs yet in this output.")
 ''')
 
+md("### Repair phase, dense: selection NLL and distance from the teacher every 10 steps for the first 200")
+code(r'''
+early_rows = []
+for name, run in summary.get("runs", {}).items():
+    for point in run.get("early_curve", []):
+        row = {"arm": run["arm"], "seed": run["seed"], "step": point["step"], "selection_nll": point["selection_nll"]}
+        for k, v in (point.get("term_loss") or {}).items():
+            row[f"dist_{k}"] = v
+        early_rows.append(row)
+if early_rows:
+    early = pd.DataFrame(early_rows)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.4), constrained_layout=True)
+    for arm, group in early.groupby("arm"):
+        mean = group.groupby("step").mean(numeric_only=True)
+        kw = dict(color=ARM_COLORS.get(arm, "#000"), linewidth=1.5, label=arm)
+        axes[0].plot(mean.index, mean["selection_nll"], **kw)
+        if "dist_causal" in mean:
+            axes[1].plot(mean.index, mean["dist_causal"], **kw)
+            axes[2].plot(mean.index, mean["dist_variance"], **kw)
+    axes[0].set(title="selection answer NLL (teacher-forced), seed mean", xlabel="step")
+    axes[1].set(title="distance from teacher in the CAUSAL directions", xlabel="step")
+    axes[2].set(title="distance from teacher in the VARIANCE directions", xlabel="step")
+    axes[0].legend(fontsize=8)
+    plt.show()
+else:
+    print("No early-curve records yet.")
+''')
+
 md("### GSM8K test exact match by arm and seed, comparisons, and gates")
 code(r'''
 test = summary.get("test")

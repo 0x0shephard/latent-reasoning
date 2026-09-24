@@ -112,9 +112,12 @@ TERM_RATIO_MIN = 1.5        # lowered from 2.0 after the first noise-mode measur
 NULL_WIDTH = 0.03
 TEACHER_BATCH = 64
 SEEDS_DEFAULT = "1,2,3,4,5"
+EARLY_EVERY = 10     # dense early secondary: repair happens within ~100 steps (ledger 98)
+EARLY_WINDOW = 200
 
 SMOKE = {"fit": 64, "select": 64, "validate": 64, "pilot_steps": 12, "steps": 8, "selection": 16,
-         "test": 16, "curve_every": 4, "checkpoint_every": 4, "candidates": 16, "term_rows": 16}
+         "test": 16, "curve_every": 4, "checkpoint_every": 4, "candidates": 16, "term_rows": 16,
+         "early_every": 2, "early_window": 4}
 
 
 def parse_arm(arm: str) -> tuple[str, float]:
@@ -219,6 +222,8 @@ def run(args):
     checkpoint_every = S["checkpoint_every"] if smoke else CHECKPOINT_EVERY
     candidates = S["candidates"] if smoke else CANDIDATE_PCS
     term_rows = S["term_rows"] if smoke else TERM_CHECK_ROWS
+    early_every = S["early_every"] if smoke else EARLY_EVERY
+    early_window = S["early_window"] if smoke else EARLY_WINDOW
     seeds = tuple(int(s) for s in args.seeds.split(",") if s.strip())
     arms = tuple(args.arms)
     for arm in arms:
@@ -383,6 +388,22 @@ def run(args):
             n += len(teacher)
         return {k: v / max(1, n) for k, v in sums.items()}
 
+    @torch.no_grad()
+    def early_point(step: int) -> dict:
+        """Cheap repair-phase measurement: teacher-forced selection NLL (no generation) and the
+        student's distance from the teacher in every arm's subspace on held-out fit rows."""
+        model.eval(); losses = []
+        for start in range(0, len(selection_rows), args.eval_batch_size):
+            batch = collate_official_codi_kv_rows(tokenizer, selection_rows[start:start + args.eval_batch_size],
+                                                  bot_token_id=model.bot_id, enforce_answer_eligibility=False).to(device)
+            losses.append(student_trajectory_forward(model, batch, latent_positions=latent_positions)
+                          .per_example_loss.float().cpu())
+        point = {"step": int(step), "selection_nll": float(torch.cat(losses).mean())}
+        if sets is not None:
+            point["term_loss"] = term_losses(splits["fit"][:term_rows], fit_states[:term_rows])
+        model.train()
+        return point
+
     # ---- go/no-go
     preliminary_path = out / "preliminary.json"
     preliminary = json.loads(preliminary_path.read_text()) if preliminary_path.is_file() else {}
@@ -446,11 +467,12 @@ def run(args):
                   {"params": [p for n, p in parameters_by_name.items() if n not in projector_names], "lr": LEARNING_RATE_LORA}]
         parameters = list(parameters_by_name.values())
         optimizer = torch.optim.AdamW(groups, weight_decay=WEIGHT_DECAY)
-        step0, curve, elapsed, window = 0, [], 0.0, []
+        step0, curve, elapsed, window, early = 0, [], 0.0, [], []
         if ckpt_path.is_file():
             ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             _restore(parameters_by_name, ckpt["trainable"]); optimizer.load_state_dict(ckpt["optimizer"])
             step0, curve, elapsed, damage_report = int(ckpt["step"]), ckpt["curve"], float(ckpt["elapsed"]), ckpt["damage"]
+            early = ckpt.get("early_curve", [])
             torch.set_rng_state(ckpt["cpu_rng"])
             if device.type == "cuda" and ckpt.get("cuda_rng") is not None:
                 torch.cuda.set_rng_state_all(ckpt["cuda_rng"])
@@ -459,12 +481,15 @@ def run(args):
             damage_report = apply_damage(seed)
             print("damaged", name, damage_report)
         target = targets[base]
+        if step0 == 0 and not early:
+            early.append(early_point(0))
         model.train(); t0 = time.perf_counter()
         base_lrs = [LEARNING_RATE_PROJECTOR, LEARNING_RATE_LORA]
 
         def save_ckpt(step):
             _atomic_torch_save({"trainable": _snapshot(parameters_by_name), "optimizer": optimizer.state_dict(),
-                                "step": step, "curve": curve, "elapsed": elapsed + time.perf_counter() - t0,
+                                "step": step, "curve": curve, "early_curve": early,
+                                "elapsed": elapsed + time.perf_counter() - t0,
                                 "damage": damage_report, "cpu_rng": torch.get_rng_state(),
                                 "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None}, ckpt_path)
 
@@ -489,6 +514,8 @@ def run(args):
                            "distillation_scale": result.distillation_scale, "gradient_cosine": result.gradient_cosine})
             del batches, teacher_states, result
             done = step + 1
+            if done <= early_window and done % early_every == 0:
+                early.append(early_point(done))
             if done % curve_every == 0 or done == steps:
                 metrics, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
                 model.train()
@@ -507,7 +534,7 @@ def run(args):
         test_metrics, test_nll, test_correct, test_outputs = selection_metrics(model, tokenizer, test_rows, **eval_kw)
         record = {"arm": arm, "base_arm": base, "multiplier": multiplier, "seed": seed, "damage": args.damage,
                   "pilot": tag != "", "rank": rank, "steps": steps, "training_seconds": training_seconds,
-                  "damage_report": damage_report, "curve": curve,
+                  "damage_report": damage_report, "curve": curve, "early_curve": early,
                   "recovery_threshold": threshold,
                   "steps_to_threshold": steps_to_threshold(curve, threshold),
                   "mean_gradient_cosine": (sum(p["gradient_cosine"] for p in curve if p["gradient_cosine"] is not None)
@@ -526,7 +553,8 @@ def run(args):
         "preregistration": {
             "arms": list(arms), "seeds_this_run": list(seeds), "step_options": list(STEP_OPTIONS),
             "pilot_steps": pilot_steps, "pilot_seeds": list(PILOT_SEEDS), "noise_grid": list(NOISE_GRID),
-            "sigma": noise_sigma["value"], "batch_size": args.batch_size, "micro_batch_size": args.micro_batch_size,
+            "sigma": noise_sigma["value"], "early_every": early_every, "early_window": early_window,
+            "batch_size": args.batch_size, "micro_batch_size": args.micro_batch_size,
             "sizes": sizes, "learning_rate_lora": LEARNING_RATE_LORA, "learning_rate_projector": LEARNING_RATE_PROJECTOR,
             "warmup_steps": WARMUP_STEPS, "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP,
             "rank_grid": list(RANK_GRID), "minimum_gap": MINIMUM_GAP, "retention_floor": RETENTION_FLOOR,
@@ -599,6 +627,23 @@ def run(args):
     return aggregate(args, summary, test_rows, out)
 
 
+def _early_mean(records: list[dict]) -> list[dict]:
+    """Seed-mean of the dense early curve per step (secondary, ledger 98)."""
+    by_step: dict[int, list[dict]] = {}
+    for record in records:
+        for point in record.get("early_curve", []):
+            by_step.setdefault(int(point["step"]), []).append(point)
+    rows = []
+    for step in sorted(by_step):
+        points = by_step[step]
+        row = {"step": step, "selection_nll": sum(p["selection_nll"] for p in points) / len(points), "seeds": len(points)}
+        terms = [p["term_loss"] for p in points if p.get("term_loss")]
+        if terms:
+            row["term_loss"] = {k: sum(t[k] for t in terms) / len(terms) for k in terms[0]}
+        rows.append(row)
+    return rows
+
+
 def aggregate(args, summary, test_rows, out):
     runs = {}
     for directory in [out, *[Path(p) for p in args.aggregate_from]]:
@@ -632,6 +677,7 @@ def aggregate(args, summary, test_rows, out):
                        "steps_to_threshold": [r["steps_to_threshold"] for r in rs],
                        "mean_gradient_cosine": [r["mean_gradient_cosine"] for r in rs],
                        "final_selection": [r["curve"][-1] if r["curve"] else None for r in rs],
+                       "early_curve_mean": _early_mean(rs),
                        "training_seconds_mean": sum(r["training_seconds"] for r in rs) / len(rs)} for a, rs in by_arm.items()}
     summary["runs"] = {k: {kk: vv for kk, vv in v.items() if kk not in ("test_correct", "test_nll", "test_outputs")} for k, v in runs.items()}
     summary["test"] = {"examples": n, "arms": arm_results, "comparisons": comparisons, "nll_comparisons": nll_comparisons, "gate": gate}

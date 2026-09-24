@@ -24,6 +24,9 @@ from scripts.run_codi_recovery_subspace_distillation import (  # noqa: E402
     WARMUP_STEPS,
     choose_steps,
     choose_steps_for_pilots,
+    EARLY_EVERY,
+    EARLY_WINDOW,
+    _early_mean,
     claim_from,
     gates_from,
     parse_arm,
@@ -83,3 +86,15 @@ def test_gates_and_claims():
     assert claim_from(g).startswith("INCONCLUSIVE")
     g = gates_from(_comparisons(variance_minus_none=(-0.06, -0.02)), 0.7, 0.662)
     assert g["variance_hurts_recovery"] and not g["variance_helps_recovery"]
+
+
+def test_early_curve_constants_and_seed_mean():
+    assert (EARLY_EVERY, EARLY_WINDOW) == (10, 200)
+    a = {"early_curve": [{"step": 0, "selection_nll": 2.0, "term_loss": {"causal": 0.4, "variance": 0.3}},
+                         {"step": 10, "selection_nll": 1.6, "term_loss": {"causal": 0.3, "variance": 0.3}}]}
+    b = {"early_curve": [{"step": 0, "selection_nll": 1.8, "term_loss": {"causal": 0.6, "variance": 0.1}}]}
+    rows = _early_mean([a, b, {}])
+    assert [r["step"] for r in rows] == [0, 10]
+    assert rows[0]["selection_nll"] == pytest.approx(1.9) and rows[0]["seeds"] == 2
+    assert rows[0]["term_loss"]["causal"] == pytest.approx(0.5)
+    assert rows[1]["seeds"] == 1

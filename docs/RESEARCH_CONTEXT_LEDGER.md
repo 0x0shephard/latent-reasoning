@@ -3787,3 +3787,45 @@ where the term is already at its floor (ratio ≈ 1). An 84% rise in the varianc
 is not that situation. The floor becomes **1.5×** for the variance and causal targets.
 No other rule changes. The two pilots (seeds 0 and 100) still have to agree before any
 seed counts, which is the check that matters for this regime.
+
+## 98. §97 pilots: GO at 1,000 steps; repair is fast, so a dense early secondary is added
+
+Preliminary 2026-09-25 (code `9e78741`), `projector_noise` at σ = 2.0. All four checks
+pass (term ratios: causal 2.07×, variance 1.84×, both above the 1.5 floor). Pilots:
+
+| pilot (none) | selection EM at step 100 | at step 2,000 | GSM8K test EM | test NLL |
+|---|---|---|---|---|
+| seed 0 | ≈0.68 | ≈0.77 | 40.2% (530) | 1.545 |
+| seed 100 | ≈0.74 | ≈0.78 | 39.2% (517) | 1.538 |
+
+Both pilots crossed the recovery threshold (0.676) at step 100, the first measurement,
+so the preregistered rule sets the budget at **1,000 steps**. The two pilots agree
+closely, unlike the reset (§96): noise damage is not bimodal.
+
+### Reading
+
+- **Repair is fast.** Most of the 29 lost selection points return within 100 steps; the
+  curve then creeps from ≈0.74 to ≈0.78 and plateaus below the official 0.82. On GSM8K
+  test the repaired `none` student sits ≈3–4 points under the official 43.4%.
+- **What the primary therefore measures.** Final GSM8K exact match after 1,000 steps
+  compares arms on the plateau: whether a copying target lifts a lightly damaged
+  student toward the teacher-consistent official solution, or pulls it further away.
+  There is room in both directions (the `none` arm is 3–4 points under official and
+  the MDE is ≈2 points), but a large positive effect is capped near the official
+  accuracy. A NULL is therefore a plausible outcome and would be informative.
+- **The `steps_to_threshold` secondary is uninformative**: every run will cross at the
+  first curve point. The repair phase sits inside the first 100 steps and the curve
+  (every 100 steps) cannot resolve it.
+
+### Addition (secondary only; primary, arms, seeds, budget and gates unchanged)
+
+Every 10 steps for the first 200, and once at step 0 immediately after damage, each run
+records the teacher-forced answer NLL on the 256-row selection split (no generation) and
+the student's distance from the teacher in **every** arm's subspace (causal, variance,
+relevance, random, full) on 256 held-out fit rows. This makes the repair phase visible,
+and makes distance-in-the-causal-directions comparable across arms, including arms not
+trained on it. Cost ≈ 2 minutes per run. Reported as seed-mean curves, not gated.
+
+Budget at 1,000 steps: ≈ 28–30 minutes per run; primary 30 runs ≈ 15 h (account A
+seeds 1–3 ≈ 9 h, account B seeds 4–5 ≈ 6 h), weights 12 runs ≈ 6 h, `lora_half` 12 runs
+plus its own preliminary ≈ 8 h.
