@@ -3750,3 +3750,13 @@ at ≈0.35 (train-distribution) / ≈0.14 (GSM8K) and escapes it stochastically.
 
 Cost of the new preliminary: σ sweep ≈ 5 min plus two pilots ≈ 1.7 h, once, on one
 account; the second account reuses the published output.
+
+### §96 addendum: third reset pilot pair confirms the bimodality; noise mode not yet run
+
+A further preliminary on 2026-09-25 ran the `034cd69` runner but with the previous
+notebook's stage table, i.e. still `--damage projector`. Two pilots: seed 0 stalled
+again (selection EM ≈ 0.34 throughout, test **13.8%**); seed 100 partly recovered
+(test **28.7%**) without crossing the selection threshold. Across three seed-0 runs of
+the reset regime the outcomes are 32.4%, 13.9%, 13.8%; the two-pilot rule stopped the
+run as designed. The `projector_noise` mode has not yet been exercised; it requires
+the notebook file at `034cd69`, whose stage table maps `primary` to `projector_noise`.
