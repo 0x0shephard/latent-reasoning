@@ -3377,3 +3377,101 @@ five seeds. The §88 NLL effects were 0.5–1.7% of the loss; if they translate 
 under a point of accuracy this returns `TRANSIENT` or a null, cleanly. The result is
 a statement about training dynamics on a task the student can finish, not about
 GSM8K difficulty. This is the last training experiment the quota allows.
+
+## 90. Completed §89, three seeds: the go/no-go passed, the student never left the floor
+
+Run 2026-09-24 on one account (seeds 1–3, code `0d5150a`, notebook pin `3e50d65`),
+≈55 min per (arm, seed). Output published as a Kaggle dataset; the other account's
+seeds 4–5 are not needed for the conclusion below.
+
+### Go/no-go (all passed)
+
+- Teacher explicit-CoT generation on 500 held-out templated problems: **82.6%**. The
+  failures shown are arithmetic slips inside a correct plan (`63*7=471`), so the task
+  transfers to the GPT-2 teacher as intended.
+- Dense colon first-token accuracy on the validate split: **88.1%** (GSM8k-Aug: ≈71%).
+- Rank rule chose **r = 12** (causal 0.509 vs variance 0.458, gap 0.050, exactly at
+  the floor). Top-4 eigenvalue share 0.696.
+
+Selector table (validate split, first-token accuracy / variance share):
+
+| r | variance | relevance | causal | random |
+|---|---|---|---|---|
+| 8 | 0.160 / 0.77 | 0.038 / 0.04 | 0.269 / 0.15 | 0.000 |
+| 12 | 0.458 / 0.83 | 0.100 / 0.06 | 0.509 / 0.21 | 0.000 |
+| 16 | 0.689 / 0.87 | 0.221 / 0.10 | 0.689 / 0.87 | 0.000 |
+
+Sets at r = 12: variance `[0..11]`, causal `[2..12, 15]`. The two share ten of twelve
+PCs; the causal set drops PCs 0 and 1, which carry ≈62% of the variance and nothing
+the readout uses, and adds PCs 12 and 15. At r = 16 the two sets are identical. On
+this task the selectors are barely distinguishable; the "inert top PCs" of §40 are
+here exactly two directions.
+
+### Training (3,000 steps × batch 16, three seeds per arm)
+
+| arm | test EM seeds 1/2/3 | mean EM | test NLL |
+|---|---|---|---|
+| none | 1.9 / 2.0 / 0.0% | 1.3% | 2.150 |
+| variance | 0.5 / 2.4 / 0.2% | 1.0% | 2.259 |
+| causal | 1.1 / 1.3 / 1.0% | 1.1% | 2.270 |
+
+No run reached the 30% selection-split threshold; the best selection-split exact
+match at any checkpoint was 2.3%. Selection-split NLL was still falling at step 3,000
+(2.1–2.4 nats per answer token). The distillation gradient scale rose from ≈1 to ≈6
+over training in both distilled arms, i.e. the norm-matched term kept pace with CE.
+
+Exact-match comparisons (paired bootstrap, seed-mean): `none − variance` +0.003
+[−0.001, +0.007]; `causal − variance` +0.001 [−0.002, +0.004]; `causal − none`
+−0.002 [−0.005, +0.001]. The runner's decision logic printed **TRANSIENT**.
+
+### Reading: the preregistered claim is vacuous, the secondary replicates
+
+The §89 design assumed a task the student would finish; it did not, so every
+exact-match interval is a comparison of floor against floor and the `TRANSIENT`
+label does not mean the tax washed out. The design error is mine: §89 gated on the
+teacher and not on the student (§86 had S1 for that). The claim is withdrawn; the
+experiment is a **STOP: student did not learn the task at this budget**.
+
+The teacher-forced NLL secondary replicates §87–§88 for the third time, now on a
+different task and with three seeds: `none < causal < variance`.
+
+| comparison | mean NLL difference | 95% CI |
+|---|---|---|
+| variance − none | +0.109 | [+0.097, +0.120] |
+| causal − none | +0.120 | [+0.110, +0.131] |
+| variance − causal | −0.012 | [−0.020, −0.004] |
+
+Here the sign of `variance − causal` is reversed relative to §88: causal is very
+slightly *worse* than variance in NLL, by 0.012 nats, with sets that share ten of
+twelve directions. The stable fact across all three runs is not "causal beats
+variance"; it is **norm-matched distillation toward any low-rank decision-state
+target slows a from-scratch latent student's NLL learning, by 0.02–0.12 nats at
+fixed steps**, and the selector moves that by an order of magnitude less.
+
+### Why the student did not learn
+
+48,000 examples (<1 epoch of a generated task) with fresh LoRA and projector from
+the official embeddings and readout, at the §86 learning rate, is far below the
+released recipe (385k GSM8k-Aug examples, many epochs). Answers are 2–3 digit
+numbers, so exact match demands the whole number from one latent pass. The latent
+task is genuinely slow to acquire from scratch; this was under-estimated in §89.
+
+### Bounds and what would change the reading
+
+- Not measured: the official checkpoint's own *latent-path* accuracy on the
+  templated test. If it is high, the from-scratch failure is budget; if it is low,
+  the task is hard for the latent path itself. Two minutes of GPU.
+- Not tested: a warm-start (official CODI weights, no reinitialisation) fine-tuned on
+  the templated task under the same three arms. That regime has non-trivial accuracy
+  from step 0 and would measure the tax where it matters; §85 warns that
+  norm-matching to a converged student can be inert, but the templated task is new
+  to the student, so the term is not near zero here.
+- The equal-pressure design is part of the finding: a weaker distillation weight may
+  remove the tax entirely, which would make it a tuning artefact rather than a
+  property of the targets.
+
+Three training experiments (§83, §86–88, §89–90) have now returned the same shape:
+distillation toward a low-rank subspace of the teacher's decision state does not
+help a from-scratch CODI student at the budgets available, and variance-selected
+targets are never better than intervention-selected ones. That negative result, with
+the §40/§55/§58 mechanistic findings it rests on, is the write-up.
