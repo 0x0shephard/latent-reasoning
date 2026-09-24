@@ -3564,3 +3564,91 @@ the target is the decision state CODI's own loss already matched, so the term st
 near converged (§85). The remaining path is a from-scratch student trained to
 competence on a task with divergent selectors, a multi-day GPU budget outside this
 project's quota. The negative result stands without it.
+
+## 94. Preregistered: recovery test of distillation targets on the real checkpoint (60 GPU-hours, two accounts)
+
+### Question
+
+§93 states what a decisive selector test needs: a student in the measurable-accuracy
+regime whose distillation term is far from converged, on a teacher where the
+selectors diverge. From-scratch students cannot reach that regime at this quota
+(§90, §92). This experiment gets there by **removing one piece of the official
+checkpoint's competence and measuring which target restores it**: the projector, the
+two-layer module that turns each latent thought into the next input embedding, is
+re-initialised; the LoRA adapters, embeddings and readout are untouched. The student
+keeps the arithmetic skill but cannot write its thoughts, so GSM8K accuracy falls from
+≈43% toward the no-thought baseline, and the distance between its latent decision
+state and the teacher's explicit-CoT decision state is large again. Fine-tuning then
+recovers accuracy in the hundreds of steps, and the question becomes which target,
+if any, recovers it faster and further. This is the continued-training regime of a
+latent reasoner, not learning from scratch; the claim is scoped to it.
+
+Contract `official_codi_recovery_subspace_distillation_v1`. Code path: the §86 module
+(teacher decision-state PCA, selectors, norm-matched smooth-L1 distillation) with
+three additions: `reset_projector` (projector only), `scale_lora_b` (second damage
+mode), and a per-step record of the cosine between the answer-CE gradient and the
+distillation gradient, plus an `auxiliary_multiplier` on the norm-matched term.
+
+### Data and teacher side
+
+GSM8k-Aug equation-only, same `DATA_SEED` 20260923 and the same `sample_splits` order
+as §86, so fit / select / validate (2,048 each) are the §86 splits and the selectors
+should reproduce §86's rank-12 sets; train = steps × 16 rows drawn next; selection =
+256 held-out GSM8k-Aug rows for the learning curve. Test = the 1,319 GSM8K test
+questions, read once per trained model. Rank rule as amended in §86 (gap ≥ 0.05,
+causal retention ≥ 0.5, maximise gap × retention over {8, 12, 16}).
+
+### Go/no-go, before any seed is spent (≈1 h)
+
+1. **Headroom.** Projector-reset model's selection-split exact match ≤ 30%.
+2. **Selector divergence.** At the chosen rank, causal and variance share at most 8 of
+   12 PCs (Jaccard ≤ 0.5). The templated teacher failed this (§90: 10 of 12); if GSM8K
+   fails it, the selector question is moot on this teacher and the run stops.
+3. **Term not converged.** Mean distillation loss of the variance and causal targets on
+   256 fit rows at the reset checkpoint ≥ 2× its value at the official checkpoint.
+4. **Recovery pilot.** One `none` run, seed 0 (not counted), 2,000 steps, curve every
+   100 on the selection split. Step budget for all arms = 1,000 if the pilot reaches
+   30% by step 1,000, else 2,000 if by 2,000, else STOP. The pilot's curve is reported.
+
+### Training
+
+Projector re-initialised per seed (same generator as §86's `reinitialize_student`,
+projector part only). AdamW, LoRA parameters 1e-4, projector 5e-4 (fresh module),
+warmup 50, cosine to 0 over the step budget, weight decay 0.1, clip 2.0, batch 16 as
+2 × 8 exact accumulation. Distillation: smooth-L1 on the selected teacher-PCA
+coordinates of the student's latent decision state against the teacher's explicit-CoT
+decision state, scaled by teacher coordinate std, gradient norm-matched to the CE
+gradient. Data order and reset are functions of the seed, so arms are paired by seed.
+
+### Stages and budget (≈30 min per run at 1.1 s/step for 1,000 steps + 1,319 generations)
+
+| stage | damage | arms | seeds | runs | hours | account |
+|---|---|---|---|---|---|---|
+| 1 primary | projector reset | none, full, variance, relevance, causal, random | 1–5 | 30 | ≈15 | A: 1–3, B: 4–5 |
+| 2 weight robustness | projector reset | variance ×0.3, variance ×3, causal ×0.3, causal ×3 | 1–3 | 12 | ≈6 | A |
+| 3 second damage | LoRA-B × 0.5 | none, variance, causal, random | 1–3 | 12 | ≈6 | B |
+
+≈27 h of the 60 available; the remainder is margin for failures and a 2,000-step
+budget if the pilot requires it (which doubles stage costs to ≈50 h, still inside).
+
+### Outcomes and gates (paired bootstrap over the 1,319 test questions, seed-mean correctness)
+
+Primary: GSM8K test exact match at the final step.
+
+- **R0** sanity: `none` final test EM ≥ 30% (recovery happened).
+- **S1** `full − none` > 0 (does any distillation help recovery?).
+- **H1** `causal − variance` lower bound > 0. **H2** `causal − relevance`. **H3** `causal − random`.
+- `variance − none`, `causal − none` two-sided (does a target hurt recovery, as it hurt learning in §86–§90?).
+- **Headline** = H1 ∧ H3 → `CONFIRMED`. If H1's interval covers 0 with width ≤ 3 points → `NULL: selector does not matter in the recovery regime`. Otherwise `PARTIAL` naming the survivors.
+- Stage 2: the sign of `causal − variance` at ×0.3 and ×3; a headline that flips sign with the weight is reported as weight-dependent, not confirmed.
+- Stage 3: the sign of `causal − variance` and of `variance − none` under LoRA-B damage.
+- Secondary: steps to 30% selection EM; test NLL; mean gradient cosine (CE vs distillation) per arm, reported as the mechanism behind any tax.
+
+### What this can and cannot say
+
+It can say whether, for a latent reasoner that must recover a lost component under
+continued training, an intervention-selected decision-state target transfers better,
+worse or the same as a variance-selected one, with five seeds on the real task and
+1,319 paired questions (minimum detectable difference ≈ 2 points). It cannot say
+anything about learning from scratch; §93 stands for that regime. If go/no-go 2 fails
+the selector claim is undecidable on this teacher and the write-up says so.
