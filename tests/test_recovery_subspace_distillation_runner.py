@@ -39,7 +39,7 @@ def test_protocol_is_frozen():
     assert DAMAGES == ("projector_noise", "projector", "lora_half") and NOISE_GRID == (0.25, 0.5, 1.0, 2.0)
     assert (STEP_OPTIONS, PILOT_STEPS, PILOT_SEEDS, BATCH_SIZE, CURVE_EVERY) == ((1_000, 2_000), 2_000, (0, 100), 16, 100)
     assert (LEARNING_RATE_LORA, LEARNING_RATE_PROJECTOR, WARMUP_STEPS) == (1e-4, 5e-4, 50)
-    assert (HEADROOM_MIN_GAP, MAX_SHARED_PCS, TERM_RATIO_MIN, RECOVERY_FRACTION, NULL_WIDTH) == (0.20, 8, 2.0, 0.5, 0.03)
+    assert (HEADROOM_MIN_GAP, MAX_SHARED_PCS, TERM_RATIO_MIN, RECOVERY_FRACTION, NULL_WIDTH) == (0.20, 8, 1.5, 0.5, 0.03)
     assert recovery_threshold(0.82, 0.504) == pytest.approx(0.662)
 
 

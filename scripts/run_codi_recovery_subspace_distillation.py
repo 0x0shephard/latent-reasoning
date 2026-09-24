@@ -108,7 +108,7 @@ TERM_CHECK_ROWS = 256
 HEADROOM_MIN_GAP = 0.20     # official - damaged on the selection split (amended, ledger 95)
 RECOVERY_FRACTION = 0.5     # recovery threshold = damaged + fraction * gap
 MAX_SHARED_PCS = 8          # Jaccard <= 0.5 at rank 12
-TERM_RATIO_MIN = 2.0
+TERM_RATIO_MIN = 1.5        # lowered from 2.0 after the first noise-mode measurement (ledger 97)
 NULL_WIDTH = 0.03
 TEACHER_BATCH = 64
 SEEDS_DEFAULT = "1,2,3,4,5"

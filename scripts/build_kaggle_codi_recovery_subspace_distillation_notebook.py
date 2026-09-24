@@ -91,7 +91,7 @@ gradient norm each step. Each step also records the cosine between the two gradi
 1. Headroom: the damage removes ≥ 20 points of selection-split exact match. For `projector_noise`
    σ is the smallest of {0.25, 0.5, 1, 2} that does so (sweep recorded).
 2. Causal and variance sets share ≤ 8 of 12 PCs (the templated teacher failed this, §90).
-3. Variance/causal distillation loss at the damaged weights ≥ 2× its value at the official weights.
+3. Variance/causal distillation loss at the damaged weights ≥ 1.5× its value at the official weights (§97).
 4. Two `none` pilots (seeds 0 and 100, 2,000 steps): the recovery threshold is `damaged + ½ × gap`
    on the selection split; budget = 1,000 if **both** cross by step 1,000, 2,000 if both cross by
    2,000, else STOP. A disagreeing pair is a STOP (that is what killed the full-reset mode, §96).

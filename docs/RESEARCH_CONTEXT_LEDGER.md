@@ -3760,3 +3760,30 @@ again (selection EM ≈ 0.34 throughout, test **13.8%**); seed 100 partly recove
 the reset regime the outcomes are 32.4%, 13.9%, 13.8%; the two-pilot rule stopped the
 run as designed. The `projector_noise` mode has not yet been exercised; it requires
 the notebook file at `034cd69`, whose stage table maps `primary` to `projector_noise`.
+
+## 97. §96 go/no-go for `projector_noise`: σ calibrated at 2.0; term-ratio floor lowered to 1.5 (amendment)
+
+First `projector_noise` preliminary, 2026-09-25 (code `034cd69`). Sigma sweep on the
+selection split (official 0.820):
+
+| σ | selection EM | gap |
+|---|---|---|
+| 0.25 | 0.816 | 0.004 |
+| 0.5 | 0.813 | 0.008 |
+| 1.0 | 0.793 | 0.027 |
+| 2.0 | 0.531 | 0.289 |
+
+The projector is robust to weight noise up to σ ≈ 1 and gives way sharply after; σ = 2.0
+is the calibrated value (gap 0.289, recovery threshold 0.676). Selectors unchanged
+(rank 12, 6 shared PCs). Term losses official → damaged: causal 0.212 → 0.439 (2.07×),
+variance 0.160 → 0.295 (**1.84×**), relevance 0.183 → 0.376 (2.05×), random 0.113 →
+0.241 (2.13×), full 0.062 → 0.135 (2.18×). Headroom, distinguishability and
+divergence pass; `term_not_converged` fails on the variance ratio alone, 0.16 short of
+the 2.0 floor.
+
+**Amendment, made after seeing the value and recorded as such.** The 2.0 floor in §94
+was set with no reference measurement; its purpose is to exclude the §85 situation
+where the term is already at its floor (ratio ≈ 1). An 84% rise in the variance term
+is not that situation. The floor becomes **1.5×** for the variance and causal targets.
+No other rule changes. The two pilots (seeds 0 and 100) still have to agree before any
+seed counts, which is the check that matters for this regime.

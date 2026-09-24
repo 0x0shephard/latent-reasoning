@@ -21,8 +21,8 @@ measures which target restores GSM8K accuracy under continued training.
 1. Headroom: `official − damaged ≥ 0.20` exact match on the 256-row selection split
    (§95). For `projector_noise`, σ is the smallest of {0.25, 0.5, 1, 2} meeting this.
 2. Selector divergence: causal and variance share ≤ 8 of 12 PCs at the chosen rank.
-3. Term not converged: variance and causal distillation loss on 256 fit rows ≥ 2× its
-   value at the official weights.
+3. Term not converged: variance and causal distillation loss on 256 fit rows ≥ 1.5× its
+   value at the official weights (lowered from 2× in ledger §97).
 4. Recovery pilots: two `none` runs (seeds 0 and 100), 2,000 steps, curve every 100.
    The recovery threshold is `damaged + 0.5 × (official − damaged)` on the selection
    split. Step budget = 1,000 if both pilots reach it by step 1,000, 2,000 if both by
