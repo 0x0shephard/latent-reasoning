@@ -235,8 +235,21 @@ def runner_command(output_dir, *extra):
         *extra,
     ]
 
+import time
+
+def run_with_retry(command, attempts=3, wait=60):
+    """Hugging Face downloads occasionally drop mid-file; the hub resumes partial files, so retry."""
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(command)
+        if result.returncode == 0:
+            return
+        if attempt == attempts:
+            raise subprocess.CalledProcessError(result.returncode, command)
+        print(f"runner exited with {result.returncode}; retrying in {wait}s (attempt {attempt + 1}/{attempts})")
+        time.sleep(wait)
+
 if RUN_SMOKE:
-    subprocess.run(runner_command(SMOKE_OUTPUT_DIR, "--smoke", "--seeds", "1"), check=True)
+    run_with_retry(runner_command(SMOKE_OUTPUT_DIR, "--smoke", "--seeds", "1"))
     smoke = json.loads((pathlib.Path(SMOKE_OUTPUT_DIR) / "summary.json").read_text())
     assert smoke["contract"].endswith("_smoke")
     print("smoke status:", smoke["status"], "|", smoke["decision"])
@@ -251,7 +264,7 @@ if RESUME_FROM:
     extra += ["--resume-from", RESUME_FROM]
 if AGGREGATE_FROM:
     extra += ["--aggregate-from", AGGREGATE_FROM]
-subprocess.run(runner_command(OUTPUT_DIR, *extra), check=True)
+run_with_retry(runner_command(OUTPUT_DIR, *extra))
 summary = json.loads((pathlib.Path(OUTPUT_DIR) / "summary.json").read_text())
 print("status:", summary["status"])
 print(summary["decision"])
