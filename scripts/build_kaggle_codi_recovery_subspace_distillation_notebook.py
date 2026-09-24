@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_recovery_subspace_distillation.ipynb"
-RUN_COMMIT = "9e78741751cd7c62f04b9c30bd62fcec584bc45c"
+RUN_COMMIT = "b44e2881a2bf7d49fcd54d938236651b1455c8b2"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -111,7 +111,7 @@ official checkpoint's weights are restored before every damage; nothing is writt
 md("## Data and setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "9e78741751cd7c62f04b9c30bd62fcec584bc45c"
+RUN_COMMIT = "b44e2881a2bf7d49fcd54d938236651b1455c8b2"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = (
