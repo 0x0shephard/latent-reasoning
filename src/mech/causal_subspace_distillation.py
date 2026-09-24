@@ -290,6 +290,23 @@ def distillation_loss(student_state: torch.Tensor, teacher_state: torch.Tensor,
     return F.smooth_l1_loss(student, teacher, reduction="mean", beta=1.0) / target.scale
 
 
+def _reset_projector_with(model, generator: torch.Generator) -> int:
+    count = 0
+    for module in model.prj.modules():
+        if isinstance(module, (torch.nn.Linear, torch.nn.LayerNorm)):
+            if isinstance(module, torch.nn.Linear):
+                bound = 1.0 / math.sqrt(module.in_features)
+                module.weight.copy_(torch.empty_like(module.weight, device="cpu").uniform_(
+                    -bound, bound, generator=generator).to(module.weight.device))
+                if module.bias is not None:
+                    module.bias.copy_(torch.empty_like(module.bias, device="cpu").uniform_(
+                        -bound, bound, generator=generator).to(module.bias.device))
+            else:
+                module.reset_parameters()
+            count += 1
+    return count
+
+
 def reinitialize_student(model, *, seed: int) -> dict:
     """Fresh LoRA (A Kaiming-uniform, B zero) and projector; embeddings and readout kept."""
     generator = torch.Generator().manual_seed(int(seed))
@@ -308,21 +325,45 @@ def reinitialize_student(model, *, seed: int) -> dict:
             elif "lora_B" in name:
                 parameter.zero_()
                 reset["lora_B"] += 1
-        for module in model.prj.modules():
-            if isinstance(module, (torch.nn.Linear, torch.nn.LayerNorm)):
-                if isinstance(module, torch.nn.Linear):
-                    bound = 1.0 / math.sqrt(module.in_features)
-                    module.weight.copy_(torch.empty_like(module.weight, device="cpu").uniform_(
-                        -bound, bound, generator=generator).to(module.weight.device))
-                    if module.bias is not None:
-                        module.bias.copy_(torch.empty_like(module.bias, device="cpu").uniform_(
-                            -bound, bound, generator=generator).to(module.bias.device))
-                else:
-                    module.reset_parameters()
-                reset["projector"] += 1
+        reset["projector"] = _reset_projector_with(model, generator)
     if not reset["lora_A"] or not reset["lora_B"] or not reset["projector"]:
         raise RuntimeError("student reset did not find LoRA adapters and a projector")
     return reset
+
+
+def reset_projector(model, *, seed: int) -> dict:
+    """§94 damage mode: re-initialise only the projector; LoRA, embeddings, readout kept."""
+    generator = torch.Generator().manual_seed(int(seed))
+    with torch.no_grad():
+        count = _reset_projector_with(model, generator)
+    if not count:
+        raise RuntimeError("no projector modules found")
+    return {"projector": count, "lora_A": 0, "lora_B": 0}
+
+
+def scale_lora_b(model, *, factor: float) -> dict:
+    """§94 second damage mode: shrink every LoRA B matrix, partially removing the skill."""
+    count = 0
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if "lora_B" in name:
+                parameter.mul_(float(factor)); count += 1
+    if not count:
+        raise RuntimeError("no LoRA B matrices found")
+    return {"lora_B": count, "factor": float(factor)}
+
+
+def gradient_cosine(a: Sequence[torch.Tensor | None], b: Sequence[torch.Tensor | None]) -> float | None:
+    """Cosine between two gradient tuples over their shared non-None entries."""
+    dot = norm_a = norm_b = 0.0
+    for x, y in zip(a, b):
+        if x is None or y is None:
+            continue
+        x = x.detach().double().flatten(); y = y.detach().double().flatten()
+        dot += float(x @ y); norm_a += float(x @ x); norm_b += float(y @ y)
+    if norm_a <= 0.0 or norm_b <= 0.0:
+        return None
+    return dot / math.sqrt(norm_a * norm_b)
 
 
 @dataclass
@@ -331,6 +372,7 @@ class StudentStep:
     answer_loss: float
     distillation_loss: float | None
     distillation_scale: float | None
+    gradient_cosine: float | None = None
 
 
 def _accumulate(total, part, scale: float):
@@ -344,8 +386,13 @@ def _accumulate(total, part, scale: float):
 
 
 def student_training_step(model, batches, teacher_states, target: DistillationTarget | None,
-                          parameters: Sequence[torch.Tensor], *, latent_positions: int) -> StudentStep:
+                          parameters: Sequence[torch.Tensor], *, latent_positions: int,
+                          auxiliary_multiplier: float = 1.0) -> StudentStep:
     """Answer cross-entropy plus a norm-matched state-12 distillation term.
+
+    ``auxiliary_multiplier`` rescales the norm-matched distillation gradient (§94
+    weight-robustness arms); the reported ``distillation_scale`` includes it, and
+    ``gradient_cosine`` is the cosine between the CE and raw distillation gradients.
 
     ``batches`` and ``teacher_states`` are equally sized micro-batches of one
     optimisation step.  Base and distillation gradients are accumulated separately
@@ -378,13 +425,16 @@ def student_training_step(model, batches, teacher_states, target: DistillationTa
     answer_loss = sum(answer_losses) / len(answer_losses)
     if target is None:
         return StudentStep(combine_gradients(base_total), answer_loss, None, None)
+    cosine = gradient_cosine(base_total, aux_total)
     if any(g is not None and bool(g.abs().sum() > 0) for g in aux_total):
         matched, matching = match_gradient_norm(aux_total, base_total)
-        scale_used = float(matching["auxiliary_scale"])
+        scale_used = float(matching["auxiliary_scale"]) * float(auxiliary_multiplier)
+        if auxiliary_multiplier != 1.0:
+            matched = tuple(None if g is None else g * float(auxiliary_multiplier) for g in matched)
         total = combine_gradients(base_total, matched)
     else:
         scale_used, total = 0.0, combine_gradients(base_total)
-    return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses), scale_used)
+    return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses), scale_used, cosine)
 
 
 def cosine_lr(step: int, *, total_steps: int, base: float, warmup: int) -> float:

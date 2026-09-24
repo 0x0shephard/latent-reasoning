@@ -200,3 +200,69 @@ def test_micro_batch_accumulation_matches_the_single_batch_step():
             continue
         assert torch.allclose(a, b, atol=1e-5, rtol=1e-3)
     assert READOUT_STATE == -1
+
+
+def test_reset_projector_touches_only_the_projector_and_is_seeded():
+    from src.mech.causal_subspace_distillation import reset_projector
+
+    model = _tiny_model()
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if "lora_B" in name:
+                parameter.normal_(0, 0.2)
+    lora_before = {n: p.detach().clone() for n, p in model.named_parameters() if "lora_" in n}
+    prj_before = {n: p.detach().clone() for n, p in model.prj.named_parameters()}
+    report = reset_projector(model, seed=3)
+    assert report["projector"] > 0 and report["lora_A"] == 0
+    for n, p in model.named_parameters():
+        if "lora_" in n:
+            assert torch.equal(p, lora_before[n])
+    assert any(not torch.equal(p, prj_before[n]) for n, p in model.prj.named_parameters())
+    again = _tiny_model(); reset_projector(again, seed=3)
+    for (n, p), (_, q) in zip(model.prj.named_parameters(), again.prj.named_parameters()):
+        assert torch.equal(p, q), n
+
+
+def test_scale_lora_b_halves_every_b_matrix():
+    from src.mech.causal_subspace_distillation import scale_lora_b
+
+    model = _tiny_model()
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if "lora_B" in name:
+                parameter.normal_(0, 0.2)
+    before = {n: p.detach().clone() for n, p in model.named_parameters() if "lora_B" in n}
+    report = scale_lora_b(model, factor=0.5)
+    assert report["lora_B"] == len(before)
+    for n, p in model.named_parameters():
+        if "lora_B" in n:
+            assert torch.allclose(p, before[n] * 0.5)
+
+
+def test_gradient_cosine_and_auxiliary_multiplier():
+    from src.mech.causal_subspace_distillation import gradient_cosine
+
+    a = (torch.tensor([1.0, 0.0]), None, torch.tensor([[2.0]]))
+    assert gradient_cosine(a, a) == pytest.approx(1.0)
+    assert gradient_cosine(a, (torch.tensor([-1.0, 0.0]), None, torch.tensor([[-2.0]]))) == pytest.approx(-1.0)
+    assert gradient_cosine(a, (torch.zeros(2), None, torch.zeros(1, 1))) is None
+
+    model, tokenizer = _tiny_model(), CharTokenizer()
+    batch = collate_official_codi_kv_rows(tokenizer, ROWS, bot_token_id=model.bot_id)
+    states, _ = teacher_decision_states(model, batch)
+    pca = fit_teacher_pca(torch.randn(64, 16))
+    target = build_target(pca, torch.randn(64, 16), [0, 1, 2])
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    one = student_training_step(model, [batch], [states], target, parameters, latent_positions=6)
+    assert one.gradient_cosine is not None and -1.0 <= one.gradient_cosine <= 1.0
+    plain = student_training_step(model, [batch], [states], None, parameters, latent_positions=6)
+    assert plain.gradient_cosine is None
+    zero = student_training_step(model, [batch], [states], target, parameters, latent_positions=6,
+                                 auxiliary_multiplier=0.0)
+    for g0, gp in zip(zero.gradients, plain.gradients):
+        if g0 is not None:
+            assert torch.allclose(g0, gp, atol=1e-6)
+    assert zero.distillation_scale == pytest.approx(0.0)
+    three = student_training_step(model, [batch], [states], target, parameters, latent_positions=6,
+                                  auxiliary_multiplier=3.0)
+    assert three.distillation_scale == pytest.approx(3.0 * one.distillation_scale)
