@@ -3488,3 +3488,56 @@ reported. Reading, fixed in advance on latent test exact match: ≥ 50% **BUDGET
 §90 floor was training budget; a warm-start design is the informative follow-up);
 ≤ 20% **TASK** (the latent path itself finds the task hard; no from-scratch design at
 this budget could have reached it); otherwise **MIXED**. Cost ≈ 5 GPU minutes.
+
+## 92. Completed §91: the official latent path solves 72.5% of the templated test — the §90 floor was budget
+
+Run 2026-09-24 (code `e44ef82`, pin `bce8a2e`), ≈5 GPU minutes, no training.
+
+| path | test (n = 2,000) | selection (n = 256) |
+|---|---|---|
+| official latent (BOT + 6 thoughts + forced cue) | **72.5%** | 67.6% |
+| official explicit CoT (question alone) | 85.4% | — |
+
+Agreement on the test split: both correct 1,397; CoT only 310; latent only 53.
+
+By step count and template (latent / explicit CoT):
+
+| group | latent | CoT | note |
+|---|---|---|---|
+| 2-step | 0.852 | 0.972 | |
+| 3-step | 0.598 | 0.735 | |
+| gain_lose (a+b−c) | 0.940 | 0.984 | |
+| share_left (a·b+c) | 0.996 | 0.992 | latent ≥ CoT |
+| hours_pay (a·(b+c)) | 0.920 | 0.944 | |
+| savings (a·b+c−d) | 0.768 | 0.832 | |
+| trips (a·b·c−d) | 0.588 | 0.656 | |
+| boxes_broken (a·b−c) | 0.552 | 0.968 | largest latent gap, 2-step |
+| classes ((a+b)·c+d) | 0.524 | 0.804 | |
+| profit ((a+b)·c−d) | 0.512 | 0.648 | |
+
+### Reading: BUDGET (preregistered threshold ≥ 50%)
+
+A converged CODI latent path does this task at 72.5%, against 1% for the §90
+students after 3,000 from-scratch steps. The §90 STOP was a training-budget failure,
+not a task failure, and the §89 exact-match gates were never reachable at that budget.
+The latent path's failures are structured and familiar: multiplication-heavy and
+three-step templates; the sample latent errors copy a question number (`7*5−4` → 7)
+or land within ±10 of the answer on three-step problems. `boxes_broken` (a·b−c) is the
+odd one out, a two-step template where the latent path loses 42 points to CoT; it is
+the only template whose first operation is a multiplication of two small numbers
+followed by a subtraction, which fits the §55 picture of intermediate values being held
+in odd latent slots less precisely for products.
+
+### Consequence for the design
+
+The from-scratch student regime is closed at this quota. The one informative design
+left is a **warm start**: the official weights unchanged, fine-tuned on the templated
+task under `none` / `variance` / `causal` for ≈1,000 steps, with final test exact match
+as primary. It starts at 72.5% and the question becomes whether either norm-matched
+subspace target helps or hurts a competent student's fine-tuning. §85 is the caveat
+(norm-matched supervision of a converged student was inert on GSM8K); here the
+distillation target is the explicit-CoT decision state, which differs from the latent
+state even at the checkpoint, so the term is not zero at step 0. Cost ≈ 3 h for three
+seeds; ceiling effects on the easy templates are likely, so the per-template breakdown
+should be preregistered as the secondary outcome. Whether to spend the quota on it is
+a separate decision; the negative result of §83/§86–§90 stands without it.
