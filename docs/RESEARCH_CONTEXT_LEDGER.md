@@ -3475,3 +3475,16 @@ distillation toward a low-rank subspace of the teacher's decision state does not
 help a from-scratch CODI student at the budgets available, and variance-selected
 targets are never better than intervention-selected ones. That negative result, with
 the §40/§55/§58 mechanistic findings it rests on, is the write-up.
+
+## 91. Preregistered diagnostic: official latent-path accuracy on the §89 test split
+
+Contract `official_codi_templated_latent_diagnostic_v1`. No training. The unmodified
+official checkpoint is scored on the same 2,000 generated test problems as §89/§90
+(same generator, seed 20260924, same split order; tested byte-identical) by the
+released latent path (question + BOT + 6 thoughts + forced cue) and by explicit-CoT
+generation from the question alone, plus the latent path on the 256-row selection
+split. Per-template and per-step-count breakdowns and latent/CoT agreement are
+reported. Reading, fixed in advance on latent test exact match: ≥ 50% **BUDGET** (the
+§90 floor was training budget; a warm-start design is the informative follow-up);
+≤ 20% **TASK** (the latent path itself finds the task hard; no from-scratch design at
+this budget could have reached it); otherwise **MIXED**. Cost ≈ 5 GPU minutes.
