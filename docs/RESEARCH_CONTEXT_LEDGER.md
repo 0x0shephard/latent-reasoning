@@ -3541,3 +3541,26 @@ state even at the checkpoint, so the term is not zero at step 0. Cost ≈ 3 h fo
 seeds; ceiling effects on the easy templates are likely, so the per-template breakdown
 should be preregistered as the secondary outcome. Whether to spend the quota on it is
 a separate decision; the negative result of §83/§86–§90 stands without it.
+
+## 93. Standing correction: the selector comparison is inconclusive and must not be claimed
+
+Across §87, §88 and §90 the causal-versus-variance NLL difference was +0.027
+(CI excludes 0), +0.008 (covers 0) and −0.012 (excludes 0, opposite sign). Relevance
+tied causal in both GSM8K seeds. Exact match never left the floor in any run. No
+statement of the form "intervention- or relevance-selected targets beat
+variance-selected targets" is supported by this repository's data, and any write-up
+must present the comparison as inconclusive with that table.
+
+What is supported (3/3 runs, tight intervals): norm-matched distillation of a
+from-scratch CODI student toward any low-rank subspace of the teacher's decision
+state raises answer NLL at fixed steps relative to answer cross-entropy alone.
+
+A decisive selector test needs, simultaneously, a student trained to non-trivial
+accuracy and a teacher on which the selectors diverge. The GSM8K runs had divergent
+selectors but students at the floor; the templated run had a learnable task (§92:
+official latent path 72.5%) but selectors sharing 10 of 12 directions. A warm start
+from the official weights does not satisfy the first requirement in a useful way:
+the target is the decision state CODI's own loss already matched, so the term starts
+near converged (§85). The remaining path is a from-scratch student trained to
+competence on a task with divergent selectors, a multi-day GPU budget outside this
+project's quota. The negative result stands without it.
