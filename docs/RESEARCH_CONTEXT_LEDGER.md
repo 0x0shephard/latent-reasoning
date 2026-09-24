@@ -3695,3 +3695,15 @@ the selection split, computed in the go/no-go and stored in `preliminary.json`:
 The checks are recomputed from the stored measurements on every run, so the first
 run's teacher cache and selectors are reused when its output is attached. Gates on the
 1,319-question test set, arms, seeds, budgets and claims are unchanged.
+
+### §95 addendum: go/no-go passed under the amended rule; pilot fixes the budget at 2,000 steps
+
+Second preliminary run 2026-09-24 (code `60068d6`). All four checks pass (gap 0.316,
+recovery threshold 0.662). Pilot (`none`, seed 0, 2,000 steps, projector reset):
+selection-split exact match 0.27 at step 100, 0.43 at step 1,000, crosses the
+threshold at **step 1,300** (0.685), plateaus at ≈0.72 from step 1,600 (official
+0.82). GSM8K test exact match after 2,000 steps: **32.4%** (428/1,319; official ≈43%),
+test NLL 1.61. Recovery is a phase transition between steps 1,000 and 1,300 rather
+than a gradual climb. Step budget for all counted runs = **2,000** (≈50 min per run;
+stages ≈25 h on account A and ≈21 h on B). Training begins from this output's teacher
+cache, selectors and pilot.
