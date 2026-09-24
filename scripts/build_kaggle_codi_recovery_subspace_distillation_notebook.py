@@ -35,8 +35,9 @@ subspace of the teacher's decision state transfers better than a **variance-sele
 one, because from-scratch students never reached measurable accuracy. This experiment
 puts the student in the measurable regime from step 0: the official CODI checkpoint's
 **projector** (the module that turns each latent thought into the next input) is
-re-initialised, GSM8K accuracy drops from ≈43%, and the student fine-tunes on GSM8k-Aug
-under one of six targets. **Primary outcome: GSM8K test exact match on all 1,319
+damaged with calibrated Gaussian noise (σ chosen in the go/no-go so that ≥ 20 points of
+selection-split accuracy are lost; a full reset proved bimodal, ledger §96), and the
+student fine-tunes on GSM8k-Aug under one of six targets. **Primary outcome: GSM8K test exact match on all 1,319
 questions at the final step**, five seeds, paired by seed.
 
 | arm | target for the student's latent decision state |
@@ -56,14 +57,15 @@ damage mode (every LoRA B matrix × 0.5).
 
 | `STAGE` | damage | arms | `SEEDS` | account |
 |---|---|---|---|---|
-| `"primary"` | projector | six | `"1,2,3"` on A, `"4,5"` on B | both |
-| `"weights"` | projector | variance_x0.3, variance_x3, causal_x0.3, causal_x3 | `"1,2,3"` | A |
+| `"primary"` | projector_noise | six | `"1,2,3"` on A, `"4,5"` on B | both |
+| `"weights"` | projector_noise | variance_x0.3, variance_x3, causal_x0.3, causal_x3 | `"1,2,3"` | A |
 | `"damage"` | lora_half | none, variance, causal, random | `"1,2,3"` | B |
 
 **Order of operations**
 
-1. Account A: `STAGE = "primary"`, `RUN_PRELIMINARY_ONLY = True`, Run All (≈1 h). This runs
-   the go/no-go and the recovery pilot and fixes the step budget. **Publish the output.**
+1. Account A: `STAGE = "primary"`, `RUN_PRELIMINARY_ONLY = True`, Run All (≈2 h). This runs
+   the go/no-go (including the σ sweep) and **two** recovery pilots and fixes the step budget.
+   **Publish the output.**
 2. Both accounts: attach A's published output (shared artefacts are reused), set
    `RUN_PRELIMINARY_ONLY = False`, `STAGE = "primary"`, their `SEEDS`, Run All. Each session
    pauses cleanly after `MAX_SECONDS`; publish, attach, rerun to resume.
@@ -86,11 +88,13 @@ gradient norm each step. Each step also records the cosine between the two gradi
 
 ### Go/no-go (before any counted seed)
 
-1. Headroom: the damage removes ≥ 20 points of selection-split exact match (measured 82% → 50%, §95).
+1. Headroom: the damage removes ≥ 20 points of selection-split exact match. For `projector_noise`
+   σ is the smallest of {0.25, 0.5, 1, 2} that does so (sweep recorded).
 2. Causal and variance sets share ≤ 8 of 12 PCs (the templated teacher failed this, §90).
 3. Variance/causal distillation loss at the damaged weights ≥ 2× its value at the official weights.
-4. `none` pilot (seed 0, 2,000 steps): the recovery threshold is `damaged + ½ × gap` on the
-   selection split; budget = 1,000 steps if reached by step 1,000, else 2,000, else STOP.
+4. Two `none` pilots (seeds 0 and 100, 2,000 steps): the recovery threshold is `damaged + ½ × gap`
+   on the selection split; budget = 1,000 if **both** cross by step 1,000, 2,000 if both cross by
+   2,000, else STOP. A disagreeing pair is a STOP (that is what killed the full-reset mode, §96).
 
 ### Gates (paired bootstrap over 1,319 test questions, seed-mean correctness)
 
@@ -127,8 +131,8 @@ PREVIOUS_OUTPUT_INPUT = ""       # attached copy of THIS stage's earlier output 
 OTHER_OUTPUT_INPUTS = ""         # comma-separated attached outputs of this experiment (any stage/account); "" = discover
 
 STAGES = {
-    "primary": ("projector", "none,full,variance,relevance,causal,random"),
-    "weights": ("projector", "variance_x0.3,variance_x3,causal_x0.3,causal_x3"),
+    "primary": ("projector_noise", "none,full,variance,relevance,causal,random"),
+    "weights": ("projector_noise", "variance_x0.3,variance_x3,causal_x0.3,causal_x3"),
     "damage":  ("lora_half", "none,variance,causal,random"),
 }
 DAMAGE, ARMS = STAGES[STAGE]
@@ -289,6 +293,9 @@ print("rank:", gate0["rank"], "| variance/causal shared PCs:", gate0["shared_var
 print("term loss official -> damaged:", {k: (round(gate0["official_term_loss"][k], 3), round(gate0["damaged_term_loss"][k], 3))
                                          for k in gate0["damaged_term_loss"]})
 print("gap:", round(gate0["gap"], 3), "| recovery threshold:", round(gate0["recovery_threshold"], 3))
+if gate0.get("sigma_sweep"):
+    print("sigma:", gate0["sigma"])
+    display(pd.DataFrame(gate0["sigma_sweep"]))
 print("checks:", gate0["checks"])
 sel = summary["selectors"]
 if sel["sets"]:
@@ -297,15 +304,19 @@ if sel["sets"]:
     display(pd.DataFrame(sel["audit"]).T)
 pilot = pre.get(f"pilot_{DAMAGE}")
 if pilot:
-    curve = pd.DataFrame(pilot["curve"])
+    pilots = pilot.get("pilots") or [{"seed": 0, **{k: pilot[k] for k in ("curve", "test", "steps_to_threshold")}}]
     fig, ax = plt.subplots(figsize=(7, 3.6), constrained_layout=True)
-    ax.plot(curve["step"], curve["accuracy"], color="#8a8a8a", marker="o", ms=3)
+    for p_, colour in zip(pilots, ("#8a8a8a", "#b65f24", "#315f8c")):
+        curve = pd.DataFrame(p_["curve"])
+        ax.plot(curve["step"], curve["accuracy"], color=colour, marker="o", ms=3, label=f"none, seed {p_['seed']}")
     ax.axhline(gate0["recovery_threshold"], color="#999", linestyle="--", linewidth=0.8)
     ax.axhline(gate0["official_selection"]["accuracy"], color="#222", linestyle=":", linewidth=0.8)
-    ax.set(title=f"recovery pilot (none, seed 0): selection-split exact match | budget = {pilot['chosen_steps']}",
+    ax.set(title=f"recovery pilots: selection-split exact match | budget = {pilot['chosen_steps']}",
            xlabel="step", ylim=(0, 1))
+    ax.legend(fontsize=8)
     plt.show()
-    print("pilot test:", pilot["test"], "| steps to recovery threshold:", pilot["steps_to_threshold"])
+    for p_ in pilots:
+        print(f"pilot seed {p_['seed']}: test {p_['test']} | steps to recovery threshold: {p_['steps_to_threshold']}")
 ''')
 
 md("### Learning curves: selection-split exact match, NLL, and CE-vs-distillation gradient cosine")

@@ -12,19 +12,21 @@ measures which target restores GSM8K accuracy under continued training.
 
 | damage | what changes | what stays |
 |---|---|---|
-| `projector` (primary) | the two-layer thought-to-input projector is re-initialised per seed | LoRA, embeddings, readout |
+| `projector_noise` (primary, §96) | each projector Linear weight gets `σ·std(W)·N(0,1)`, σ calibrated in the go/no-go, seeded per run | biases, LayerNorm, LoRA, embeddings, readout |
 | `lora_half` (robustness) | every LoRA B matrix is scaled by 0.5 | projector, embeddings, readout |
+| `projector` (non-default) | the projector is re-initialised; recovery proved bimodal across accounts (§96) | LoRA, embeddings, readout |
 
 ## Go/no-go before any counted seed
 
 1. Headroom: `official − damaged ≥ 0.20` exact match on the 256-row selection split
-   (amended in ledger §95; the first run measured 0.82 → 0.50).
+   (§95). For `projector_noise`, σ is the smallest of {0.25, 0.5, 1, 2} meeting this.
 2. Selector divergence: causal and variance share ≤ 8 of 12 PCs at the chosen rank.
 3. Term not converged: variance and causal distillation loss on 256 fit rows ≥ 2× its
    value at the official weights.
-4. Recovery pilot: a `none` run, seed 0, 2,000 steps, curve every 100. The recovery
-   threshold is `damaged + 0.5 × (official − damaged)` on the selection split. Step
-   budget = 1,000 if the pilot reaches it by step 1,000, else 2,000, else STOP.
+4. Recovery pilots: two `none` runs (seeds 0 and 100), 2,000 steps, curve every 100.
+   The recovery threshold is `damaged + 0.5 × (official − damaged)` on the selection
+   split. Step budget = 1,000 if both pilots reach it by step 1,000, 2,000 if both by
+   2,000, else STOP (a disagreeing pair is a STOP, §96).
 
 `--preliminary-only` runs exactly this; the notebook flag `RUN_PRELIMINARY_ONLY`
 exposes it.
@@ -33,8 +35,8 @@ exposes it.
 
 | stage | damage | arms | seeds | runs | ≈hours |
 |---|---|---|---|---|---|
-| primary | projector | none, full, variance, relevance, causal, random | 1–5 | 30 | 15 |
-| weights | projector | variance_x0.3, variance_x3, causal_x0.3, causal_x3 | 1–3 | 12 | 6 |
+| primary | projector_noise | none, full, variance, relevance, causal, random | 1–5 | 30 | 25 |
+| weights | projector_noise | variance_x0.3, variance_x3, causal_x0.3, causal_x3 | 1–3 | 12 | 6 |
 | damage | lora_half | none, variance, causal, random | 1–3 | 12 | 6 |
 
 Suggested split: account A runs primary seeds 1–3 then weights; account B runs
@@ -71,7 +73,7 @@ bootstrap over questions on seed-mean correctness.
 python scripts/run_codi_recovery_subspace_distillation.py \
   --reproduction-summary <official reproduction summary.json> \
   --output-dir outputs/codi_recovery_primary \
-  --damage projector --arms none,full,variance,relevance,causal,random \
+  --damage projector_noise --arms none,full,variance,relevance,causal,random \
   --seeds 1,2,3 --max-seconds 30600 [--preliminary-only] [--smoke]
 ```
 

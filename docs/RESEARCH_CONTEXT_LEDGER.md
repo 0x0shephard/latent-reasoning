@@ -3707,3 +3707,46 @@ test NLL 1.61. Recovery is a phase transition between steps 1,000 and 1,300 rath
 than a gradual climb. Step budget for all counted runs = **2,000** (≈50 min per run;
 stages ≈25 h on account A and ≈21 h on B). Training begins from this output's teacher
 cache, selectors and pilot.
+
+## 96. §94 pilot is bimodal across accounts: projector reset replaced by calibrated projector noise (amendment)
+
+The second account ran the identical preliminary (runner unchanged between `60068d6`
+and `ae8ed41`; same seed 0, same reset, same data; go/no-go numbers identical to the
+digit: 0.820 / 0.504, term ratios equal). Its `none` pilot did **not** recover:
+selection-split exact match hovered at 0.30–0.37 for all 2,000 steps (0.36 at the
+end) and GSM8K test exact match was **13.9%** (184/1,319), against 0.72 / 32.4% on the
+first account.
+
+| pilot (none, seed 0, 2,000 steps) | selection EM at 1,000 / 2,000 | test EM |
+|---|---|---|
+| account A | 0.43 / 0.72 | 32.4% |
+| account B | 0.33 / 0.36 | 13.9% |
+
+Same code, same seed, opposite outcome: the only difference is GPU numerics (kernel
+nondeterminism, possibly a different GPU model). Recovery from a fully re-initialised
+projector is a phase transition (§95 addendum) that can fail to fire within the
+budget, and whether it fires is decided by noise below the seed. That makes the
+projector-reset regime unusable as a primary: with five seeds, arm differences would
+be swamped by which runs happened to transition. Recorded as an incidental finding
+in its own right: a CODI student whose thought-writer is destroyed sits on a plateau
+at ≈0.35 (train-distribution) / ≈0.14 (GSM8K) and escapes it stochastically.
+
+### Amendment (before any counted seed; nothing trained)
+
+- **Primary damage mode becomes `projector_noise`:** each projector `Linear` weight
+  receives `W ← W + σ · std(W) · N(0, 1)` (seeded per run; biases and LayerNorm
+  untouched). The model stays in its basin and recovery should be gradual. **σ is
+  calibrated in the go/no-go**, not chosen by hand: over σ ∈ {0.25, 0.5, 1.0, 2.0}
+  the smallest σ whose selection-split gap is ≥ 0.20 is taken (sweep recorded); if
+  none qualifies the headroom check fails and the run stops.
+- **Two pilot seeds** (0 and 100) instead of one. The step budget is 1,000 if *both*
+  pilots cross the recovery threshold by step 1,000, 2,000 if both cross by 2,000,
+  otherwise STOP. A pair that disagrees is itself a STOP, which is the bimodality
+  check this section shows is necessary.
+- Stage 2 (weights) uses the same `projector_noise` damage and σ; stage 3 keeps
+  `lora_half`. `projector` (full reset) remains available as a non-default mode.
+- Everything else (arms, seeds, learning rates, gates, claims, 1,319-question test)
+  is unchanged.
+
+Cost of the new preliminary: σ sweep ≈ 5 min plus two pilots ≈ 1.7 h, once, on one
+account; the second account reuses the published output.

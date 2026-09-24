@@ -266,3 +266,25 @@ def test_gradient_cosine_and_auxiliary_multiplier():
     three = student_training_step(model, [batch], [states], target, parameters, latent_positions=6,
                                   auxiliary_multiplier=3.0)
     assert three.distillation_scale == pytest.approx(3.0 * one.distillation_scale)
+
+
+def test_add_projector_noise_is_seeded_scaled_and_local():
+    from src.mech.causal_subspace_distillation import add_projector_noise
+
+    model = _tiny_model()
+    lora_before = {n: p.detach().clone() for n, p in model.named_parameters() if "lora_" in n}
+    weights_before = {n: p.detach().clone() for n, p in model.prj.named_parameters()}
+    report = add_projector_noise(model, sigma=0.5, seed=11)
+    assert report["projector_linears"] == 2 and report["sigma"] == 0.5
+    for n, p in model.named_parameters():
+        if "lora_" in n:
+            assert torch.equal(p, lora_before[n])
+    for n, p in model.prj.named_parameters():
+        if n.endswith(".weight") and p.ndim == 2:
+            delta = (p - weights_before[n]).std() / weights_before[n].std()
+            assert 0.35 < float(delta) < 0.65, (n, float(delta))
+        else:  # biases and LayerNorm untouched
+            assert torch.equal(p, weights_before[n]), n
+    again = _tiny_model(); add_projector_noise(again, sigma=0.5, seed=11)
+    for (n, p), (_, q) in zip(model.prj.named_parameters(), again.prj.named_parameters()):
+        assert torch.equal(p, q), n

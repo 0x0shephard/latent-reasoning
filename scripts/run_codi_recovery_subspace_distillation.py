@@ -60,6 +60,7 @@ from src.data.official_codi_training import (
 from src.eval.official_codi import select_device
 from src.mech.causal_subspace_distillation import (
     READOUT_STATE,
+    add_projector_noise,
     build_target,
     choose_rank,
     cosine_lr,
@@ -90,11 +91,12 @@ CONTRACT = "official_codi_recovery_subspace_distillation_v1"
 ARMS_PRIMARY = ("none", "full", "variance", "relevance", "causal", "random")
 ARMS_WEIGHTS = ("variance_x0.3", "variance_x3", "causal_x0.3", "causal_x3")
 ARMS_DAMAGE = ("none", "variance", "causal", "random")
-DAMAGES = ("projector", "lora_half")
+DAMAGES = ("projector_noise", "projector", "lora_half")
 LORA_HALF_FACTOR = 0.5
+NOISE_GRID = (0.25, 0.5, 1.0, 2.0)   # sigma sweep for projector_noise, calibrated in the go/no-go (ledger 96)
 STEP_OPTIONS = (1_000, 2_000)
 PILOT_STEPS = 2_000
-PILOT_SEED = 0
+PILOT_SEEDS = (0, 100)               # both must cross the threshold (bimodality check, ledger 96)
 BATCH_SIZE = 16
 MICRO_BATCH_SIZE = 8
 LEARNING_RATE_LORA = 1e-4
@@ -139,6 +141,15 @@ def choose_steps(curve: list[dict], *, threshold: float,
         if first <= option:
             return option
     return None
+
+
+def choose_steps_for_pilots(curves: list[list[dict]], *, threshold: float,
+                            options: tuple[int, ...] = STEP_OPTIONS) -> int | None:
+    """The budget every pilot satisfies; None if any pilot fails (a disagreeing pair is a STOP)."""
+    budgets = [choose_steps(curve, threshold=threshold, options=options) for curve in curves]
+    if not budgets or any(b is None for b in budgets):
+        return None
+    return max(budgets)
 
 
 def steps_to_threshold(curve: list[dict], threshold: float) -> int | None:
@@ -341,10 +352,17 @@ def run(args):
             targets[name] = build_target(pca, fit_states.float(), sets[name]).to(device)
 
     # ---- damage, applied from the official weights every time
-    def apply_damage(seed: int) -> dict:
+    noise_sigma = {"value": None}   # calibrated in the go/no-go for projector_noise
+
+    def apply_damage(seed: int, *, sigma: float | None = None) -> dict:
         _restore(parameters_by_name, official_snapshot)
         if args.damage == "projector":
             return {"mode": "projector", **reset_projector(model, seed=seed)}
+        if args.damage == "projector_noise":
+            sigma = noise_sigma["value"] if sigma is None else sigma
+            if sigma is None:
+                raise RuntimeError("projector_noise sigma has not been calibrated")
+            return {"mode": "projector_noise", **add_projector_noise(model, sigma=sigma, seed=seed)}
         return {"mode": "lora_half", **scale_lora_b(model, factor=LORA_HALF_FACTOR)}
 
     eval_kw = dict(latent_positions=latent_positions, batch_size=args.eval_batch_size, device=device)
@@ -374,15 +392,28 @@ def run(args):
         _restore(parameters_by_name, official_snapshot)
         official_sel, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
         official_terms = term_losses(fit_rows, fit_teacher) if sets else {}
-        damage_report = apply_damage(PILOT_SEED)
+        sigma_sweep = None
+        if args.damage == "projector_noise":
+            sigma_sweep = []
+            for sigma in NOISE_GRID:
+                apply_damage(PILOT_SEEDS[0], sigma=sigma)
+                metrics, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
+                sigma_sweep.append({"sigma": sigma, "selection_accuracy": metrics["accuracy"],
+                                    "gap": official_sel["accuracy"] - metrics["accuracy"]})
+                print("sigma sweep", sigma_sweep[-1])
+            qualifying = [s for s in sigma_sweep if s["gap"] >= HEADROOM_MIN_GAP]
+            noise_sigma["value"] = (qualifying[0] if qualifying else sigma_sweep[-1])["sigma"]
+        damage_report = apply_damage(PILOT_SEEDS[0])
         damaged_sel, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
         damaged_terms = term_losses(fit_rows, fit_teacher) if sets else {}
         ratios = {k: (damaged_terms[k] / official_terms[k] if official_terms.get(k) else None) for k in damaged_terms}
         preliminary[prelim_key] = {
             "damage": damage_report, "official_selection": official_sel, "damaged_selection": damaged_sel,
             "official_term_loss": official_terms, "damaged_term_loss": damaged_terms, "term_ratio": ratios,
-            "rank": rank, "shared_variance_causal_pcs": shared_pcs}
+            "rank": rank, "shared_variance_causal_pcs": shared_pcs,
+            "sigma_sweep": sigma_sweep, "sigma": noise_sigma["value"]}
     gate0 = preliminary[prelim_key]
+    noise_sigma["value"] = gate0.get("sigma")
     # Checks are derived from the stored measurements on every run (ledger 95 amendment),
     # so an earlier output's cache is reusable after a rule change.
     official_acc, damaged_acc = gate0["official_selection"]["accuracy"], gate0["damaged_selection"]["accuracy"]
@@ -494,7 +525,8 @@ def run(args):
         "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
         "preregistration": {
             "arms": list(arms), "seeds_this_run": list(seeds), "step_options": list(STEP_OPTIONS),
-            "pilot_steps": pilot_steps, "batch_size": args.batch_size, "micro_batch_size": args.micro_batch_size,
+            "pilot_steps": pilot_steps, "pilot_seeds": list(PILOT_SEEDS), "noise_grid": list(NOISE_GRID),
+            "sigma": noise_sigma["value"], "batch_size": args.batch_size, "micro_batch_size": args.micro_batch_size,
             "sizes": sizes, "learning_rate_lora": LEARNING_RATE_LORA, "learning_rate_projector": LEARNING_RATE_PROJECTOR,
             "warmup_steps": WARMUP_STEPS, "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP,
             "rank_grid": list(RANK_GRID), "minimum_gap": MINIMUM_GAP, "retention_floor": RETENTION_FLOOR,
@@ -512,7 +544,7 @@ def run(args):
         "preliminary": preliminary, "runs": {}, "test": None, "status": "running",
         "decision": {"preliminary_passed": bool(prechecks_ok), "claim": "pending"},
         "warnings": [
-            "Recovery regime: the official checkpoint's projector (or LoRA B) is damaged and re-learned; this is continued training, not learning from scratch (ledger 93/94).",
+            "Recovery regime: the official checkpoint's projector (noise or reset) or LoRA B is damaged and re-learned; this is continued training, not learning from scratch (ledger 93/94/96).",
             "Primary is GSM8K test exact match on 1,319 questions at the final step; arms are paired by seed.",
             "Distillation gradients are norm-matched to the answer cross-entropy; weight arms rescale that match."]}
     _atomic_json(summary, out / "summary.json")
@@ -524,21 +556,30 @@ def run(args):
     # ---- recovery pilot decides the step budget (shared across damage modes only if both pass)
     pilot_key = f"pilot_{args.damage}"
     if pilot_key not in preliminary:
-        record, status = train_one("none", PILOT_SEED, pilot_steps, tag="pilot_")
-        if status == "paused":
-            summary["status"] = "paused"; summary["decision"]["claim"] = "PAUSED during the pilot: publish this output and rerun with it attached"
-            _atomic_json(summary, out / "summary.json"); print(summary["decision"]); return summary
-        chosen_steps = choose_steps(record["curve"], threshold=threshold) if not smoke else S["steps"]
-        preliminary[pilot_key] = {"curve": record["curve"], "test": record["test"],
-                                  "steps_to_threshold": record["steps_to_threshold"], "chosen_steps": chosen_steps}
+        pilots = []
+        for pilot_seed in (PILOT_SEEDS if not smoke else PILOT_SEEDS[:1]):
+            record, status = train_one("none", pilot_seed, pilot_steps, tag="pilot_")
+            if status == "paused":
+                summary["status"] = "paused"; summary["decision"]["claim"] = "PAUSED during the pilot: publish this output and rerun with it attached"
+                _atomic_json(summary, out / "summary.json"); print(summary["decision"]); return summary
+            pilots.append({"seed": pilot_seed, "curve": record["curve"], "test": record["test"],
+                           "steps_to_threshold": record["steps_to_threshold"],
+                           "budget": choose_steps(record["curve"], threshold=threshold)})
+        chosen_steps = (choose_steps_for_pilots([p["curve"] for p in pilots], threshold=threshold)
+                        if not smoke else S["steps"])
+        preliminary[pilot_key] = {"pilots": pilots, "chosen_steps": chosen_steps,
+                                  # kept for readers of the first-run layout
+                                  "curve": pilots[0]["curve"], "test": pilots[0]["test"],
+                                  "steps_to_threshold": pilots[0]["steps_to_threshold"]}
         _atomic_json(preliminary, preliminary_path)
     steps = preliminary[pilot_key]["chosen_steps"]
     summary["preliminary"] = preliminary
     summary["preregistration"]["steps"] = steps
-    print("pilot", {k: v for k, v in preliminary[pilot_key].items() if k != "curve"})
+    print("pilots", [{k: v for k, v in p.items() if k != "curve"} for p in preliminary[pilot_key].get("pilots", [])],
+          "budget", steps)
     if steps is None:
         summary["status"] = "stopped"
-        summary["decision"]["claim"] = "STOP: the none pilot did not recover half the lost accuracy within 2,000 steps; the recovery regime is out of reach"
+        summary["decision"]["claim"] = "STOP: not every none pilot recovered half the lost accuracy within 2,000 steps (or the pilots disagreed); the recovery regime is not reliable at this budget"
         _atomic_json(summary, out / "summary.json"); print(summary["decision"]); return summary
     if args.preliminary_only:
         summary["status"] = "preliminary_only"
@@ -616,7 +657,7 @@ def main():
     parser.add_argument("--reproduction-summary", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--checkpoint-path", type=Path)
-    parser.add_argument("--damage", default="projector", choices=DAMAGES)
+    parser.add_argument("--damage", default="projector_noise", choices=DAMAGES)
     parser.add_argument("--arms", default=",".join(ARMS_PRIMARY), type=lambda s: tuple(a for a in s.split(",") if a))
     parser.add_argument("--seeds", default=SEEDS_DEFAULT)
     parser.add_argument("--resume-from", default=[], type=lambda s: [p for p in s.split(",") if p])

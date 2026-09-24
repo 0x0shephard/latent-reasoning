@@ -341,6 +341,27 @@ def reset_projector(model, *, seed: int) -> dict:
     return {"projector": count, "lora_A": 0, "lora_B": 0}
 
 
+def add_projector_noise(model, *, sigma: float, seed: int) -> dict:
+    """§96 damage mode: ``W <- W + sigma * std(W) * N(0, 1)`` on each projector Linear weight.
+
+    Biases and LayerNorm are untouched; the model stays in its basin, so recovery is
+    gradual rather than a phase transition (unlike a full projector reset).
+    """
+    generator = torch.Generator().manual_seed(int(seed))
+    count = 0
+    with torch.no_grad():
+        for module in model.prj.modules():
+            if isinstance(module, torch.nn.Linear):
+                weight = module.weight
+                noise = torch.randn(weight.shape, generator=generator, dtype=torch.float32)
+                scale = float(sigma) * float(weight.detach().float().std())
+                weight.add_((noise * scale).to(device=weight.device, dtype=weight.dtype))
+                count += 1
+    if not count:
+        raise RuntimeError("no projector Linear modules found")
+    return {"projector_linears": count, "sigma": float(sigma), "lora_A": 0, "lora_B": 0}
+
+
 def scale_lora_b(model, *, factor: float) -> dict:
     """§94 second damage mode: shrink every LoRA B matrix, partially removing the skill."""
     count = 0
