@@ -17,12 +17,14 @@ measures which target restores GSM8K accuracy under continued training.
 
 ## Go/no-go before any counted seed
 
-1. Headroom: damaged model ≤ 30% on the 256-row selection split.
+1. Headroom: `official − damaged ≥ 0.20` exact match on the 256-row selection split
+   (amended in ledger §95; the first run measured 0.82 → 0.50).
 2. Selector divergence: causal and variance share ≤ 8 of 12 PCs at the chosen rank.
 3. Term not converged: variance and causal distillation loss on 256 fit rows ≥ 2× its
    value at the official weights.
-4. Recovery pilot: a `none` run, seed 0, 2,000 steps, curve every 100. Step budget =
-   1,000 if 30% selection exact match is reached by step 1,000, else 2,000, else STOP.
+4. Recovery pilot: a `none` run, seed 0, 2,000 steps, curve every 100. The recovery
+   threshold is `damaged + 0.5 × (official − damaged)` on the selection split. Step
+   budget = 1,000 if the pilot reaches it by step 1,000, else 2,000, else STOP.
 
 `--preliminary-only` runs exactly this; the notebook flag `RUN_PRELIMINARY_ONLY`
 exposes it.
@@ -55,7 +57,8 @@ the CE gradient and the raw distillation gradient.
 Primary: GSM8K test exact match on 1,319 questions at the final step, paired
 bootstrap over questions on seed-mean correctness.
 
-- R0: `none` ≥ 30%. S1: `full − none` > 0.
+- R0: the `none` arm's final selection-split exact match (seed mean) reaches the
+  recovery threshold. S1: `full − none` > 0.
 - H1: `causal − variance` > 0. H2: `causal − relevance` > 0. H3: `causal − random` > 0.
 - `variance − none` and `causal − none` two-sided.
 - CONFIRMED = H1 ∧ H3. REVERSED if variance beats causal. NULL if H1 covers zero

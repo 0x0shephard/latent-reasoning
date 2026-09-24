@@ -3652,3 +3652,46 @@ worse or the same as a variance-selected one, with five seeds on the real task a
 1,319 paired questions (minimum detectable difference ≈ 2 points). It cannot say
 anything about learning from scratch; §93 stands for that regime. If go/no-go 2 fails
 the selector claim is undecidable on this teacher and the write-up says so.
+
+## 95. §94 go/no-go: three of four passed; the headroom threshold was mis-scaled (amendment)
+
+First preliminary run 2026-09-24 (code `87f4e70`, pin `1d39f6a`), projector damage:
+
+| check | measured | rule | result |
+|---|---|---|---|
+| selectors distinguishable | rank 12 chosen (gap 0.163, retention 0.543) | rank rule | pass |
+| selector divergence | causal `[5,6,7,9,10,11,12,13,14,15,17,19]` vs variance `[0..11]`: 6 shared | ≤ 8 shared | pass |
+| term not converged | causal 0.212 → 0.508 (2.4×), variance 0.160 → 0.330 (2.1×), full 0.062 → 0.157 | ≥ 2× | pass |
+| headroom | official 0.820 → damaged **0.504** on the selection split | damaged ≤ 0.30 | **fail** |
+
+On GSM8K the selectors diverge properly (unlike the templated teacher, §90): the causal
+set skips PCs 0–4 entirely and reaches into PCs 12–19; relevance overlaps causal on 8
+of 12 and adds two tail PCs (760, 767).
+
+**Why the headroom check failed.** The 30% ceiling in §94 was written on the GSM8K-test
+scale (official ≈ 43%) but is evaluated on the selection split, which is 256 held-out
+GSM8k-Aug *training-distribution* rows where the official model scores 82%. A reset
+projector removes 32 points there, which is ample room; the absolute ceiling was the
+wrong instrument. Recorded as a scaling error in the preregistration, not a property
+of the damage.
+
+**Incidental finding worth keeping.** With the projector re-initialised, i.e. six
+latent slots fed by a random LayerNormed MLP of the previous state, the LoRA-adapted
+GPT-2 still answers 50% of training-distribution problems. Roughly 32 of the official
+model's 82 points on this split depend on the thoughts being written correctly.
+
+### Amendment (before any counted seed; nothing trained)
+
+All recovery quantities are now relative to the measured gap `official − damaged` on
+the selection split, computed in the go/no-go and stored in `preliminary.json`:
+
+- **Headroom:** `official − damaged ≥ 0.20` (measured: 0.316).
+- **Recovery threshold** `= damaged + 0.5 × (official − damaged)` (measured: ≈ 0.66).
+  The pilot's step rule (1,000 / 2,000 / STOP) and the per-run steps-to-threshold
+  secondary use this threshold instead of the absolute 30%.
+- **R0:** the `none` arm's final selection-split exact match, averaged over seeds,
+  reaches the recovery threshold.
+
+The checks are recomputed from the stored measurements on every run, so the first
+run's teacher cache and selectors are reused when its output is attached. Gates on the
+1,319-question test set, arms, seeds, budgets and claims are unchanged.

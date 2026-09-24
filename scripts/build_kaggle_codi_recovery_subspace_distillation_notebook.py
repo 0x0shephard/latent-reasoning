@@ -86,15 +86,15 @@ gradient norm each step. Each step also records the cosine between the two gradi
 
 ### Go/no-go (before any counted seed)
 
-1. Damaged model ≤ 30% on the selection split (headroom).
+1. Headroom: the damage removes ≥ 20 points of selection-split exact match (measured 82% → 50%, §95).
 2. Causal and variance sets share ≤ 8 of 12 PCs (the templated teacher failed this, §90).
 3. Variance/causal distillation loss at the damaged weights ≥ 2× its value at the official weights.
-4. `none` pilot (seed 0, 2,000 steps): budget = 1,000 steps if 30% is reached by step 1,000,
-   else 2,000, else STOP.
+4. `none` pilot (seed 0, 2,000 steps): the recovery threshold is `damaged + ½ × gap` on the
+   selection split; budget = 1,000 steps if reached by step 1,000, else 2,000, else STOP.
 
 ### Gates (paired bootstrap over 1,319 test questions, seed-mean correctness)
 
-R0 `none` ≥ 30%. S1 `full − none`. **H1 `causal − variance`**, H2 `causal − relevance`,
+R0 `none` reaches the recovery threshold. S1 `full − none`. **H1 `causal − variance`**, H2 `causal − relevance`,
 **H3 `causal − random`**. `variance − none`, `causal − none` two-sided.
 CONFIRMED = H1 ∧ H3; REVERSED; NULL if H1 covers 0 within 3 points; PARTIAL; INCONCLUSIVE.
 
@@ -275,6 +275,7 @@ print("official selection EM:", round(gate0["official_selection"]["accuracy"], 3
 print("rank:", gate0["rank"], "| variance/causal shared PCs:", gate0["shared_variance_causal_pcs"])
 print("term loss official -> damaged:", {k: (round(gate0["official_term_loss"][k], 3), round(gate0["damaged_term_loss"][k], 3))
                                          for k in gate0["damaged_term_loss"]})
+print("gap:", round(gate0["gap"], 3), "| recovery threshold:", round(gate0["recovery_threshold"], 3))
 print("checks:", gate0["checks"])
 sel = summary["selectors"]
 if sel["sets"]:
@@ -286,11 +287,12 @@ if pilot:
     curve = pd.DataFrame(pilot["curve"])
     fig, ax = plt.subplots(figsize=(7, 3.6), constrained_layout=True)
     ax.plot(curve["step"], curve["accuracy"], color="#8a8a8a", marker="o", ms=3)
-    ax.axhline(0.30, color="#999", linestyle="--", linewidth=0.8)
+    ax.axhline(gate0["recovery_threshold"], color="#999", linestyle="--", linewidth=0.8)
+    ax.axhline(gate0["official_selection"]["accuracy"], color="#222", linestyle=":", linewidth=0.8)
     ax.set(title=f"recovery pilot (none, seed 0): selection-split exact match | budget = {pilot['chosen_steps']}",
-           xlabel="step", ylim=(0, max(0.6, curve["accuracy"].max() + 0.05)))
+           xlabel="step", ylim=(0, 1))
     plt.show()
-    print("pilot test:", pilot["test"], "| steps to 30%:", pilot["steps_to_threshold"])
+    print("pilot test:", pilot["test"], "| steps to recovery threshold:", pilot["steps_to_threshold"])
 ''')
 
 md("### Learning curves: selection-split exact match, NLL, and CE-vs-distillation gradient cosine")
@@ -308,14 +310,15 @@ if summary.get("runs"):
         axes[1].plot(curve["step"], curve["answer_nll"], **kw)
         if curve["gradient_cosine"].notna().any():
             axes[2].plot(curve["step"], curve["gradient_cosine"], **kw)
-    axes[0].axhline(0.30, color="#999", linestyle="--", linewidth=0.8)
-    axes[0].set(title="selection-split exact match", xlabel="step")
+    axes[0].axhline(gate0["recovery_threshold"], color="#999", linestyle="--", linewidth=0.8)
+    axes[0].axhline(gate0["official_selection"]["accuracy"], color="#222", linestyle=":", linewidth=0.8)
+    axes[0].set(title="selection-split exact match (dashed: recovery threshold, dotted: official)", xlabel="step")
     axes[1].set(title="selection-split answer NLL (teacher-forced)", xlabel="step")
     axes[2].axhline(0, color="#222", linewidth=0.8)
     axes[2].set(title="cosine(CE gradient, distillation gradient)", xlabel="step")
     axes[0].legend(fontsize=8)
     plt.show()
-    display(pd.DataFrame([{"run": k, "arm": v["arm"], "seed": v["seed"], "steps to 30%": v["steps_to_threshold"],
+    display(pd.DataFrame([{"run": k, "arm": v["arm"], "seed": v["seed"], "steps to recovery threshold": v["steps_to_threshold"],
                            "mean gradient cosine": v["mean_gradient_cosine"],
                            "final selection EM": v["curve"][-1]["accuracy"] if v["curve"] else None,
                            "test EM": v["test"]["accuracy"]} for k, v in summary["runs"].items()]))

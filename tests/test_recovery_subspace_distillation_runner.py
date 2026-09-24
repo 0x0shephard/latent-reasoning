@@ -10,14 +10,14 @@ from scripts.run_codi_recovery_subspace_distillation import (  # noqa: E402
     CONTRACT,
     CURVE_EVERY,
     DAMAGES,
-    HEADROOM_MAX,
+    HEADROOM_MIN_GAP,
     LEARNING_RATE_LORA,
     LEARNING_RATE_PROJECTOR,
     MAX_SHARED_PCS,
     NULL_WIDTH,
     PILOT_SEED,
     PILOT_STEPS,
-    RECOVERY_THRESHOLD,
+    RECOVERY_FRACTION,
     STEP_OPTIONS,
     TERM_RATIO_MIN,
     WARMUP_STEPS,
@@ -25,6 +25,7 @@ from scripts.run_codi_recovery_subspace_distillation import (  # noqa: E402
     claim_from,
     gates_from,
     parse_arm,
+    recovery_threshold,
 )
 
 
@@ -35,7 +36,8 @@ def test_protocol_is_frozen():
     assert ARMS_DAMAGE == ("none", "variance", "causal", "random") and DAMAGES == ("projector", "lora_half")
     assert (STEP_OPTIONS, PILOT_STEPS, PILOT_SEED, BATCH_SIZE, CURVE_EVERY) == ((1_000, 2_000), 2_000, 0, 16, 100)
     assert (LEARNING_RATE_LORA, LEARNING_RATE_PROJECTOR, WARMUP_STEPS) == (1e-4, 5e-4, 50)
-    assert (HEADROOM_MAX, MAX_SHARED_PCS, TERM_RATIO_MIN, RECOVERY_THRESHOLD, NULL_WIDTH) == (0.30, 8, 2.0, 0.30, 0.03)
+    assert (HEADROOM_MIN_GAP, MAX_SHARED_PCS, TERM_RATIO_MIN, RECOVERY_FRACTION, NULL_WIDTH) == (0.20, 8, 2.0, 0.5, 0.03)
+    assert recovery_threshold(0.82, 0.504) == pytest.approx(0.662)
 
 
 def test_parse_arm():
@@ -45,11 +47,11 @@ def test_parse_arm():
 
 
 def test_choose_steps_follows_the_preregistered_rule():
-    curve = lambda first: [{"step": s, "accuracy": 0.35 if s >= first else 0.1} for s in range(100, 2_001, 100)]
-    assert choose_steps(curve(700)) == 1_000
-    assert choose_steps(curve(1_000)) == 1_000
-    assert choose_steps(curve(1_100)) == 2_000
-    assert choose_steps([{"step": s, "accuracy": 0.1} for s in range(100, 2_001, 100)]) is None
+    curve = lambda first: [{"step": s, "accuracy": 0.70 if s >= first else 0.5} for s in range(100, 2_001, 100)]
+    assert choose_steps(curve(700), threshold=0.662) == 1_000
+    assert choose_steps(curve(1_000), threshold=0.662) == 1_000
+    assert choose_steps(curve(1_100), threshold=0.662) == 2_000
+    assert choose_steps([{"step": s, "accuracy": 0.5} for s in range(100, 2_001, 100)], threshold=0.662) is None
 
 
 def _comparisons(**bounds):
@@ -59,16 +61,16 @@ def _comparisons(**bounds):
 
 
 def test_gates_and_claims():
-    assert claim_from(gates_from(_comparisons(), 0.2)).startswith("STOP")
-    g = gates_from(_comparisons(causal_minus_variance=(0.01, 0.05), causal_minus_random=(0.01, 0.05)), 0.4)
+    assert claim_from(gates_from(_comparisons(), 0.55, 0.662)).startswith("STOP")
+    g = gates_from(_comparisons(causal_minus_variance=(0.01, 0.05), causal_minus_random=(0.01, 0.05)), 0.7, 0.662)
     assert claim_from(g).startswith("CONFIRMED")
-    g = gates_from(_comparisons(causal_minus_variance=(-0.05, -0.01)), 0.4)
+    g = gates_from(_comparisons(causal_minus_variance=(-0.05, -0.01)), 0.7, 0.662)
     assert claim_from(g).startswith("REVERSED")
-    g = gates_from(_comparisons(causal_minus_variance=(-0.01, 0.012)), 0.4)
+    g = gates_from(_comparisons(causal_minus_variance=(-0.01, 0.012)), 0.7, 0.662)
     assert g["h1_tight_null"] and claim_from(g).startswith("NULL")
-    g = gates_from(_comparisons(causal_minus_variance=(0.01, 0.05)), 0.4)
+    g = gates_from(_comparisons(causal_minus_variance=(0.01, 0.05)), 0.7, 0.662)
     assert claim_from(g).startswith("PARTIAL")
-    g = gates_from(_comparisons(causal_minus_variance=(-0.04, 0.04)), 0.4)
+    g = gates_from(_comparisons(causal_minus_variance=(-0.04, 0.04)), 0.7, 0.662)
     assert claim_from(g).startswith("INCONCLUSIVE")
-    g = gates_from(_comparisons(variance_minus_none=(-0.06, -0.02)), 0.4)
+    g = gates_from(_comparisons(variance_minus_none=(-0.06, -0.02)), 0.7, 0.662)
     assert g["variance_hurts_recovery"] and not g["variance_helps_recovery"]

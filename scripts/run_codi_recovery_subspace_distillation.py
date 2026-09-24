@@ -103,10 +103,10 @@ WARMUP_STEPS = 50
 CURVE_EVERY = 100
 CHECKPOINT_EVERY = 250
 TERM_CHECK_ROWS = 256
-HEADROOM_MAX = 0.30
+HEADROOM_MIN_GAP = 0.20     # official - damaged on the selection split (amended, ledger 95)
+RECOVERY_FRACTION = 0.5     # recovery threshold = damaged + fraction * gap
 MAX_SHARED_PCS = 8          # Jaccard <= 0.5 at rank 12
 TERM_RATIO_MIN = 2.0
-RECOVERY_THRESHOLD = 0.30
 NULL_WIDTH = 0.03
 TEACHER_BATCH = 64
 SEEDS_DEFAULT = "1,2,3,4,5"
@@ -123,7 +123,12 @@ def parse_arm(arm: str) -> tuple[str, float]:
     return arm, 1.0
 
 
-def choose_steps(curve: list[dict], *, threshold: float = RECOVERY_THRESHOLD,
+def recovery_threshold(official: float, damaged: float, *, fraction: float = RECOVERY_FRACTION) -> float:
+    """Selection-split exact match that counts as having recovered half the lost accuracy."""
+    return float(damaged + fraction * (official - damaged))
+
+
+def choose_steps(curve: list[dict], *, threshold: float,
                  options: tuple[int, ...] = STEP_OPTIONS) -> int | None:
     """Smallest preregistered step budget by which the pilot reached ``threshold``."""
     reached = [int(p["step"]) for p in curve if p.get("accuracy", 0.0) >= threshold]
@@ -150,11 +155,12 @@ COMPARISONS = (("full", "none"), ("causal", "variance"), ("causal", "relevance")
                ("variance_x0.3", "variance"), ("variance_x3", "variance"))
 
 
-def gates_from(comparisons: dict, none_accuracy: float | None) -> dict:
+def gates_from(comparisons: dict, none_selection_accuracy: float | None, threshold: float) -> dict:
     lb = lambda k: comparisons[k]["bootstrap_95ci"][0]
     ub = lambda k: comparisons[k]["bootstrap_95ci"][1]
     has = lambda k: k in comparisons
-    gate = {"r0_recovered": none_accuracy is not None and none_accuracy >= RECOVERY_THRESHOLD}
+    gate = {"r0_recovered": none_selection_accuracy is not None and none_selection_accuracy >= threshold,
+            "recovery_threshold": threshold, "none_final_selection_accuracy": none_selection_accuracy}
     if has("full_minus_none"):
         gate["s1_full_beats_none"] = lb("full_minus_none") > 0
     if has("causal_minus_variance"):
@@ -177,7 +183,7 @@ def gates_from(comparisons: dict, none_accuracy: float | None) -> dict:
 
 def claim_from(gate: dict) -> str:
     if not gate.get("r0_recovered"):
-        return "STOP: the none arm did not recover to 30% test exact match; the recovery regime was not reached"
+        return "STOP: the none arm did not recover half the lost selection-split accuracy; the recovery regime was not reached"
     if gate.get("h1_causal_beats_variance") and gate.get("h3_causal_beats_random"):
         return "CONFIRMED: the intervention-selected target recovers accuracy better than the variance-selected and random targets"
     if gate.get("h1_variance_beats_causal"):
@@ -375,16 +381,24 @@ def run(args):
         preliminary[prelim_key] = {
             "damage": damage_report, "official_selection": official_sel, "damaged_selection": damaged_sel,
             "official_term_loss": official_terms, "damaged_term_loss": damaged_terms, "term_ratio": ratios,
-            "rank": rank, "shared_variance_causal_pcs": shared_pcs,
-            "checks": {
-                "headroom": damaged_sel["accuracy"] <= HEADROOM_MAX,
-                "selectors_distinguishable": rank is not None,
-                "selector_divergence": shared_pcs is not None and shared_pcs <= MAX_SHARED_PCS,
-                "term_not_converged": bool(ratios) and all((ratios[k] or 0) >= TERM_RATIO_MIN for k in ("variance", "causal")),
-            }}
-        _atomic_json(preliminary, preliminary_path)
+            "rank": rank, "shared_variance_causal_pcs": shared_pcs}
     gate0 = preliminary[prelim_key]
-    print("go/no-go", gate0["checks"], "damaged selection EM", gate0["damaged_selection"]["accuracy"])
+    # Checks are derived from the stored measurements on every run (ledger 95 amendment),
+    # so an earlier output's cache is reusable after a rule change.
+    official_acc, damaged_acc = gate0["official_selection"]["accuracy"], gate0["damaged_selection"]["accuracy"]
+    ratios = gate0["term_ratio"]
+    gate0["gap"] = official_acc - damaged_acc
+    gate0["recovery_threshold"] = recovery_threshold(official_acc, damaged_acc)
+    gate0["checks"] = {
+        "headroom": gate0["gap"] >= HEADROOM_MIN_GAP,
+        "selectors_distinguishable": gate0["rank"] is not None,
+        "selector_divergence": gate0["shared_variance_causal_pcs"] is not None and gate0["shared_variance_causal_pcs"] <= MAX_SHARED_PCS,
+        "term_not_converged": bool(ratios) and all((ratios.get(k) or 0) >= TERM_RATIO_MIN for k in ("variance", "causal")),
+    }
+    _atomic_json(preliminary, preliminary_path)
+    threshold = gate0["recovery_threshold"]
+    print("go/no-go", gate0["checks"], "official/damaged selection EM", official_acc, damaged_acc,
+          "recovery threshold", round(threshold, 3))
     prechecks_ok = all(gate0["checks"].values()) or smoke
 
     def train_one(arm: str, seed: int, steps: int, *, tag: str):
@@ -463,7 +477,8 @@ def run(args):
         record = {"arm": arm, "base_arm": base, "multiplier": multiplier, "seed": seed, "damage": args.damage,
                   "pilot": tag != "", "rank": rank, "steps": steps, "training_seconds": training_seconds,
                   "damage_report": damage_report, "curve": curve,
-                  "steps_to_threshold": steps_to_threshold(curve, RECOVERY_THRESHOLD),
+                  "recovery_threshold": threshold,
+                  "steps_to_threshold": steps_to_threshold(curve, threshold),
                   "mean_gradient_cosine": (sum(p["gradient_cosine"] for p in curve if p["gradient_cosine"] is not None)
                                            / max(1, sum(p["gradient_cosine"] is not None for p in curve))) if curve else None,
                   "test": test_metrics, "test_correct": test_correct, "test_nll": test_nll, "test_outputs": test_outputs}
@@ -483,10 +498,11 @@ def run(args):
             "sizes": sizes, "learning_rate_lora": LEARNING_RATE_LORA, "learning_rate_projector": LEARNING_RATE_PROJECTOR,
             "warmup_steps": WARMUP_STEPS, "weight_decay": WEIGHT_DECAY, "grad_clip": GRAD_CLIP,
             "rank_grid": list(RANK_GRID), "minimum_gap": MINIMUM_GAP, "retention_floor": RETENTION_FLOOR,
-            "headroom_max": HEADROOM_MAX, "max_shared_pcs": MAX_SHARED_PCS, "term_ratio_min": TERM_RATIO_MIN,
-            "recovery_threshold": RECOVERY_THRESHOLD, "null_width": NULL_WIDTH, "data_seed": DATA_SEED,
+            "headroom_min_gap": HEADROOM_MIN_GAP, "max_shared_pcs": MAX_SHARED_PCS, "term_ratio_min": TERM_RATIO_MIN,
+            "recovery_fraction": RECOVERY_FRACTION, "recovery_threshold": threshold, "null_width": NULL_WIDTH,
+            "data_seed": DATA_SEED,
             "test_examples": len(test_rows),
-            "gates": ["r0 none >= 30%", "s1 full-none", "h1 causal-variance", "h2 causal-relevance",
+            "gates": ["r0 none reaches damaged + 0.5*gap on the selection split", "s1 full-none", "h1 causal-variance", "h2 causal-relevance",
                       "h3 causal-random", "variance-none and causal-none two-sided",
                       "headline = h1 and h3; null if h1 covers 0 within 3 points"]},
         "sampling": {k: v for k, v in sampling.items() if k != "hashes"},
@@ -512,7 +528,7 @@ def run(args):
         if status == "paused":
             summary["status"] = "paused"; summary["decision"]["claim"] = "PAUSED during the pilot: publish this output and rerun with it attached"
             _atomic_json(summary, out / "summary.json"); print(summary["decision"]); return summary
-        chosen_steps = choose_steps(record["curve"]) if not smoke else S["steps"]
+        chosen_steps = choose_steps(record["curve"], threshold=threshold) if not smoke else S["steps"]
         preliminary[pilot_key] = {"curve": record["curve"], "test": record["test"],
                                   "steps_to_threshold": record["steps_to_threshold"], "chosen_steps": chosen_steps}
         _atomic_json(preliminary, preliminary_path)
@@ -522,7 +538,7 @@ def run(args):
     print("pilot", {k: v for k, v in preliminary[pilot_key].items() if k != "curve"})
     if steps is None:
         summary["status"] = "stopped"
-        summary["decision"]["claim"] = "STOP: the none pilot did not recover to 30% within 2,000 steps; the recovery regime is out of reach"
+        summary["decision"]["claim"] = "STOP: the none pilot did not recover half the lost accuracy within 2,000 steps; the recovery regime is out of reach"
         _atomic_json(summary, out / "summary.json"); print(summary["decision"]); return summary
     if args.preliminary_only:
         summary["status"] = "preliminary_only"
@@ -562,8 +578,12 @@ def aggregate(args, summary, test_rows, out):
         if a in mean_correct and b in mean_correct:
             comparisons[f"{a}_minus_{b}"] = _paired(mean_correct[a], mean_correct[b], seed=args.seed + i, samples=args.bootstrap_samples)
             nll_comparisons[f"{b}_minus_{a}_nll"] = _paired(mean_nll[b], mean_nll[a], seed=args.seed + 50 + i, samples=args.bootstrap_samples)
-    none_accuracy = float(torch.tensor(mean_correct["none"]).mean()) if "none" in mean_correct else None
-    gate = gates_from(comparisons, none_accuracy)
+    threshold = summary["preliminary"][f"gate_{args.damage}"]["recovery_threshold"]
+    none_selection = None
+    if "none" in by_arm:
+        finals = [r["curve"][-1]["accuracy"] for r in by_arm["none"] if r["curve"]]
+        none_selection = sum(finals) / len(finals) if finals else None
+    gate = gates_from(comparisons, none_selection, threshold)
     arm_results = {a: {"seeds": sorted(r["seed"] for r in rs),
                        "test_accuracy_by_seed": [r["test"]["accuracy"] for r in rs],
                        "test_accuracy_mean": float(torch.tensor(mean_correct[a]).mean()),
