@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_templated_latent_diagnostic.ipynb"
-RUN_COMMIT = "1a876c2090b98286cf8ae19092c2582062c5e231"
+RUN_COMMIT = "e44ef825f9112664784b649b4269b91b8701ab67"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -52,7 +52,7 @@ between → **MIXED**. Runtime ≈ 3–5 minutes on a T4/P100.
 md("## Setup")
 code(f'''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "{RUN_COMMIT}"
+RUN_COMMIT = "e44ef825f9112664784b649b4269b91b8701ab67"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = (
