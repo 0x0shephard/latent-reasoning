@@ -4040,3 +4040,19 @@ its 12 directions) without adding repairs, and that ×0.3 will lose anchoring fi
 It also motivates a two-term target (answer-directed at full pressure plus a weak
 full-state anchor) as the natural follow-up if stage 2 behaves as predicted; that
 would be preregistered separately.
+
+### §100 addendum 2: relevance comparisons not gated by the runner (paired bootstrap, five seeds)
+
+| comparison | mean | 95% CI | seeds > 0 |
+|---|---|---|---|
+| relevance − variance | +0.59 | [−0.11, +1.30] | 4/5 |
+| relevance − random | +0.33 | [−0.30, +0.99] | 3/5 |
+| full − relevance | +0.49 | [−0.14, +1.14] | 4/5 |
+| full − causal | +0.38 | [−0.26, +1.02] | 4/5 |
+
+Only `causal − variance` (+0.70, [+0.05, +1.38], 5/5) clears zero among the
+subspace-selector contrasts. The gradient-scored (relevance) selector does not
+separately clear variance or random at five seeds. Any statement that "relevance
+beats variance" or "relevance beats causal" is unsupported; the supported statement
+is that the two answer-directed selectors are indistinguishable from each other and
+that the intervention-selected one, and only it, clears variance.
