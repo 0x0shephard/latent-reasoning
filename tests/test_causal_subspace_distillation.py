@@ -288,3 +288,55 @@ def test_add_projector_noise_is_seeded_scaled_and_local():
     again = _tiny_model(); add_projector_noise(again, sigma=0.5, seed=11)
     for (n, p), (_, q) in zip(model.prj.named_parameters(), again.prj.named_parameters()):
         assert torch.equal(p, q), n
+
+
+def test_transfer_patch_selects_the_decisive_directions_and_breakage_anchor_excludes_them():
+    from src.mech.causal_subspace_distillation import (
+        breakage_score, patched_states, select_breakage_anchor, select_transfer_patch, transfer_patch_score,
+    )
+
+    teacher, gold, readout = _synthetic_teacher()
+    pca = fit_teacher_pca(teacher)
+    g = torch.Generator().manual_seed(1)
+    # a "student" whose decisive dims 4..7 are corrupted and whose inert dims are noisy
+    student = teacher.clone()
+    student[:, 4:8] = torch.randn(teacher.shape[0], 4, generator=g) * 2.0
+    student[:, 0:4] += torch.randn(teacher.shape[0], 4, generator=g) * 5.0
+    # patching nothing returns the student; patching everything returns the teacher
+    assert torch.allclose(patched_states(student, teacher, pca, []), student)
+    assert torch.allclose(patched_states(student, teacher, pca, list(range(16))), teacher, atol=1e-4)
+    before = transfer_patch_score(student, teacher, gold, pca, [], readout)[0]
+    chosen = select_transfer_patch(student, teacher, gold, pca, readout, 4, candidates=16)
+    after = transfer_patch_score(student, teacher, gold, pca, chosen, readout)[0]
+    assert after > before + 0.3
+    # the decisive PCs are 4..7 (variances 3, 2.5, 2, 1.5 sit below the four inert dims)
+    assert set(chosen) <= set(range(4, 8)), chosen
+    # breakage: drift in the decisive dims breaks answers; inert dims do not
+    assert breakage_score(teacher, student, gold, pca, [4, 5, 6, 7], readout) > 0.3
+    assert breakage_score(teacher, student, gold, pca, [0, 1, 2, 3], readout) < 0.05
+    anchor = select_breakage_anchor(teacher, student, gold, pca, readout, 2, candidates=16, exclude=chosen)
+    assert not set(anchor) & set(chosen)
+    assert set(anchor) <= set(range(4, 8)) - set(chosen) or len(set(range(4, 8)) - set(chosen)) < 2
+
+
+def test_multi_term_step_matches_single_term_and_adds_the_anchor():
+    from src.mech.causal_subspace_distillation import student_training_step_multi
+
+    model, tokenizer = _tiny_model(), CharTokenizer()
+    batch = collate_official_codi_kv_rows(tokenizer, ROWS, bot_token_id=model.bot_id)
+    states, _ = teacher_decision_states(model, batch)
+    pca = fit_teacher_pca(torch.randn(64, 16))
+    teach = build_target(pca, torch.randn(64, 16), [0, 1, 2])
+    anchor = build_target(pca, torch.randn(64, 16), [3, 4, 5, 6])
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    single = student_training_step(model, [batch], [states], teach, parameters, latent_positions=6)
+    multi_one = student_training_step_multi(model, [batch], [states], [(teach, 1.0)], parameters, latent_positions=6)
+    for a, b in zip(single.gradients, multi_one.gradients):
+        if a is not None:
+            assert torch.allclose(a, b, atol=1e-6)
+    assert multi_one.distillation_scale == pytest.approx(single.distillation_scale)
+    multi_two = student_training_step_multi(model, [batch], [states], [(teach, 1.0), (anchor, 0.3)], parameters, latent_positions=6)
+    assert any(not torch.allclose(a, b, atol=1e-6) for a, b in zip(multi_one.gradients, multi_two.gradients) if a is not None)
+    assert multi_two.distillation_loss == pytest.approx(multi_one.distillation_loss)
+    none = student_training_step_multi(model, [batch], [states], [], parameters, latent_positions=6)
+    assert none.distillation_loss is None

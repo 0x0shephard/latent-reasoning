@@ -4056,3 +4056,81 @@ separately clear variance or random at five seeds. Any statement that "relevance
 beats variance" or "relevance beats causal" is unsupported; the supported statement
 is that the two answer-directed selectors are indistinguishable from each other and
 that the intervention-selected one, and only it, clears variance.
+
+## 101. Preregistered: patch-selected two-term distillation (teaching set by transfer patching, anchor set by breakage patching)
+
+Designed after the §100 primary and its per-question addendum, and stated as such.
+Contract `official_codi_patch_selected_distillation_v1`. Same repair regime as §94–§98
+(`projector_noise` σ = 2.0, 1,000 steps, seeds 1–3, batch 16 as 2 × 8, LoRA 1e-4 /
+projector 5e-4, warmup 50, cosine, norm-matched terms), same splits, same teacher
+cache and PCA, same 1,319-question test read once per run. Seeds 1–3 fix the damage
+and data order, so every new arm is **paired with the §100 runs of the same seed**
+(`none`, `full`, `causal`, `relevance`), whose per-question correctness is read from the
+published primary output. No baseline is retrained.
+
+### Why interventions can beat a gradient score here
+
+§100 showed that at the decision state, teacher-side intervention and gradient
+attribution select the same directions (causal ≈ relevance) and that the full
+state's advantage over both is fewer breaks on unstable questions, not more
+repairs. Both new selectors use the *student's* state, which no teacher-side score
+can see, and both measure a nonlinear transfer effect through the readout rather than
+a first-order sensitivity.
+
+- **Teaching set (transfer patching).** For each candidate subspace S among the first
+  128 teacher PCs, patch the teacher's coordinates into the damaged student's
+  decision state, `h' = s + V_S V_Sᵀ (t − s)`, and read out. Greedy forward selection
+  by (patched accuracy, patched margin) to rank 12. This asks "which teacher
+  coordinates, copied into this student, fix its answers", the question distillation
+  actually poses.
+- **Anchor set (breakage patching).** With `s₀` the official (undamaged) model's own
+  latent-path state, patch the damaged student's drift into it, `h' = s₀ + V_S V_Sᵀ (s
+  − s₀)`, and count healthy answers that break. Greedy selection to rank 24 over the
+  same candidates *excluding* the teaching set, maximising breakage. These are the
+  directions in which the damage drift costs answers, i.e. the anchoring component
+  §100's addendum identified. (Regime note: `s₀` exists only in repair; the from-
+  scratch analogue would use the teacher as reference.)
+- **Loss.** Answer CE + smooth-L1 on the teaching coordinates, norm-matched to CE at
+  ×1.0, + smooth-L1 on the anchor coordinates, norm-matched at ×0.3. Both targets are
+  the teacher's coordinates (the student copies the teacher; the anchor set only
+  chooses *where* the weak copying goes).
+- **Adaptive variant.** Every 250 steps the student's states on 1,024 select rows are
+  recomputed and both sets re-selected; the sets' drift is recorded.
+
+### Arms (3 seeds each, ≈26 min per run)
+
+| arm | teaching set | anchor set | re-selection |
+|---|---|---|---|
+| `patch` | transfer-patch, rank 12 | none | no |
+| `patch_anchor` | transfer-patch, rank 12 | breakage-patch, rank 24, ×0.3 | no |
+| `patch_anchor_adaptive` | transfer-patch | breakage-patch | every 250 steps |
+| `causal_anchor` (control) | §100 causal set | breakage-patch, rank 24, ×0.3 | no |
+
+### Go/no-go (teacher and student side, before training)
+
+1. Shared artefacts and the §98 preliminary are reused; damage passes as before.
+2. **Anchor is meaningful:** breakage of the selected anchor set on `s₀` ≥ 2× the mean
+   breakage of 20 random 24-direction sets. Otherwise STOP.
+3. **Reported, not gated:** Jaccard of the transfer-patch set with the §100 causal
+   set. If ≥ 0.75, the `patch` arm is expected to tie `causal` and the experiment is
+   about the anchor.
+
+### Gates (paired bootstrap over questions on seed-mean correctness; per-seed signs reported)
+
+- **P1** `patch_anchor − full` > 0. **P2** `patch_anchor − causal` > 0. **P3**
+  `patch_anchor − relevance` > 0.
+- **P4** `patch − causal` (does the transfer-patch teaching set alone beat teacher
+  sufficiency). **P5** `patch_anchor_adaptive − patch_anchor` (does re-selection help).
+- **P6** `causal_anchor − causal` (what the anchor adds to the old teaching set).
+- **Secondary, predicted in advance from the §100 addendum:** per seed against
+  `none`, `patch_anchor` repairs ≥ 59 and breaks < 36.6 (full's figure).
+- Claims: `CONFIRMED` if P1 ∧ P2 ∧ P3 with 3/3 seeds positive on each; `ANCHOR` if P6
+  passes and P1 fails (anchoring helps but does not beat full); `TIE` if all cover
+  zero within 3 points; otherwise `PARTIAL` naming survivors.
+
+### Budget and bounds
+
+12 runs ≈ 5.5 h on one account. Three seeds; MDE per seed ≈ 2.5 points, so the
+per-seed sign counts and the repair/break decomposition are the informative reads
+and the question-level intervals are secondary. One model, one damage mode, one
+anchor weight (0.3) and one anchor rank (24), both fixed before the run.

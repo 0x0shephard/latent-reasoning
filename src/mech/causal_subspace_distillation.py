@@ -132,6 +132,84 @@ def retain_only_score(states, gold, pca, index_set, readout) -> tuple[float, flo
     return float(correct.double().mean()), float(margin.mean()), float(log_prob.mean())
 
 
+def patched_states(base: torch.Tensor, donor: torch.Tensor, pca: TeacherPCA,
+                   index_set: Sequence[int]) -> torch.Tensor:
+    """Subspace activation patch ``base + V_S V_S^T (donor - base)`` (ledger 101)."""
+    if not index_set:
+        return base.to(torch.float32)
+    basis = pca.basis[:, list(index_set)].to(base.device, torch.float32)
+    delta = donor.to(base.device, torch.float32) - base.to(torch.float32)
+    return base.to(torch.float32) + (delta @ basis) @ basis.T
+
+
+def transfer_patch_score(student_states, teacher_states, gold, pca, index_set, readout
+                         ) -> tuple[float, float]:
+    """(accuracy, mean margin) of the student after the teacher's coordinates in
+    ``index_set`` are patched in: which teacher coordinates fix this student."""
+    edited = patched_states(student_states, teacher_states, pca, index_set)
+    _, correct = gold_outcomes(edited, gold, readout)
+    margin = margin_outcomes(edited, gold, readout)
+    return float(correct.double().mean()), float(margin.mean())
+
+
+def select_transfer_patch(student_states, teacher_states, gold, pca, readout, rank: int, *,
+                          candidates: int = 128, return_trace: bool = False):
+    """Greedy forward selection of the teacher directions whose transfer into the
+    student most raises the student's patched first-token accuracy (margin tie-break)."""
+    chosen: list[int] = []
+    pool = list(range(min(int(candidates), pca.basis.shape[1])))
+    trace = []
+    for _ in range(int(rank)):
+        best_key, best_index = None, None
+        for index in pool:
+            if index in chosen:
+                continue
+            key = transfer_patch_score(student_states, teacher_states, gold, pca, chosen + [index], readout)
+            if best_key is None or key > best_key:
+                best_key, best_index = key, index
+        chosen.append(int(best_index))
+        trace.append({"added": int(best_index), "accuracy": best_key[0], "mean_margin": best_key[1]})
+    result = sorted(chosen)
+    return (result, trace) if return_trace else result
+
+
+def breakage_score(reference_states, drifted_states, gold, pca, index_set, readout) -> float:
+    """Fraction of the reference model's correct answers that break when the drifted
+    state's coordinates in ``index_set`` are patched into the reference state."""
+    _, healthy = gold_outcomes(reference_states, gold, readout)
+    edited = patched_states(reference_states, drifted_states, pca, index_set)
+    _, patched = gold_outcomes(edited, gold, readout)
+    healthy_n = int(healthy.sum())
+    if healthy_n == 0:
+        return 0.0
+    return float((healthy & ~patched).sum()) / healthy_n
+
+
+def select_breakage_anchor(reference_states, drifted_states, gold, pca, readout, rank: int, *,
+                           candidates: int = 128, exclude: Sequence[int] = (),
+                           return_trace: bool = False):
+    """Greedy forward selection of the directions in which the drift breaks the most
+    reference answers; ``exclude`` removes the teaching set from the pool."""
+    chosen: list[int] = []
+    excluded = set(int(i) for i in exclude)
+    pool = [i for i in range(min(int(candidates), pca.basis.shape[1])) if i not in excluded]
+    trace = []
+    for _ in range(int(rank)):
+        best, best_index = None, None
+        for index in pool:
+            if index in chosen:
+                continue
+            value = breakage_score(reference_states, drifted_states, gold, pca, chosen + [index], readout)
+            if best is None or value > best:
+                best, best_index = value, index
+        if best_index is None:
+            break
+        chosen.append(int(best_index))
+        trace.append({"added": int(best_index), "breakage": best})
+    result = sorted(chosen)
+    return (result, trace) if return_trace else result
+
+
 # --------------------------------------------------------------------- selectors
 
 
@@ -456,6 +534,53 @@ def student_training_step(model, batches, teacher_states, target: DistillationTa
     else:
         scale_used, total = 0.0, combine_gradients(base_total)
     return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses), scale_used, cosine)
+
+
+def student_training_step_multi(model, batches, teacher_states, terms, parameters: Sequence[torch.Tensor],
+                                *, latent_positions: int) -> StudentStep:
+    """Answer CE plus several norm-matched distillation terms (ledger 101).
+
+    ``terms`` is a sequence of ``(DistillationTarget, multiplier)``; each term's gradient
+    is norm-matched to the CE gradient independently and scaled by its multiplier, then
+    summed.  With one term this equals ``student_training_step``.  Reported
+    ``distillation_loss`` / ``distillation_scale`` / ``gradient_cosine`` refer to the
+    first term (the teaching term).
+    """
+    terms = list(terms)
+    if not terms:
+        return student_training_step(model, batches, teacher_states, None, parameters, latent_positions=latent_positions)
+    if len(batches) != len(teacher_states) or not batches:
+        raise ValueError("micro-batches and teacher states must align and be non-empty")
+    scale = 1.0 / len(batches)
+    base_total = None
+    aux_totals = [None] * len(terms)
+    answer_losses, term_losses = [], [[] for _ in terms]
+    for batch, teacher_state12 in zip(batches, teacher_states):
+        student = student_trajectory_forward(model, batch, latent_positions=latent_positions)
+        answer_losses.append(float(student.mean_loss.detach()))
+        base = autograd_gradients(student.mean_loss, parameters, retain_graph=True)
+        base_total = _accumulate(base_total, base, scale)
+        state = student.answer_endpoint_hidden[:, READOUT_STATE, :]
+        for k, (target, _) in enumerate(terms):
+            loss = distillation_loss(state, teacher_state12.to(state.device), target)
+            term_losses[k].append(float(loss.detach()))
+            raw = autograd_gradients(loss, parameters, retain_graph=k < len(terms) - 1)
+            aux_totals[k] = _accumulate(aux_totals[k], raw, scale)
+            del loss, raw
+        del student, state
+    total = combine_gradients(base_total)
+    first_scale, first_cosine = 0.0, gradient_cosine(base_total, aux_totals[0])
+    for k, ((_, multiplier), aux_total) in enumerate(zip(terms, aux_totals)):
+        if not any(g is not None and bool(g.abs().sum() > 0) for g in aux_total):
+            continue
+        matched, matching = match_gradient_norm(aux_total, base_total)
+        used = float(matching["auxiliary_scale"]) * float(multiplier)
+        matched = tuple(None if g is None else g * float(multiplier) for g in matched)
+        total = combine_gradients(total, matched)
+        if k == 0:
+            first_scale = used
+    answer_loss = sum(answer_losses) / len(answer_losses)
+    return StudentStep(total, answer_loss, sum(term_losses[0]) / len(term_losses[0]), first_scale, first_cosine)
 
 
 def cosine_lr(step: int, *, total_steps: int, base: float, warmup: int) -> float:
