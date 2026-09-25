@@ -3973,3 +3973,70 @@ distribution read is possible for these thirty runs.
 > level test if a genuinely causal selector is wanted (§93 discussion); otherwise run
 > stage 3 as planned. Add final-weight saving before either, so the remaining runs can
 > be read on SVAMP / GSM-Hard / MultiArith later.
+
+### §100 addendum: per-question analysis of the 30 runs — full wins by breaking less, not by repairing more
+
+No GPU. `scripts/analyze_recovery_per_question.py` re-scores every run's stored test
+outputs with `official_answers_match` (arm means reproduce the summary exactly) and
+pairs each arm with the `none` run of the same seed (same damage, same data order).
+
+**Questions by plain-training outcome across the five seeds:** always right 392
+(29.7%), unstable 254 (19.3%), always wrong 673 (51.0%).
+
+**Where each target's gain over `none` comes from** (points of test accuracy):
+
+| arm | total | always right | unstable | always wrong |
+|---|---|---|---|---|
+| full | +1.74 | −0.30 | **+1.06** | +0.99 |
+| causal | +1.36 | −0.36 | +0.64 | **+1.09** |
+| relevance | +1.26 | −0.39 | +0.62 | +1.03 |
+| random | +0.92 | −0.50 | +0.50 | +0.92 |
+| variance | +0.67 | −0.59 | +0.42 | +0.83 |
+
+**Paired flips per seed** (none wrong → arm right = repair; none right → arm wrong = break):
+
+| arm | repairs | breaks | net |
+|---|---|---|---|
+| full | 59.6 | **36.6** | +23.0 |
+| causal | 59.0 | 41.0 | +18.0 |
+| relevance | 57.0 | 40.4 | +16.6 |
+| random | 53.8 | 41.6 | +12.2 |
+| variance | 50.8 | 42.0 | +8.8 |
+
+### Reading
+
+1. **Full and causal repair the same number of questions (59.6 vs 59.0 per seed).** On the
+   673 questions plain training never solves, causal's gain (+1.09) matches full's
+   (+0.99). The answer-directed 12 directions carry the *teaching* signal as well as
+   the whole state does.
+2. **Full's whole advantage is fewer breaks** (36.6 vs 41.0 per seed) and it lands on
+   the 254 *unstable* questions (+1.06 vs +0.64). Copying the remaining 756 directions
+   does not teach; it anchors, keeping marginal questions from drifting during repair.
+   This matches the early curves (§100 item 7): training on the causal target lets the
+   student drift away from the teacher in the directions it is not trained on, and the
+   drift costs borderline questions.
+3. **The repair sets are not nested.** Only 59–63% of any low-rank target's repairs are
+   also repaired by full in the same seed; each arm repairs 19–24 questions per seed
+   that full does not, and full repairs 24–27 that the arm does not. Overlaps are far
+   above independence (Jaccard 0.35–0.46 vs 0.03–0.04 expected) but no target is a
+   subset of another. There is no distinct set that "only full can fix": full's
+   seed-mean gain exceeds every low-rank target's by ≥ 0.4 on just 5 of 1,319 questions.
+4. **Variance and random are interchangeable.** Their repair sets overlap no more with
+   each other (Jaccard 0.37) than with the other arms, they repair the fewest questions
+   and break the most, and their gains on always-wrong questions are the smallest.
+5. **Most flips are seed-specific.** Only 14–22 questions per arm are repaired in ≥ 3 of
+   5 seeds; ~78% of per-seed repairs are one-off. Two `none` runs with different seeds
+   disagree on 120 questions; an arm and its same-seed `none` disagree on 93–100. The
+   damage-and-data seed moves more questions than the target does.
+
+### Consequence for the claim and for stage 2
+
+The mechanism splits into two components: an **answer-directed component** (the 12
+causal/relevance directions), which repairs the never-solved questions as well as the
+full state, and an **anchoring component** (everything else), which prevents breaks on
+marginal questions. Variance directions provide neither. This predicts that the ×3
+copying-pressure arms in stage 2 will reduce breaks for causal (stronger anchoring in
+its 12 directions) without adding repairs, and that ×0.3 will lose anchoring first.
+It also motivates a two-term target (answer-directed at full pressure plus a weak
+full-state anchor) as the natural follow-up if stage 2 behaves as predicted; that
+would be preregistered separately.
