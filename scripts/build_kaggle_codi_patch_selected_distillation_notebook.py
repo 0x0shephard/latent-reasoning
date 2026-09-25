@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_patch_selected_distillation.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "23bf36b329cfadac277e4dd64498637070db8188"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -83,7 +83,7 @@ This stage was designed after the §100 result and is labelled as such in the le
 md("## Data and setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "23bf36b329cfadac277e4dd64498637070db8188"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 
 REPRODUCTION_SUMMARY_INPUT = ""   # "" = discover the official reproduction summary under /kaggle/input
