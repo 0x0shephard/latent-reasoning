@@ -3895,3 +3895,81 @@ selection 0.772 against threshold 0.676).
   alongside and is the more conservative read with three seeds.
 - Effects are about 1 point, below the ≈2-point planning MDE; seeds 4–5 decide H3.
 - `full − causal` was not a preregistered comparison and is descriptive only.
+
+## 100. Completed §94 primary, five seeds: PARTIAL. Copying helps repair; the full state is best; the benefit tracks gradient alignment
+
+Seeds 4–5 (account B, code `b44e288`) completed 2026-09-26 and were pooled with seeds
+1–3 (§99). Thirty runs, `projector_noise` σ = 2.0, 1,000 steps, one read of the 1,319
+GSM8K test questions per run. This is the preregistered read.
+
+### GSM8K test exact match
+
+| arm | mean (5 seeds) | seed SD | gain over none | seeds with gain > 0 | test NLL | grad cosine |
+|---|---|---|---|---|---|---|
+| none | 38.48 | 0.64 | — | — | 1.578 | — |
+| **full** | **40.23** | 0.57 | +1.74 | 5/5 | 1.578 | 0.400 |
+| causal | 39.85 | 0.71 | +1.36 | 5/5 | 1.597 | 0.311 |
+| relevance | 39.74 | 0.67 | +1.26 | 5/5 | 1.625 | 0.330 |
+| random | 39.41 | 0.79 | +0.92 | 5/5 | 1.481 | 0.163 |
+| variance | 39.15 | 0.59 | +0.67 | 5/5 | 1.542 | 0.128 |
+
+Official checkpoint 43.4%. Paired bootstrap over questions on seed-mean correctness:
+
+| gate | comparison | mean | 95% CI | seeds > 0 | result |
+|---|---|---|---|---|---|
+| R0 | none final selection EM ≥ 0.676 | 0.771 | — | — | pass |
+| S1 | full − none | +1.74 | [+0.99, +2.52] | 5/5 | **pass** |
+| H1 | causal − variance | +0.70 | [+0.05, +1.38] | 5/5 | **pass** |
+| H2 | causal − relevance | +0.11 | [−0.52, +0.74] | 3/5 | fail |
+| H3 | causal − random | +0.44 | [−0.26, +1.12] | 4/5 | fail |
+| — | causal − none | +1.36 | [+0.64, +2.08] | 5/5 | positive |
+| — | variance − none | +0.67 | [−0.09, +1.43] | 5/5 | covers 0 |
+| — | variance − random | −0.26 | [−0.89, +0.39] | 1/5 | covers 0 |
+
+**Verdict: PARTIAL** (H1 ∧ ¬H3), exactly as preregistered. Descriptive, not
+preregistered: full − causal +0.38 (4/5 seeds), full − relevance +0.49 (4/5).
+
+### What is established (five seeds, one model, recovery regime)
+
+1. **Distillation toward the teacher's decision state helps a damaged competent
+   student.** Every target beats plain fine-tuning in every seed. This is the sign
+   reversal from §86–§90, where the same targets slowed a from-scratch student.
+2. **The full decision state is the best target.** CODI's own choice. The strong
+   hypothesis, that copying only the answer-deciding directions beats copying
+   everything, is rejected at this budget.
+3. **Variance selection is the worst target** and is not distinguishable from twelve
+   random directions (variance − random −0.26, 1/5 seeds). The LoRi-style rule has no
+   support here; §40's "inert loud directions" carries into distillation.
+4. **Answer-directed selection beats variance selection** (H1, 5/5 seeds), and causal
+   and relevance are tied (H2), for the reason given in §93's follow-up discussion: at
+   the readout layer, intervention and gradient attribution select the same object.
+   Causal does not clear random (H3), so the claim is "not variance", not "causal".
+5. **The benefit of a target is predicted by the alignment of its gradient with the
+   answer gradient.** Across the five copying arms, Pearson 0.97 / Spearman 0.90
+   between mean cosine and accuracy gain (n = 5 arms, descriptive). Ordering: full
+   0.40 > relevance 0.33 > causal 0.31 > random 0.16 > variance 0.13.
+6. **Teacher-forced NLL dissociates from exact match** (random and variance have the
+   lowest NLL and the smallest gains). NLL is not a usable proxy for this outcome.
+7. **Early repair curves (10-step resolution, 5 seeds).** The full target reduces the
+   student's distance from the teacher fastest in both the causal and the variance
+   subspaces. Training on the causal target *raises* the distance in the variance
+   directions above `none`; random raises both. Low-rank copying is local.
+
+### Bounds
+
+Effects are 0.7–1.7 points with a seed SD of 0.6–0.8, so the question-level intervals
+understate seed-level uncertainty; the per-seed sign counts are the conservative read
+and agree with the intervals on every gate. One model (CODI GPT-2), one task (GSM8K),
+one damage mode, one distillation weight; stages 2 (weights) and 3 (LoRA-half) are the
+robustness checks and remain to run. Final weights were not saved, so no out-of-
+distribution read is possible for these thirty runs.
+
+### Decision
+
+> The decision-state selector question is answered for this checkpoint: full > answer-
+> directed (causal ≈ relevance) > random ≈ variance, with a gradient-alignment
+> mechanism. Run stage 2 (weights) to test whether the ordering survives ×0.3 and ×3
+> pressure. For the second account, replace stage 3 (LoRA-half) with the trajectory-
+> level test if a genuinely causal selector is wanted (§93 discussion); otherwise run
+> stage 3 as planned. Add final-weight saving before either, so the remaining runs can
+> be read on SVAMP / GSM-Hard / MultiArith later.
