@@ -3829,3 +3829,69 @@ trained on it. Cost ≈ 2 minutes per run. Reported as seed-mean curves, not gat
 Budget at 1,000 steps: ≈ 28–30 minutes per run; primary 30 runs ≈ 15 h (account A
 seeds 1–3 ≈ 9 h, account B seeds 4–5 ≈ 6 h), weights 12 runs ≈ 6 h, `lora_half` 12 runs
 plus its own preliminary ≈ 8 h.
+
+## 99. Interim, §94 primary seeds 1–3 (account A): copying helps repair; the full state is best; causal beats variance only
+
+Run 2026-09-25/26, code `b44e288`, `projector_noise` σ = 2.0, 1,000 steps, 18 runs of
+≈26 min. Seeds 4–5 (account B) outstanding; this is **not** the preregistered read,
+which requires all five seeds.
+
+### GSM8K test exact match (1,319 questions)
+
+| arm | seed 1 | seed 2 | seed 3 | mean | test NLL | mean grad cosine |
+|---|---|---|---|---|---|---|
+| none | 38.44 | 39.42 | 37.83 | 38.56 | 1.571 | — |
+| full | 40.56 | 40.71 | 39.95 | **40.41** | 1.571 | 0.402 |
+| causal | 40.56 | 40.18 | 39.04 | 39.93 | 1.600 | 0.309 |
+| relevance | 39.95 | 40.33 | 38.67 | 39.65 | 1.622 | 0.325 |
+| random | 38.82 | 40.11 | 38.67 | 39.20 | 1.476 | 0.162 |
+| variance | 38.51 | 39.58 | 38.82 | 38.97 | 1.542 | 0.132 |
+
+Official checkpoint 43.4%. Paired bootstrap over questions on seed-mean correctness:
+
+| comparison | mean | 95% CI | per-seed differences |
+|---|---|---|---|
+| full − none (S1) | +1.84 | [+0.91, +2.75] | +2.12, +1.29, +2.12 |
+| causal − none | +1.36 | [+0.53, +2.20] | +2.12, +0.76, +1.21 |
+| causal − variance (H1) | +0.96 | [+0.13, +1.82] | +2.05, +0.61, +0.23 |
+| causal − random (H3) | +0.73 | [−0.15, +1.62] | +1.74, +0.08, +0.38 |
+| causal − relevance (H2) | +0.28 | [−0.51, +1.09] | +0.61, −0.15, +0.38 |
+| variance − none | +0.40 | [−0.45, +1.29] | +0.08, +0.15, +0.99 |
+| full − causal (not preregistered) | +0.48 | not computed | 0.00, +0.53, +0.91 |
+
+Interim runner verdict: **PARTIAL** (H1 passes, H3 does not). R0 passed (none final
+selection 0.772 against threshold 0.676).
+
+### Reading (interim)
+
+1. **The from-scratch sign reverses in repair.** In §86–§90 every copying target slowed
+   learning. Here every copying target beats `none` in every one of the three seeds,
+   by +0.4 (variance) to +1.8 points (full). Copying the teacher's decision state helps
+   a competent student recover; it hurt a student that could not yet do the task.
+2. **The full state is the strongest target**, ≥ causal in all three seeds. The strong
+   form of the hypothesis, that copying only the answer-deciding directions beats
+   copying everything, is not supported at this n.
+3. **Among 12-direction targets, answer-directed beats loud.** Causal beats variance
+   (H1, all seeds positive). Causal and relevance are tied, as in §88. Causal versus
+   random is positive in every seed but its interval crosses zero.
+4. **The benefit tracks gradient alignment.** Across the five copying arms, the mean
+   cosine between the copying gradient and the answer gradient orders the accuracy
+   gains almost exactly (Pearson 0.96, Spearman 0.90, n = 5 arms): full 0.40, relevance
+   0.32, causal 0.31, random 0.16, variance 0.13. Variance-target gradients are the
+   least aligned with the answer, as §94 predicted. Descriptive, five points.
+5. **Teacher-forced NLL dissociates from exact match.** Random and variance have the
+   lowest test NLL and near-lowest accuracy; causal and relevance raise NLL while
+   raising accuracy. The primary is exact match; NLL is not a proxy for it here.
+6. **Early curves.** The full target reaches the smallest distance from the teacher in
+   both the causal and the variance directions. Training on the causal target *raises*
+   the distance in the variance directions above the `none` arm; the random target
+   raises both distances. Repair of selection NLL is similar across arms in the first
+   200 steps, full slightly fastest.
+
+### Caveats
+
+- The bootstrap resamples questions, not seeds. Between-seed spread of `none` (1.6
+  points) is comparable to the arm effects, so per-seed sign consistency is reported
+  alongside and is the more conservative read with three seeds.
+- Effects are about 1 point, below the ≈2-point planning MDE; seeds 4–5 decide H3.
+- `full − causal` was not a preregistered comparison and is descriptive only.
