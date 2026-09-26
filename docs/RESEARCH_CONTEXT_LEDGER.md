@@ -4134,3 +4134,82 @@ a first-order sensitivity.
 per-seed sign counts and the repair/break decomposition are the informative reads
 and the question-level intervals are secondary. One model, one damage mode, one
 anchor weight (0.3) and one anchor rank (24), both fixed before the run.
+
+## 102. Completed §101: TIE. Student-side patch selection does not beat teacher-side selection; the breakage anchor does not help
+
+Run 2026-09-26/27, code `23bf36b`, seeds 1–3, 12 runs, paired with the §100 runs of the
+same seeds via the published primary output.
+
+### Selection (seed 1, step 0)
+
+- Transfer-patch teaching set `[7,8,9,11,13,14,15,16,17,18,19,20]` vs §100 causal set
+  `[5,6,7,9,10,11,12,13,14,15,17,19]`: Jaccard 0.50 (8 shared). Patching the teaching
+  set into the damaged student raised its pool first-token accuracy 0.510 → 0.777.
+- Breakage-patch anchor (24, teaching set excluded) `[0,4,6,12,21,22,25,28,31,32,45,47,
+  48,54,55,64,67,70,74,96,98,101,111,113]`: breakage 0.079 vs 0.022 for random sets
+  (ratio 3.6; go/no-go passed). Note that it contains PCs 0 and 4, loud directions.
+- Adaptive re-selection was unstable: Jaccard of the teaching set with its previous
+  selection 0.14–0.50 at steps 250/500/750 across seeds.
+
+### GSM8K test exact match (seeds 1–3; reference arms from §100)
+
+| arm | seed 1 | seed 2 | seed 3 | mean | repairs / breaks per seed vs none |
+|---|---|---|---|---|---|
+| none | 38.44 | 39.42 | 37.83 | 38.56 | — |
+| full | 40.56 | 40.71 | 39.95 | **40.41** | 59.3 / **35.0** |
+| causal | 40.56 | 40.18 | 39.04 | 39.93 | 58.3 / 40.3 |
+| relevance | 39.95 | 40.33 | 38.67 | 39.65 | 53.3 / 39.0 |
+| patch | 39.65 | 40.18 | 38.51 | 39.45 | 53.0 / 41.3 |
+| patch_anchor | 39.73 | 40.64 | 39.27 | 39.88 | 55.0 / 37.7 |
+| patch_anchor_adaptive | 40.56 | 39.95 | 39.20 | 39.90 | 59.0 / 41.3 |
+| causal_anchor | 39.73 | 39.42 | 38.82 | 39.32 | 51.0 / 41.0 |
+
+| gate | comparison | mean | 95% CI | per seed |
+|---|---|---|---|---|
+| P1 | patch_anchor − full | −0.53 | [−1.34, +0.28] | −0.83, −0.08, −0.68 |
+| P2 | patch_anchor − causal | −0.05 | [−0.86, +0.78] | −0.83, +0.45, +0.23 |
+| P3 | patch_anchor − relevance | +0.23 | [−0.56, +1.04] | −0.23, +0.30, +0.61 |
+| P4 | patch − causal | −0.48 | [−1.24, +0.28] | −0.91, 0.00, −0.53 |
+| P5 | adaptive − fixed | +0.03 | [−0.76, +0.83] | +0.83, −0.68, −0.08 |
+| P6 | causal_anchor − causal | −0.61 | [−1.42, +0.20] | −0.83, −0.76, −0.23 |
+| — | patch_anchor − none | +1.31 | [+0.40, +2.25] | 3/3 |
+
+Predictions failed: `patch_anchor` repairs 55.0 (< 59 predicted) and breaks 37.7 (> 36.6).
+Verdict as preregistered: **TIE**.
+
+### Reading
+
+1. **The transfer-patch teaching set is worse than the teacher-sufficiency set** (P4:
+   −0.48, 0/3 seeds positive; 53 repairs vs 58). Selecting where the *current* student
+   is wrong targets errors that plain training removes within the first 100 steps
+   (§98), so the step-0 selection is stale almost immediately; the adaptive variant's
+   unstable re-selections (Jaccard 0.14–0.50) say the same thing from the other side.
+   "Where the student is wrong now" is not "what the student should learn".
+2. **The breakage anchor did not help and hurt the causal set** (P6: −0.61, 3/3 seeds
+   negative; repairs 58 → 51). It lowered breaks only for the patch set (41.3 → 37.7)
+   and not for the causal set (40.3 → 41.0). Two candidate causes, not separable here:
+   (a) a **reference/target mismatch** in the design: the anchor set was chosen by
+   drift from the official model's own latent state `s₀`, but the anchor *target* was
+   the teacher's explicit-CoT state `t`. In the loud directions the set contains (PCs
+   0 and 4), `s₀` and `t` legitimately differ, so the anchor pulled the student toward
+   a teacher geometry the healthy student never had, the §86–§90 variance tax in
+   miniature; (b) **total pressure**: two norm-matched terms put 1.3× the CE gradient
+   norm on copying, against 1.0× for the single-term arms, and the extra pressure may
+   itself cost repairs. The untested variant that separates these is a self-anchor to
+   `s₀` at the same 0.3 (regime-specific; §101 noted it), or the ×3 weights stage.
+3. **Full remains the only target with breaks near 35**; every low-rank target,
+   student-selected or teacher-selected, breaks 38–41. The anchoring component of
+   the full state is not captured by any 24-direction set chosen this way.
+4. **All new arms beat `none`** (patch_anchor +1.31, 3/3), consistent with §100: any
+   answer-directed copying helps repair.
+
+### Decision
+
+> Student-side intervention selection at the decision state is closed: it ties or
+> loses to teacher-side selection, and the decision-state selector question stays as
+> §100 left it (full > answer-directed > random ≈ variance). The anchoring hypothesis
+> is not refuted, because the implementation anchored to the wrong reference, but it
+> should not be pursued further unless a single self-anchor arm (≈1.3 h) is cheap
+> enough to close it. The remaining robustness run for the paper is the weights stage.
+> The trajectory-level test remains the only route on which an intervention-selected
+> target can differ from a gradient-selected one in principle.
