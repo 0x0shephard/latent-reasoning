@@ -472,6 +472,7 @@ class StudentStep:
     distillation_loss: float | None
     distillation_scale: float | None
     gradient_cosine: float | None = None
+    gate_fraction: float | None = None
 
 
 def _accumulate(total, part, scale: float):
@@ -534,6 +535,84 @@ def student_training_step(model, batches, teacher_states, target: DistillationTa
     else:
         scale_used, total = 0.0, combine_gradients(base_total)
     return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses), scale_used, cosine)
+
+
+GATE_MODES = ("all", "wrong", "patch")
+
+
+@torch.no_grad()
+def counterfactual_gate(student_state: torch.Tensor, teacher_state: torch.Tensor, gold: torch.Tensor,
+                        pca: TeacherPCA, index_set: Sequence[int] | None, readout: torch.Tensor,
+                        mode: str) -> torch.Tensor:
+    """Per-example boolean gate for the copying term (ledger 103).
+
+    ``wrong``: the student's first answer token is currently wrong.
+    ``patch``: it is wrong now and becomes right when the teacher's coordinates in
+    ``index_set`` (all 768 when ``None``) are patched into the student's state.
+    ``all``: every example.
+    """
+    if mode not in GATE_MODES:
+        raise ValueError(f"unknown gate mode {mode!r}")
+    n = student_state.shape[0]
+    if mode == "all":
+        return torch.ones(n, dtype=torch.bool, device=student_state.device)
+    gold = gold.to(readout.device)
+    before = (_log_probs(student_state.detach(), readout).argmax(-1) == gold)
+    if mode == "wrong":
+        return (~before).to(student_state.device)
+    if index_set is None:
+        patched = teacher_state.detach().to(torch.float32)
+    else:
+        patched = patched_states(student_state.detach(), teacher_state.detach(), pca, index_set)
+    after = (_log_probs(patched, readout).argmax(-1) == gold)
+    return ((~before) & after).to(student_state.device)
+
+
+def student_training_step_gated(model, batches, teacher_states, golds, target: DistillationTarget,
+                                parameters: Sequence[torch.Tensor], *, latent_positions: int,
+                                gate_mode: str, gate_index_set: Sequence[int] | None, pca: TeacherPCA,
+                                readout: torch.Tensor) -> StudentStep:
+    """Answer CE plus one norm-matched distillation term applied only to gated examples.
+
+    The gate is computed from the same forward pass, at the cost of one readout matmul
+    per micro-batch.  The distillation loss is the mean over gated examples; a
+    micro-batch with no gated example contributes no distillation gradient.  Norm
+    matching is applied once per step to the accumulated term, so total copying pressure
+    equals the ungated arms' and is concentrated on the gated examples.
+    """
+    if len(batches) != len(teacher_states) or len(batches) != len(golds) or not batches:
+        raise ValueError("micro-batches, teacher states and golds must align and be non-empty")
+    scale = 1.0 / len(batches)
+    base_total = aux_total = None
+    answer_losses, distill_losses, gated, total_n = [], [], 0, 0
+    for batch, teacher_state12, gold in zip(batches, teacher_states, golds):
+        student = student_trajectory_forward(model, batch, latent_positions=latent_positions)
+        answer_losses.append(float(student.mean_loss.detach()))
+        state = student.answer_endpoint_hidden[:, READOUT_STATE, :]
+        teacher_state12 = teacher_state12.to(state.device)
+        mask = counterfactual_gate(state, teacher_state12, gold, pca, gate_index_set, readout, gate_mode)
+        gated += int(mask.sum()); total_n += int(mask.numel())
+        if not bool(mask.any()):
+            base = autograd_gradients(student.mean_loss, parameters, retain_graph=False)
+            base_total = _accumulate(base_total, base, scale)
+            del student, state
+            continue
+        base = autograd_gradients(student.mean_loss, parameters, retain_graph=True)
+        base_total = _accumulate(base_total, base, scale)
+        loss = distillation_loss(state[mask], teacher_state12[mask], target)
+        distill_losses.append(float(loss.detach()))
+        raw = autograd_gradients(loss, parameters, retain_graph=False)
+        aux_total = _accumulate(aux_total, raw, scale)
+        del student, state, loss, raw
+    answer_loss = sum(answer_losses) / len(answer_losses)
+    fraction = gated / max(1, total_n)
+    if aux_total is None or not any(g is not None and bool(g.abs().sum() > 0) for g in aux_total):
+        return StudentStep(combine_gradients(base_total), answer_loss, None, 0.0, None, fraction)
+    cosine = gradient_cosine(base_total, aux_total)
+    matched, matching = match_gradient_norm(aux_total, base_total)
+    total = combine_gradients(base_total, matched)
+    return StudentStep(total, answer_loss, sum(distill_losses) / len(distill_losses),
+                       float(matching["auxiliary_scale"]), cosine, fraction)
 
 
 def student_training_step_multi(model, batches, teacher_states, terms, parameters: Sequence[torch.Tensor],

@@ -340,3 +340,50 @@ def test_multi_term_step_matches_single_term_and_adds_the_anchor():
     assert multi_two.distillation_loss == pytest.approx(multi_one.distillation_loss)
     none = student_training_step_multi(model, [batch], [states], [], parameters, latent_positions=6)
     assert none.distillation_loss is None
+
+
+def test_counterfactual_gate_modes_and_gated_step():
+    from src.mech.causal_subspace_distillation import (
+        counterfactual_gate, student_training_step_gated,
+    )
+
+    teacher, gold, readout = _synthetic_teacher(n=400)
+    pca = fit_teacher_pca(teacher)
+    g = torch.Generator().manual_seed(2)
+    student = teacher.clone()
+    student[:, 4:8] = torch.randn(teacher.shape[0], 4, generator=g) * 2.0
+    all_ = counterfactual_gate(student, teacher, gold, pca, [4, 5, 6, 7], readout, "all")
+    wrong = counterfactual_gate(student, teacher, gold, pca, [4, 5, 6, 7], readout, "wrong")
+    patch = counterfactual_gate(student, teacher, gold, pca, [4, 5, 6, 7], readout, "patch")
+    full = counterfactual_gate(student, teacher, gold, pca, None, readout, "patch")
+    assert bool(all_.all()) and 0 < int(wrong.sum()) < 400
+    assert bool((patch <= wrong).all()) and int(patch.sum()) > 0.5 * int(wrong.sum())
+    # the full-state patch restores the teacher exactly, so it fixes every wrong example the teacher gets right
+    _, teacher_right = gold_outcomes(teacher, gold, readout)
+    assert torch.equal(full, wrong & teacher_right)
+    # a set of inert directions fixes nothing
+    inert = counterfactual_gate(student, teacher, gold, pca, [0, 1, 2, 3], readout, "patch")
+    assert int(inert.sum()) < 0.1 * int(wrong.sum())
+    with pytest.raises(ValueError):
+        counterfactual_gate(student, teacher, gold, pca, None, readout, "sometimes")
+
+    model, tokenizer = _tiny_model(), CharTokenizer()
+    batch = collate_official_codi_kv_rows(tokenizer, ROWS, bot_token_id=model.bot_id)
+    states, golds = teacher_decision_states(model, batch)
+    pca_m = fit_teacher_pca(torch.randn(64, 16))
+    target = build_target(pca_m, torch.randn(64, 16), None)
+    readout_m = readout_matrix(model, vocab_limit=50)
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    kw = dict(latent_positions=6, gate_index_set=None, pca=pca_m, readout=readout_m)
+    everything = student_training_step_gated(model, [batch], [states], [golds], target, parameters, gate_mode="all", **kw)
+    plain = student_training_step(model, [batch], [states], target, parameters, latent_positions=6)
+    assert everything.gate_fraction == pytest.approx(1.0)
+    for a, b in zip(everything.gradients, plain.gradients):
+        if a is not None:
+            assert torch.allclose(a, b, atol=1e-6)
+    gated = student_training_step_gated(model, [batch], [states], [golds], target, parameters, gate_mode="wrong", **kw)
+    assert 0.0 <= gated.gate_fraction <= 1.0
+    if gated.gate_fraction == 0.0:
+        assert gated.distillation_loss is None and gated.distillation_scale == 0.0
+    else:
+        assert gated.distillation_loss is not None

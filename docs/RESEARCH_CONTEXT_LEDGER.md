@@ -4213,3 +4213,69 @@ Verdict as preregistered: **TIE**.
 > enough to close it. The remaining robustness run for the paper is the weights stage.
 > The trajectory-level test remains the only route on which an intervention-selected
 > target can differ from a gradient-selected one in principle.
+
+## 103. Preregistered: counterfactually gated distillation (copy only where the copy would fix the answer)
+
+Designed after §100–§102 and stated as such. Contract
+`official_codi_gated_distillation_v1`. Same repair regime, splits, teacher cache, PCA,
+damage (σ = 2.0), budget (1,000 steps), optimiser and test read as §94–§101; seeds 1–3,
+paired with the §100 runs of the same seeds through the published primary output.
+
+### Idea
+
+§100's addendum and §102 agree: every answer-directed target repairs the never-solved
+questions about as well as the full state, and the full state wins only by breaking
+fewer of the questions plain training already gets right. Breaks come from applying
+copying pressure to examples the student already answers correctly. So gate the
+copying term per example by an **intervention on the student's own state, computed in
+the training step from the forward pass already made**: patch the teacher's
+coordinates into the student's decision state in the arm's copying subspace, read out,
+and apply the copying loss only to examples whose first answer token flips from wrong
+to right under that patch. Examples already right receive no copying pressure;
+examples the patch cannot fix receive none either.
+
+The control that keeps the claim honest is an **error gate** that needs no
+intervention: copy where the student is currently wrong. If it matches the
+counterfactual gate, the intervention adds nothing and the result is example-selective
+distillation, not a causal method.
+
+### Arms (3 seeds each, ≈27 min per run, 12 runs ≈ 5.5 h)
+
+| arm | copies | gate (per example, per step) |
+|---|---|---|
+| `gated_causal` | §100 causal 12 directions | patch of those 12 flips wrong → right |
+| `gated_full` | all 768 | patch of the full state flips wrong → right (= student wrong ∧ teacher right) |
+| `wrong_causal` (control) | causal 12 | student currently wrong |
+| `wrong_full` (control) | all 768 | student currently wrong |
+
+Copying pressure remains norm-matched to the CE gradient per step (equal total pressure
+to every earlier arm); gating concentrates it on the gated examples. The gate fraction
+is logged every step and reported per curve point. Reference arms `none`, `full`,
+`causal`, `relevance` come from §100.
+
+### Gates (paired bootstrap over the 1,319 test questions, per-seed signs reported)
+
+- **G1** `gated_causal − full` > 0. **G2** `gated_full − full` > 0.
+- **G3** `gated_causal − wrong_causal` > 0. **G4** `gated_full − wrong_full` > 0
+  (does the counterfactual criterion beat the plain error criterion).
+- Also reported: each gated arm − `none`, − `causal`; `wrong_full − full`.
+- **Secondary, predicted in advance:** per seed against `none`, each gated arm breaks
+  < 25 questions (full: 35.0, causal: 40.3) while repairing ≥ 54 (within 5 of its
+  ungated counterpart).
+- Claims: `CONFIRMED` if (G1 or G2) passes with 3/3 seeds *and* the matching G3/G4
+  passes (the intervention matters); `SELECTIVE` if (G1 or G2) passes but the matching
+  control comparison covers zero (error gating suffices; positive but not causal);
+  `TIE` if every comparison against `full` covers zero within 3 points; else `PARTIAL`.
+
+### Go/no-go
+
+None beyond the inherited preliminary. The gate is cheap and its fraction is reported;
+a gate fraction below 5% or above 95% at step 0 is flagged in the summary as
+degenerate but does not stop the run.
+
+### Bounds
+
+Three seeds, MDE ≈ 2.5 points per seed; the repair/break decomposition is the sensitive
+read. One model, one damage mode, one pressure. If `wrong_full` matches `gated_full`,
+the honest claim is selective distillation by student error, which is prior art in
+spirit (selective KD by sample), and the write-up says so.
