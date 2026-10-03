@@ -82,6 +82,12 @@ from src.models.official_codi import (
 from src.utils.config import load_config
 
 
+def mean_observed_metric(window, key):
+    """Average defined observations; empty gates leave copying metrics undefined."""
+    values = [row[key] for row in window if row[key] is not None]
+    return sum(values) / len(values) if values else None
+
+
 CONTRACT = "official_codi_gated_distillation_v1"
 ARMS = ("gated_causal", "gated_full", "wrong_causal", "wrong_full")
 REFERENCE_ARMS = ("none", "full", "causal", "relevance", "random", "variance")
@@ -390,7 +396,7 @@ def run(args):
             if done % curve_every == 0 or done == steps:
                 metrics, _, _, _ = selection_metrics(model, tokenizer, selection_rows, **eval_kw)
                 model.train()
-                mean = lambda k: (sum(r[k] for r in window) / len(window)) if window and window[0][k] is not None else None
+                mean = lambda k: mean_observed_metric(window, k)
                 curve.append({"step": done, **metrics, "train_answer_loss": mean("answer_loss"),
                               "train_distillation_loss": mean("distillation_loss"),
                               "distillation_scale": mean("distillation_scale"), "gradient_cosine": mean("gradient_cosine"),

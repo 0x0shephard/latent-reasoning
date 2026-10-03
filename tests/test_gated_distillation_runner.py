@@ -15,8 +15,17 @@ from scripts.run_codi_gated_distillation import (  # noqa: E402
     claim_from,
     flips,
     gates_from,
+    mean_observed_metric,
     reference_correctness,
 )
+
+
+def test_metric_window_handles_empty_gates_in_any_position():
+    assert mean_observed_metric([], "loss") is None
+    assert mean_observed_metric([{"loss": None}], "loss") is None
+    assert mean_observed_metric([{"loss": 2.0}, {"loss": None}, {"loss": 4.0}], "loss") == 3.0
+    assert mean_observed_metric([{"loss": None}, {"loss": 2.0}], "loss") == 2.0
+    assert mean_observed_metric([{"loss": 0.0}, {"loss": None}], "loss") == 0.0
 
 
 def test_protocol_is_frozen():
