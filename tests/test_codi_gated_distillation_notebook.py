@@ -1,5 +1,6 @@
 import ast
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -25,6 +26,15 @@ def test_notebook_is_pinned_to_a_full_commit():
     commit = _builder_run_commit()
     assert len(commit) == 40 and set(commit) <= set("0123456789abcdef")
     assert f'RUN_COMMIT = "{commit}"' in _text()
+
+
+def test_pinned_runner_handles_empty_gate_metrics():
+    source = subprocess.run(
+        ["git", "show", f"{_builder_run_commit()}:scripts/run_codi_gated_distillation.py"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout
+    assert "mean_observed_metric(window, k)" in source
+    assert "window[0][k] is not None" not in source
 
 
 def test_notebook_exposes_controls_inputs_and_pairing():
