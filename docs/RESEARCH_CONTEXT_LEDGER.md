@@ -4640,3 +4640,100 @@ the first token even under a complete tail transplant.
 
 ≈ 55 first-token passes and 8 native decodes over 512 questions; 25–40 GPU minutes
 on a T4. 512 pairs give ≈ ±4 points on a change rate.
+
+## 109. Completed §108: the latent tail is a compute-store ladder. Odd thoughts act through their state, even positions through their layers 8–9 values; the terminal slot is nearly inert through both routes
+
+Run 2026-10-04, code `f8fa728`, official checkpoint, 512 §86-fit questions, the §106
+pairs, no training, 440 s. Baseline identical to §106: first-token accuracy 0.822,
+native exact match 0.805, 98.8% of pairs differ.
+
+### First-token change rate by slot and route
+
+| slot | hidden (state) | k | v | kv | v L0–7 | v L8–9 | v L10–11 | hidden+kv |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.137 | 0.162 | 0.402 | **0.424** | 0.035 | **0.326** | 0.070 | 0.422 |
+| 1 | **0.305** | 0.045 | 0.111 | 0.117 | 0.084 | 0.021 | 0.008 | 0.303 |
+| 2 | 0.168 | 0.111 | 0.238 | **0.238** | 0.043 | **0.150** | 0.064 | 0.393 |
+| 3 | **0.369** | 0.039 | 0.074 | 0.078 | 0.066 | 0.016 | 0.014 | 0.344 |
+| 4 | 0.059 | 0.109 | 0.299 | **0.275** | 0.057 | **0.203** | 0.064 | 0.303 |
+| 5 | 0.000 | 0.033 | 0.031 | 0.039 | 0.035 | 0.008 | 0.008 | 0.039 |
+
+All six slots at once: `hidden_all` 0.643 (accuracy 0.332); `k_all` 0.305; `v_all`
+0.684; `v_all_8_9` 0.568; `v_all_10_11` 0.160; `kv_all` 0.748 (accuracy 0.250);
+`hidden_kv_all` 0.748, numerically identical to `kv_all` in every statistic.
+Toward-donor share under the complete tail transplant: 0.047 (null 0.008).
+
+Native decoding (baseline exact match 0.805): slot 1 state swap changes 31.6%
+(→ 0.633), slot 1 K/V swap 12.3% (→ 0.770); slot 3 state 37.5% (→ 0.582), K/V 8.6%
+(→ 0.783); slot 5 state 0.0%, K/V 3.9% (→ 0.809); complete tail transplant 75.4%
+(→ 0.240), 4.1% of changed answers equal the donor's.
+
+| check | result |
+|---|---|
+| A1 replication | pass (0.305, 0.369, slot 5 state 0.000) |
+| A2 terminal slot is a memory (K/V ≥ 0.10) | **fail** (0.039) |
+| A3 route split at slots 1, 3 | state-dominant at both (2.6× and 4.7×) |
+| A4 values over keys | pass (0.111 vs 0.045; 0.074 vs 0.039; tail 0.684 vs 0.305) |
+| A5 layers 8–9 over 10–11 | pass (tail 0.568 vs 0.160) |
+| A6 tail transplant donor-directed | **fail** (0.047) |
+| sanity hidden+kv ≥ max(route) − 0.02 | **fail at slot 3 only** (0.344 vs 0.369, a 0.025 shortfall; slot 1 0.303 vs 0.305) |
+
+### Reading
+
+1. **The routes alternate by parity.** The state route is strong at the odd slots
+   (0.305, 0.369) and weak at the even ones (0.137, 0.168, 0.059); the cache route is
+   strong at the even slots (0.424, 0.238, 0.275) and weak at the odd ones (0.117,
+   0.078). Within the cache route the carrier is the values at layers 8–9 of the even
+   positions (0.326, 0.150, 0.203; layers 10–11 ≤ 0.07, layers 0–7 ≤ 0.06). This is
+   SCIT's layers 8–9 value carrier, replicated here with independent code and a
+   different pool, now with the positional structure SCIT reported not finding:
+   the carrier lives at even positions.
+2. **`kv_all` ≡ `hidden_kv_all` is an identity, not a coincidence.** Once every
+   latent position's K/V are the donor's, the recipient's own thought states have no
+   path to the answer: everything a state does, it does by shaping the K/V its
+   successors write, and the last state is discarded. The state route at an odd slot
+   is therefore fully mediated by the K/V downstream of it, which the table confirms:
+   slot 1's state effect (0.305) is realised as slots 2 and 4's layers 8–9 values.
+   The picture is a ladder: an odd thought computes, projects into the next even
+   position, and that position stores the result at layers 8–9, where the answer
+   decode reads it. The §55 "odd slots hold the values" and SCIT's "values at 8–9
+   carry the counterfactual" are the two halves of one mechanism.
+3. **Slot 5 is nearly inert through both routes.** Its state is discarded (0.000) and
+   its K/V move 3.9% of answers. The A2 prediction, that the terminal thought would
+   be consumed as a memory, is false: the sixth thought contributes almost nothing.
+   A monitor placed on z₆ in this architecture reads a position with no effect.
+4. **The latent tail is not a self-contained answer.** A complete tail transplant
+   changes three quarters of answers and drops accuracy to 0.25, yet only 4.7% of
+   changed answers become the donor's. The decode fuses the stored values with the
+   recipient's question tokens, so a foreign tail produces a wrong answer, not the
+   foreign answer. SCIT's near-perfect target win used same-template sources that
+   differ in one number; under unrelated pairs the question wins. This is Liang &
+   Pan's late fusion at the readout seen interventionally.
+5. **The slot-3 sub-additivity (0.025) is an interaction, not an error.** The
+   self-donor identity tests pin the index convention on both routes; swapping the
+   state and the K/V of one slot together can be more coherent than swapping either,
+   so a few pairs that flip under one route flip back under both. It is recorded as
+   the preregistered sanity flag firing by 0.5 of a point over slack.
+
+### Consequence for the monitoring question (§108 motivation)
+
+A linear monitor on CODI's final-layer slot states reads the causal object only at
+the odd slots. At the even slots it reads a state with a small effect (≤ 0.17)
+while the causal content is the layer 8–9 residual at the same position, and at the
+terminal slot it reads nothing that matters. Ramjee's "probe the early final-layer
+states" is a Coconut-trained heuristic; on CODI the right targets are parity- and
+depth-specific. This is a statement about where to read, not yet about what a
+monitor would detect; the §52 rule still bars correctness probes here.
+
+### What this adds to the paper and what it opens
+
+Added: the compute-store ladder (points 1–2), terminal-slot inertness through both
+routes (3), late fusion with the question (4), and an independent SCIT replication.
+
+Opened, in order of value: (a) a *directed* counterfactual on the store, replacing the
+unspecified §106 directedness test: same-template pairs differing in one intermediate
+value, swapping only the even position's layers 8–9 values, outcome = the counterfactual
+answer computed from the equation chain. That would show the store holds *the value*,
+not merely *an influence*. (b) The same audit on CODI LLaMA-1B, inference-only, as the
+§107 replication item, now with a specific prediction to test (parity alternation).
+(c) Not opened: any training on this structure (§107 stands).
