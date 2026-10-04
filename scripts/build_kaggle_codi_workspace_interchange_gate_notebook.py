@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_workspace_interchange_gate.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "c94d7f043c44c78915b437898f583a1bce1e677c"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -55,7 +55,7 @@ reproduction dataset.
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "c94d7f043c44c78915b437898f583a1bce1e677c"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""   # "" = discover under /kaggle/input
 OUTPUT_DIR = "/kaggle/working/codi_workspace_interchange_gate"
