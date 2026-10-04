@@ -353,6 +353,7 @@ def generate_official_codi(
     return_endpoint_metadata: bool = False,
     answer_state_observer=None,
     answer_logit_observer=None,
+    latent_state_hook=None,
 ) -> list[str] | tuple[list[str], dict]:
     """Greedy generation matching the released path, with optional causal KV edits.
 
@@ -364,6 +365,12 @@ def generate_official_codi(
     ``answer_logit_observer`` receives the corresponding vocabulary logits, active
     rows, and answer-token position.  It is intended for read-only fidelity audits;
     tensors are detached before the callback and generation decisions are unchanged.
+
+    ``latent_state_hook(state, latent_position, chunk_start)`` is an opt-in
+    intervention on the latent trajectory (ledger 105): it receives the last hidden
+    state of each thought ``[B, D]`` before the projector and must return the state to
+    project (the same tensor to observe only).  With the default ``None`` the path is
+    byte-for-byte the released one.
     """
     if latent_iterations <= 0:
         raise ValueError("latent_iterations must be positive")
@@ -425,9 +432,10 @@ def generate_official_codi(
             cache = latent_output.past_key_values
             if kv_intervention is not None:
                 cache = kv_intervention(cache, latent_position)
-            latent = model.prj(
-                latent_output.hidden_states[-1][:, -1, :].unsqueeze(1)
-            )
+            slot_state = latent_output.hidden_states[-1][:, -1, :]
+            if latent_state_hook is not None:
+                slot_state = latent_state_hook(slot_state, latent_position, start)
+            latent = model.prj(slot_state.unsqueeze(1))
 
         finished = torch.zeros(len(chunk), dtype=torch.bool, device=device)
         endpoint_applied = torch.zeros(len(chunk), dtype=torch.bool, device=device)

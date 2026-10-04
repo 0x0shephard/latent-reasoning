@@ -4349,3 +4349,61 @@ passed**; in substance every gated arm is indistinguishable from `none` and
 > coincide at a linear readout (§100, §102). The only untested route to a method is
 > trajectory-level interchange training, which is a different experiment with its own
 > go/no-go, and should be weighed against writing now.
+
+## 105. Preregistered go/no-go: does CODI's latent workspace mediate the answer under interchange, and do gradients disagree with interventions there?
+
+Designed after §100–§104 and stated as such. No training. Contract
+`official_codi_workspace_interchange_gate_v1`. This decides whether a trajectory-level
+interchange-intervention method (DIITO on the workspace slots) has anything to train
+on, and whether an intervention-selected trajectory target can differ from a
+gradient-selected one in principle. The official checkpoint only; GSM8k-Aug rows from
+the §86 fit split (no test rows); seeded derangement pairs so every question has a
+different donor.
+
+### Measurements (all on the unmodified official model)
+
+1. **Slot states.** Run the released latent path once on 512 questions and record the
+   last hidden state of each of the six thoughts before the projector; fit a PCA per
+   slot.
+2. **Interchange.** For each pair (A ← donor B) and each slot k, replace A's slot-k
+   state by `h_A + V_S V_Sᵀ (h_B − h_A)` and continue the forward pass. Subspaces:
+   full slot, and the slot's top-r PCs for r ∈ {12, 28, 64, 128}. Outcome: the first
+   answer token under the forced cue (cheap, same instrument as §86–§104) for every
+   condition; native greedy exact match additionally for the full-slot and the
+   rank-64 swaps at the odd slots.
+3. **Per-direction intervention effect.** At each odd slot, rank-1 interchange along
+   each of the first 64 PCs; effect = fraction of pairs whose first answer token
+   changes.
+4. **Per-direction gradient score.** At each odd slot, mean squared projection onto
+   the same 64 PCs of the gradient of the gold first-token log-probability (the §86
+   relevance selector moved to the trajectory).
+
+### Gates
+
+- **M1 slots matter:** full-slot interchange at each odd slot (1, 3, 5) changes the
+  first answer token for ≥ 30% of pairs.
+- **M2 low-rank mediation:** at each odd slot some r ≤ 64 reaches ≥ 50% of that
+  slot's full-swap change rate.
+- **M3 specificity:** at rank 64 and at full rank, mean odd-slot change rate ≥ 1.5×
+  mean even-slot change rate.
+- **M4 divergence:** at each odd slot, Spearman correlation between the per-PC
+  gradient score and the per-PC interchange effect ≤ 0.7.
+- Reported, not gated: directedness (share of changed answers that equal the donor's
+  own answer, against the derangement null); native-decoding change rates; the full
+  curves of change rate against rank.
+
+GO = M1 ∧ M2 ∧ M3 ∧ M4. STOP otherwise, with the failing gate named: M1 or M2 failing
+means there is no low-rank mediator to train on (the §58 risk realised at subspace
+level); M3 failing means the effect is not workspace-specific; M4 failing means
+gradients already rank the mediating directions correctly and the intervention-
+selected trajectory target cannot differ from the gradient one, which closes the
+method route on this model.
+
+### Cost and bounds
+
+≈ 25–35 GPU minutes. 512 questions and 512 pairs give ≈ ±4 points on a change rate.
+First-token-under-forced-cue is the primary instrument because it is cheap enough for
+the per-direction scans; native decoding is reported for the headline conditions.
+The Makelov subspace-patching illusion is noted: a change rate shows the subspace
+*affects* the answer, not that it *is* the variable; the directedness measure and the
+later training stage, if any, are the behavioural checks.
