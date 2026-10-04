@@ -4279,3 +4279,73 @@ Three seeds, MDE ≈ 2.5 points per seed; the repair/break decomposition is the 
 read. One model, one damage mode, one pressure. If `wrong_full` matches `gated_full`,
 the honest claim is selective distillation by student error, which is prior art in
 spirit (selective KD by sample), and the write-up says so.
+
+## 104. Completed §103: gating the copying term to the examples it would fix removes the anchoring and makes repair worse
+
+Run 2026-10-03/04, code `ec96cb6`, seeds 1–3, 12 runs, paired with §100. Step-0 gate
+fractions on the selection split: gated_causal 0.26, gated_full 0.38, wrong_* 0.49; none
+degenerate. Over training the gate fractions fell to ≈0.15 (gated_causal), ≈0.22
+(gated_full) and ≈0.28 (wrong_*) as the student repaired itself.
+
+### GSM8K test exact match (seeds 1–3)
+
+| arm | seed 1 | seed 2 | seed 3 | mean | repairs / breaks per seed vs none |
+|---|---|---|---|---|---|
+| none | 38.44 | 39.42 | 37.83 | 38.56 | — |
+| full | 40.56 | 40.71 | 39.95 | **40.41** | 59.3 / **35.0** |
+| causal | 40.56 | 40.18 | 39.04 | 39.93 | 58.3 / 40.3 |
+| gated_causal | 38.21 | 38.74 | 38.97 | 38.64 | 45.3 / 44.3 |
+| wrong_causal | 38.51 | 39.04 | 38.29 | 38.62 | 46.0 / 45.3 |
+| wrong_full | 38.44 | 39.27 | 37.83 | 38.51 | 49.3 / 50.0 |
+| gated_full | 37.53 | 37.91 | 38.13 | 37.86 | 40.3 / 49.7 |
+
+| comparison | mean | 95% CI | per seed |
+|---|---|---|---|
+| gated_causal − full (G1) | −1.77 | [−2.65, −0.86] | all negative |
+| gated_full − full (G2) | −2.55 | [−3.44, −1.67] | all negative |
+| gated_causal − wrong_causal (G3) | +0.03 | [−0.83, +0.86] | tie |
+| gated_full − wrong_full (G4) | −0.66 | [−1.47, +0.13] | 2/3 negative |
+| gated_causal − causal | −1.29 | [−2.10, −0.51] | all negative |
+| wrong_full − full | −1.90 | [−2.76, −1.04] | all negative |
+| gated_full − none | −0.71 | [−1.54, +0.15] | 2/3 negative |
+
+Predictions failed in both directions: breaks rose to 44–50 (predicted < 25) and
+repairs fell to 40–49 (predicted ≥ 54). Verdict as preregistered: **PARTIAL, no gate
+passed**; in substance every gated arm is indistinguishable from `none` and
+`gated_full` is below it.
+
+### Reading
+
+1. **The hypothesis behind §101–§103 is falsified.** Breaks are not caused by copying
+   pressure on already-correct examples. Removing that pressure *increased* breaks
+   (35 → 50 for the full target) and also *reduced* repairs. Copying on the examples the
+   student already gets right is what holds them in place while the rest of the model
+   is repaired: that is the anchoring component of the full-state loss, and it lives in
+   the correct examples, not in a set of directions.
+2. **The counterfactual gate adds nothing over the error gate** (G3 tie, G4 negative).
+   The intervention told us which examples a patch would fix, and training on only
+   those was no better than training on all currently-wrong examples. At the decision
+   state the student-side intervention is, again, uninformative beyond a cheap proxy.
+3. **Repairs also fell**, which the gating hypothesis did not predict. Two consistent
+   explanations: copying on correct examples teaches the geometry that neighbouring
+   wrong examples need (the student generalises from anchored examples), and
+   norm-matching concentrated the full CE-sized pressure on 15–30% of examples, which
+   over-drives them. The data do not separate these.
+4. **Taken with §100 and §102**, the decision-state picture is now complete and
+   consistent: the full-state loss works as teaching on wrong examples plus anchoring
+   on right ones; low-rank targets keep the teaching and lose the anchoring; gating
+   loses the anchoring too; no direction set or example set chosen by intervention,
+   on the teacher or the student, recovers it. The anchoring is a property of copying
+   *everything on everyone*.
+
+### Decision
+
+> Method development at the decision state is closed. Three preregistered attempts to
+> beat full-state copying with intervention-selected targets (§101/§102) or
+> intervention-gated examples (§103/§104) failed, each in a way that sharpened the
+> mechanism rather than the method. The write-up is the mechanism: variance ≠ function
+> (§40, §100), copying helps repair and hurts learning from scratch (§86–§100), the
+> full state wins by anchoring correct examples (§100 addendum, §104), selectors
+> coincide at a linear readout (§100, §102). The only untested route to a method is
+> trajectory-level interchange training, which is a different experiment with its own
+> go/no-go, and should be weighed against writing now.
