@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_cache_carrier_audit.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "f8fa7281a0bbc60a158460c412a098fc13c6a0da"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -53,7 +53,7 @@ Reported as a profile, not a single go/no-go. Attach only the official reproduct
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "f8fa7281a0bbc60a158460c412a098fc13c6a0da"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""   # "" = discover under /kaggle/input
 OUTPUT_DIR = "/kaggle/working/codi_cache_carrier_audit"
