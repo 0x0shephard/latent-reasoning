@@ -4407,3 +4407,18 @@ the per-direction scans; native decoding is reported for the headline conditions
 The Makelov subspace-patching illusion is noted: a change rate shows the subspace
 *affects* the answer, not that it *is* the variable; the directedness measure and the
 later training stage, if any, are the behavioural checks.
+
+### §105 amendment: the terminal thought's output state is architecturally inert
+
+The first smoke run failed in the gradient scan at slot 5 with "differentiated tensor
+not used in the graph", which is correct: in the released path the sixth thought's
+hidden state is projected and then discarded, because the next input is the
+end-of-thought token (or the forced cue), not the projection. Slot 5's *output* state
+therefore cannot influence the answer; only its K/V, computed from slot 4's projected
+state, can. This also bears on §55: the values read from thought 5 are epiphenomenal
+with respect to the answer, whereas those at thoughts 1 and 3 feed forward.
+
+Amendment before any counted read: the feeding odd slots are **1 and 3**; M1, M2 and
+M4 apply to them; M3 compares them with slots 0, 2, 4. Slot 5 is still swept and is
+reported as a built-in negative control whose change rate must be exactly zero. The
+gradient scan tolerates the unused state and returns zeros for it. Thresholds unchanged.

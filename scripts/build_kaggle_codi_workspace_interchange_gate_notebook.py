@@ -43,13 +43,15 @@ training on the trajectory, this notebook asks the official model three question
 
 | gate | threshold |
 |---|---|
-| M1 slots matter | full-slot swap at each odd slot changes the first answer token for ≥ 30% of pairs |
+| M1 slots matter | full-slot swap at each feeding odd slot (1, 3) changes the first answer token for ≥ 30% of pairs |
 | M2 low-rank mediation | some rank ≤ 64 reaches ≥ 50% of the full-slot change rate at each odd slot |
 | M3 specificity | mean odd-slot change rate ≥ 1.5× mean even-slot change rate, at rank 64 and at full rank |
 | M4 divergence | Spearman(gradient score, interchange effect) over the first 64 PCs ≤ 0.7 at each odd slot |
 
-**GO = all four.** Each failing gate names what it closes. Attach only the official
-reproduction dataset.
+**GO = all four.** Each failing gate names what it closes. Slot 5 is the terminal thought:
+the released path projects its state and then feeds the end-of-thought token, so its output
+state cannot affect the answer. It is swept as a built-in negative control (its change rate
+must be zero) and excluded from the gates. Attach only the official reproduction dataset.
 """)
 
 md("## Setup")
@@ -152,7 +154,7 @@ for k, s in slots.items():
 axes[0].set(xscale="log", xlabel="interchanged rank (PCs of the slot state)", ylabel="first-token change rate",
             title="odd slots (orange) vs even slots (grey)")
 axes[0].legend(fontsize=7, ncol=2)
-for k in ("1", "3", "5"):
+for k in ("1", "3"):
     s = slots[k]
     if s.get("per_direction_change_rate"):
         axes[1].scatter(s["per_direction_gradient_score"], s["per_direction_change_rate"], s=14, alpha=0.7, label=f"slot {k}  rho={s['spearman_gradient_vs_intervention']:.2f}")
@@ -162,14 +164,15 @@ axes[1].legend(fontsize=8)
 plt.show()
 
 native_rows = []
-for k in ("1", "3", "5"):
+for k in ("1", "3"):
     for label, v in slots[k].get("native", {}).items():
         native_rows.append({"slot": int(k), "swap": label, "native change rate": round(v["change_rate"], 3),
                             "exact match under swap": round(v["exact_match"], 3),
                             "equals donor's answer (among changed)": round(v["equals_donor_answer_among_changed"], 3)})
+print("terminal slot 5 change rate (must be 0):", slots["5"]["first_token"]["full"]["change_rate"])
 print("native decoding, odd slots (baseline exact match", round(summary["baseline"]["native_exact_match"], 3), ")")
 display(pd.DataFrame(native_rows))
-for k in ("1", "3", "5"):
+for k in ("1", "3"):
     print(f"slot {k}: top-8 PCs by intervention {slots[k]['top8_by_intervention']} | by gradient {slots[k]['top8_by_gradient']}")
 display(pd.DataFrame([summary["gate"]]).T.rename(columns={0: "value"}))
 ''')

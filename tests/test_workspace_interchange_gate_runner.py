@@ -13,6 +13,7 @@ from scripts.run_codi_workspace_interchange_gate import (  # noqa: E402
     M4_MAX_SPEARMAN,
     ODD_SLOTS,
     QUESTIONS,
+    TERMINAL_SLOT,
     RANKS,
     claim_from,
     gates_from,
@@ -22,7 +23,7 @@ from scripts.run_codi_workspace_interchange_gate import (  # noqa: E402
 def test_protocol_is_frozen():
     assert CONTRACT == "official_codi_workspace_interchange_gate_v1"
     assert (QUESTIONS, CANDIDATES, RANKS) == (512, 64, (12, 28, 64, 128))
-    assert (ODD_SLOTS, EVEN_SLOTS) == ((1, 3, 5), (0, 2, 4))
+    assert (ODD_SLOTS, EVEN_SLOTS, TERMINAL_SLOT) == ((1, 3), (0, 2, 4), 5)
     assert (M1_MIN_CHANGE, M2_SHARE_OF_FULL, M2_MAX_RANK, M3_ODD_OVER_EVEN, M4_MAX_SPEARMAN) == (0.30, 0.50, 64, 1.5, 0.70)
 
 
@@ -31,13 +32,16 @@ def _report(odd_full=0.5, odd_64=0.3, even_full=0.2, even_64=0.1, rho=0.3):
         return {"first_token": {"12": {"change_rate": r64 / 2}, "28": {"change_rate": r64 * 0.8},
                                 "64": {"change_rate": r64}, "128": {"change_rate": r64 * 1.1}, "full": {"change_rate": full}},
                 "spearman_gradient_vs_intervention": rho if is_odd else None}
-    return {"slots": {str(k): slot(odd_full, odd_64, True) for k in (1, 3, 5)}
-            | {str(k): slot(even_full, even_64, False) for k in (0, 2, 4)}}
+    return {"slots": {str(k): slot(odd_full, odd_64, True) for k in (1, 3)}
+            | {str(k): slot(even_full, even_64, False) for k in (0, 2, 4)}
+            | {"5": slot(0.0, 0.0, False)}}
 
 
 def test_gates_and_claims():
     g = gates_from(_report())
-    assert g == {"m1_slots_matter": True, "m2_low_rank_mediation": True, "m3_specificity": True, "m4_divergence": True, "go": True}
+    assert {k: g[k] for k in ("m1_slots_matter", "m2_low_rank_mediation", "m3_specificity", "m4_divergence", "go")} == \
+        {"m1_slots_matter": True, "m2_low_rank_mediation": True, "m3_specificity": True, "m4_divergence": True, "go": True}
+    assert g["terminal_slot_inert"] is True
     assert claim_from(g).startswith("GO")
     g = gates_from(_report(odd_full=0.2))
     assert not g["m1_slots_matter"] and claim_from(g).startswith("STOP: the odd slots do not change")

@@ -141,7 +141,9 @@ def slot_gradient_scores(model, tokenizer, rows: Sequence[dict], *, latent_posit
             logits, gold, state = _latent_path_first_token_logits(model, batch, latent_positions=latent_positions,
                                                                   grad_slot=slot)
             log_prob = F.log_softmax(logits.float(), dim=-1).gather(1, gold[:, None]).sum()
-            grad, = torch.autograd.grad(log_prob, state)
+            grad, = torch.autograd.grad(log_prob, state, allow_unused=True)
+        if grad is None:  # the terminal slot's output state is never consumed by the released path
+            grad = torch.zeros_like(state)
         proj = grad.detach().float() @ basis
         total += (proj ** 2).sum(0).double().cpu()
         n += grad.shape[0]

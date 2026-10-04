@@ -60,3 +60,10 @@ def test_first_token_outcomes_and_gradient_scores_on_tiny_model():
     scores = slot_gradient_scores(model, tokenizer, rows, latent_positions=6, slot=3, pca=pca, batch_size=2,
                                   device=torch.device("cpu"), candidates=5)
     assert scores.shape == (5,) and bool(torch.isfinite(scores).all()) and bool((scores >= 0).all())
+    # the terminal slot's output state is never consumed, so its gradient is exactly zero
+    terminal = slot_gradient_scores(model, tokenizer, rows, latent_positions=6, slot=5, pca=pca, batch_size=2,
+                                    device=torch.device("cpu"), candidates=5)
+    assert bool((terminal == 0).all())
+    swapped5, _ = first_token_outcomes(model, tokenizer, rows, latent_positions=6, batch_size=2, device=torch.device("cpu"),
+                                       slot=5, donor_states=donors, basis=None)
+    assert torch.equal(swapped5, pred)

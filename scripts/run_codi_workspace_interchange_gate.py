@@ -57,8 +57,10 @@ CONTRACT = "official_codi_workspace_interchange_gate_v1"
 QUESTIONS = 512
 CANDIDATES = 64
 RANKS = (12, 28, 64, 128)
-ODD_SLOTS = (1, 3, 5)
+ODD_SLOTS = (1, 3)            # odd slots whose output state feeds the next thought
 EVEN_SLOTS = (0, 2, 4)
+TERMINAL_SLOT = 5             # its output state is projected but never consumed by the released path
+TERMINAL_MAX_CHANGE = 0.0
 NATIVE_RANK = 64
 M1_MIN_CHANGE = 0.30
 M2_SHARE_OF_FULL = 0.50
@@ -72,6 +74,7 @@ SMOKE = {"questions": 24, "candidates": 6, "ranks": (4, 8), "native_rank": 8}
 def gates_from(report: dict) -> dict:
     odd = [report["slots"][str(k)] for k in ODD_SLOTS]
     even = [report["slots"][str(k)] for k in EVEN_SLOTS]
+    terminal = report["slots"].get(str(TERMINAL_SLOT))
     full_rate = lambda s: s["first_token"]["full"]["change_rate"]
     best_low = lambda s: max((v["change_rate"] for r, v in s["first_token"].items()
                               if r != "full" and int(r) <= M2_MAX_RANK), default=0.0)
@@ -80,18 +83,20 @@ def gates_from(report: dict) -> dict:
         "m1_slots_matter": all(full_rate(s) >= M1_MIN_CHANGE for s in odd),
         "m2_low_rank_mediation": all(best_low(s) >= M2_SHARE_OF_FULL * full_rate(s) for s in odd),
         "m3_specificity": (
-            sum(full_rate(s) for s in odd) / 3 >= M3_ODD_OVER_EVEN * max(1e-9, sum(full_rate(s) for s in even) / 3)
-            and sum(rank_rate(s, M2_MAX_RANK) for s in odd) / 3
-            >= M3_ODD_OVER_EVEN * max(1e-9, sum(rank_rate(s, M2_MAX_RANK) for s in even) / 3)),
+            sum(full_rate(s) for s in odd) / len(odd) >= M3_ODD_OVER_EVEN * max(1e-9, sum(full_rate(s) for s in even) / len(even))
+            and sum(rank_rate(s, M2_MAX_RANK) for s in odd) / len(odd)
+            >= M3_ODD_OVER_EVEN * max(1e-9, sum(rank_rate(s, M2_MAX_RANK) for s in even) / len(even))),
         "m4_divergence": all(s["spearman_gradient_vs_intervention"] is not None
                              and s["spearman_gradient_vs_intervention"] <= M4_MAX_SPEARMAN for s in odd),
     }
     gate["go"] = all(gate.values())
+    # reported, not gated: the terminal slot's output state must be inert by construction
+    gate["terminal_slot_inert"] = None if terminal is None else full_rate(terminal) <= TERMINAL_MAX_CHANGE
     return gate
 
 
 def claim_from(gate: dict) -> str:
-    if gate["go"]:
+    if gate.get("go"):
         return "GO: the odd slots mediate the answer through a low-rank subspace, specifically, and gradients rank the mediating directions differently from interventions"
     failed = [k for k in ("m1_slots_matter", "m2_low_rank_mediation", "m3_specificity", "m4_divergence") if not gate[k]]
     reasons = {"m1_slots_matter": "the odd slots do not change the answer under full interchange",
@@ -205,13 +210,15 @@ def run(args):
     summary = {"schema_version": 1, "contract": contract, "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
                "preregistration": {"questions": len(rows), "candidates": candidates, "ranks": list(ranks), "native_rank": native_rank,
-                                   "odd_slots": list(ODD_SLOTS), "even_slots": list(EVEN_SLOTS), "pair_seed": PAIR_SEED,
+                                   "odd_slots": list(ODD_SLOTS), "even_slots": list(EVEN_SLOTS), "terminal_slot": TERMINAL_SLOT,
+                                   "pair_seed": PAIR_SEED,
                                    "m1_min_change": M1_MIN_CHANGE, "m2_share_of_full": M2_SHARE_OF_FULL, "m2_max_rank": M2_MAX_RANK,
                                    "m3_odd_over_even": M3_ODD_OVER_EVEN, "m4_max_spearman": M4_MAX_SPEARMAN,
                                    "data_seed": DATA_SEED, "sampling_hash_fit": sampling["hashes"]["fit"]},
                "baseline": baseline, "report": report, "gate": gate,
                "decision": {"claim": claim_from(gate)}, "seconds": time.perf_counter() - started,
                "warnings": ["Official checkpoint only; no training. First-token-under-forced-cue is the primary instrument; native decoding is reported for the odd slots.",
+                            "Slot 5 is the terminal thought: the released path projects its state and then feeds the end-of-thought token, so its output state cannot affect the answer; it is reported as a negative control, not gated.",
                             "A change rate shows a subspace affects the answer, not that it is the variable (subspace-patching illusion); directedness is reported."]}
     _atomic_json(summary, out / "summary.json")
     print(json.dumps({"gate": gate, "decision": summary["decision"]}, indent=2))
