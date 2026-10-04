@@ -4422,3 +4422,71 @@ Amendment before any counted read: the feeding odd slots are **1 and 3**; M1, M2
 M4 apply to them; M3 compares them with slots 0, 2, 4. Slot 5 is still swept and is
 reported as a built-in negative control whose change rate must be exactly zero. The
 gradient scan tolerates the unused state and returns zeros for it. Thresholds unchanged.
+
+## 106. Completed §105: STOP on divergence. The feeding odd slots mediate the answer through a low-rank subspace, but gradients rank those directions almost as the interventions do
+
+Run 2026-10-04, code `0870f8e`, official checkpoint, 512 §86-fit questions, seeded
+derangement pairs, no training. Baseline on the pool: first-token accuracy 0.822,
+native exact match 0.805; 98.8% of pairs have different first answer tokens.
+
+### Interchange change rate of the first answer token (forced cue)
+
+| slot | rank 12 | 28 | 64 | 128 | full | Spearman(gradient, intervention) |
+|---|---|---|---|---|---|---|
+| 0 (even) | 0.131 | 0.133 | 0.135 | 0.133 | 0.137 | — |
+| **1 (odd, feeds)** | 0.127 | 0.281 | 0.307 | 0.305 | 0.305 | **0.71** |
+| 2 (even) | 0.137 | 0.154 | 0.164 | 0.166 | 0.168 | — |
+| **3 (odd, feeds)** | 0.168 | 0.322 | 0.359 | 0.361 | 0.369 | **0.72** |
+| 4 (even) | 0.049 | 0.057 | 0.059 | 0.055 | 0.059 | — |
+| 5 (terminal) | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | — |
+
+Native decoding at the odd slots: slot 1 full swap changes 31.6% of answers (exact
+match 0.805 → 0.633); slot 3 full swap changes 37.5% (→ 0.582); rank 64 matches full
+at both slots.
+
+| gate | result |
+|---|---|
+| M1 slots matter (≥ 0.30 at slots 1 and 3) | pass (0.305, 0.369) |
+| M2 low-rank mediation (rank ≤ 64 ≥ half of full) | pass (rank 28 already carries 92% / 87% of the full effect) |
+| M3 specificity (odd ≥ 1.5× even) | pass (≈ 0.34 vs ≈ 0.12, 2.8×) |
+| M4 divergence (Spearman ≤ 0.70) | **fail** (0.71, 0.72) |
+| terminal slot inert | confirmed (0.000 everywhere) |
+
+Top-8 directions by intervention vs by gradient share 5 of 8 at slot 1 and 6 of 8 at
+slot 3.
+
+### Reading
+
+1. **The workspace is causal where the architecture lets it be.** Thoughts 1 and 3
+   change roughly a third of answers when swapped, three times the even slots, and a
+   28-dimensional subspace of each slot carries nearly all of that effect. This is the
+   first interventional confirmation of §55 at the subspace level, and it localises
+   the §58 "readable but not writable" result: the slots are writable as *states*,
+   while the token-readout directions §58 wrote along were not the mediating ones.
+2. **The terminal thought is inert by construction** (0.000 at every rank): the
+   released path discards its projected state. The §55 values read from thought 5 are
+   epiphenomenal to the answer.
+3. **M4 fails, narrowly but as preregistered.** At ρ ≈ 0.71 the gradient score ranks
+   the mediating directions nearly as the interventions do, and the top sets overlap
+   by 5–6 of 8. The divergence that would let an intervention-selected trajectory
+   target beat a gradient-selected one is modest, well short of what the decision-
+   state tie (§100, §102) and the effect sizes seen throughout would need. The route
+   is closed on this model under the rule set in advance; loosening the threshold
+   after seeing 0.71 is exactly the move §82 forbids.
+4. **The directedness metric was mis-specified and is uninformative.** "Changed
+   answer equals the donor's final answer" was 0.0 at every condition, but under
+   genuine transport of one intermediate value the correct counterfactual is A's
+   question with B's intermediate, not B's answer, so 0.0 is expected either way. A
+   proper test needs the counterfactual computed from the equation chain. It is
+   recorded as not done; it does not bear on the gates.
+
+### Decision
+
+> The trajectory-level method route is closed on CODI GPT-2: the mediating subspace
+> exists and is low-rank, but gradients find it almost as well as interventions do,
+> so an intervention-selected trajectory target cannot be expected to differ
+> materially from a gradient-selected one. With §100, §102 and §104 this completes
+> the method question in the negative at both the decision state and the trajectory.
+> The write-up is the mechanism paper, now with two new interventional facts: feeding
+> odd slots mediate ~a third of answers through a rank-28 subspace, and the terminal
+> slot is causally inert.
