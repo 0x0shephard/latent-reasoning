@@ -4490,3 +4490,72 @@ slot 3.
 > The write-up is the mechanism paper, now with two new interventional facts: feeding
 > odd slots mediate ~a third of answers through a rank-28 subspace, and the terminal
 > slot is causally inert.
+
+## 107. Assessment and decision point (2026-10-04): the method angle is closed; write the mechanism paper and replicate it at 1B
+
+### What stands (confirmed, preregistered or replicated)
+
+| finding | section | evidence |
+|---|---|---|
+| A 28-direction low-variance band of the final state carries the answer | §40 | band retains 88% of accuracy; the 4 loudest directions retain 6% |
+| The latent thoughts are a workspace of intermediate values | §55 | 31% verbatim recovery vs 5.6% null, odd slots only; wrong answers have wrong workspaces |
+| A rank-96 head keeps 98.4% of accuracy and depends on the band; no end-to-end speedup | §65–§67 | band removal drops it to 8.5%; 1.004× latency |
+| The KV cache has no fixed low-rank core; compressibility is per request | §79, §83 | 34–55 of 64 directions per head needed; allocation ties plain xKV where the model is intact |
+| Decision-state copying hurts a from-scratch student and helps a damaged one | §86–§90, §100 | consistent sign in every seed, both regimes |
+| The full state wins by anchoring already-correct examples, not by teaching | §100 addendum, §104 | repairs equal across targets, breaks differ; removing copying on correct examples raises breaks |
+| Variance directions ≈ random; answer-directed selection helps; benefit tracks gradient alignment | §100 | five seeds; Pearson 0.97 across arms |
+| Intervention- and gradient-selected directions coincide at the readout and nearly so at the slots | §100, §102, §106 | 8 of 12 shared; Spearman 0.71–0.72 at slots 1 and 3 |
+| Thoughts 1 and 3 mediate ≈ one third of answers through a rank-28 subspace; thought 6 is inert | §106 | interchange on the official model; 0.000 at slot 5 |
+
+### What is closed, and why
+
+Every method attempt is closed by a preregistered gate: fixed-basis KV compression
+(§83), trajectory supervision on the converged model (§85), intervention-selected
+decision-state targets (§86–§100), student-side patch selection with an anchor
+(§101–§102), counterfactual gating (§103–§104), and the trajectory-level route
+(§105–§106). The structural reason is now explicit: wherever the target feeds a linear
+readout, interventions and gradients agree; at the one nonlinear location they agree
+to 0.71. The last three attempts moved accuracy by ≈ 0.5 points against a seed spread
+of 0.6–0.8. No remaining design on this model changes either fact.
+
+### Publishability
+
+- As it stands: a mechanism paper for an ICLR 2027 workshop, BlackboxNLP, or TMLR,
+  with the preregistered chain as part of the contribution and the negative method
+  results presented as evidence in the arc.
+- Overlap to declare: Quemy 2026 (function vs variance) and the CODI paper's own
+  decoding section anticipate parts of §40 and §55; ours is the interventional
+  confirmation, the distillation consequences, and the anchoring decomposition.
+- What lifts it a tier: the same three inference-only measurements (band retention,
+  workspace interchange, terminal-slot inertness) on the released CODI LLaMA-3.2-1B
+  checkpoint, ≈ 5–10 GPU hours, no training. Findings/COLM territory if they hold.
+- What does not help: further training arms on GPT-2, out-of-distribution reads of
+  the repair runs, any further selector or anchor variant.
+
+### Decision
+
+> 1. Write the mechanism paper now; all tables come from this ledger.
+> 2. Run the 1B inference-only replication of §40, §106 and the terminal-slot result.
+> 3. Optional, only after 1–2 and only because it is the thesis question: endpoint
+>    copying vs endpoint + rank-28 copying at slots 1 and 3, repair regime, three
+>    seeds (≈ 4 h). No prediction is made.
+> 4. Do not run the §94 weights stage, the LoRA-half damage, or any anchor variant;
+>    they were robustness checks for a method claim that no longer exists.
+>
+> The next chapter's question should have a plausibly large effect size, a second
+> model from the start, and no dependence on beating a baseline by a point. One
+> finding-driven candidate: the released path discards the sixth thought's projection
+> (§106); whether feeding it, or training with five thoughts, changes accuracy is a
+> cheap architectural question with an efficiency payoff. Recorded as an example of
+> the shape, not as a commitment.
+
+### Standing additions to §17
+
+- Before preregistering a selector or target comparison, check whether the target
+  feeds a linear map; if it does, intervention- and gradient-based selection coincide
+  and the comparison is uninformative.
+- Any intervention on a latent slot must check that the slot's output is consumed by
+  the architecture (§105 amendment); the released CODI path discards the terminal
+  projection.
+- A directedness or counterfactual metric must state the correct counterfactual
+  outcome before the run (§106 item 4).
