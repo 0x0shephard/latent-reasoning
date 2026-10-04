@@ -4559,3 +4559,84 @@ of 0.6–0.8. No remaining design on this model changes either fact.
   projection.
 - A directedness or counterfactual metric must state the correct counterfactual
   outcome before the run (§106 item 4).
+
+## 108. Preregistered audit: which route carries a thought's effect, its projected state or its K/V? (cache-carrier audit, no training)
+
+Designed 2026-10-04 after the review of Ramjee (ICLR 2026 LIT workshop, arXiv
+2604.23460) and SCIT (Ding, Huang & Yang, EMNLP 2026, arXiv 2608.27265), recorded in
+[`PAPER_REVIEW_ULTERIOR_MOTIVES_AND_DIRECTIONS.md`](PAPER_REVIEW_ULTERIOR_MOTIVES_AND_DIRECTIONS.md).
+Contract `official_codi_cache_carrier_audit_v1`. Official checkpoint only. The paper's
+backdoored model is not released (code and data only), so nothing on MoralChain can be
+done without training; this is the direction that needs none.
+
+### Why
+
+Every thought slot acts on the answer by two routes that §105–§106 did not separate:
+(a) its output state, projected and fed as the next thought's input, and (b) the K/V it
+writes at every layer, which every later position attends to. §106 swapped route (a)
+only: slots 1 and 3 changed 31–37% of first tokens, slot 5 changed none because its
+projected state is discarded. SCIT swapped route (b) only on the same checkpoint and
+found the counterfactual carried by the value cache of layers 8–9, with the current
+hidden state and the keys weak. The two are consistent only if slot 5, inert as a
+state, is alive as a memory, and if the odd slots' effect divides between the routes
+in some measurable way. A linear monitor (Ramjee, ThoughtSteer) reads route (a)'s
+state; this audit measures whether that is the object that carries the computation.
+
+Not included, by the §52 standing rule: a correctness probe on the value cache. V at
+layer ℓ is a fixed linear map of the layer-ℓ residual at the same position, which §52
+already probed in all 78 cells; it is not a new information source.
+
+### Design
+
+Same pool as §105: 512 §86-fit questions, the same seeded derangement pairs
+(`PAIR_SEED`), the first-answer-token-under-forced-cue instrument on the
+teacher-forced latent path, plus native greedy decoding for the headline conditions.
+One recording pass stores, per question and slot, the pre-projector state and the K
+and V written at all 12 layers. Conditions, each a full pass over the 512 pairs:
+
+| condition | what is replaced by the donor's, at slot s |
+|---|---|
+| `hidden` | the output state fed to the projector (route a; §106 replication) |
+| `k`, `v`, `kv` | keys only / values only / both, all layers (route b) |
+| `v_layers_0_7`, `v_layers_8_9`, `v_layers_10_11` | values at SCIT's predeclared layer groups |
+| `hidden_kv` | both routes: the whole position |
+
+Swept at every slot 0–5, and as **tail** conditions applied at all six slots at once
+(`hidden_all`, `k_all`, `v_all`, `kv_all`, `v_all_8_9`, `hidden_kv_all`; the last is a
+complete transplant of the donor's latent tail under the recipient's question, SCIT's
+main condition). Outcomes per condition: change rate of the first token, accuracy,
+share of changed answers equal to the donor's own first token, and the derangement
+null for that share. Native decoding: `hidden` and `kv` at slots 1, 3 and 5, and
+`kv_all`, `hidden_kv_all`.
+
+### Preregistered checks (reported as a profile; no single go/no-go)
+
+- **A1 replication.** `hidden` at slots 1 and 3 ≥ 0.25 change; `hidden` at slot 5 = 0.
+- **A2 the terminal slot is a memory.** `kv` at slot 5 ≥ 0.10 change. If this holds,
+  "slot 5 is inert" (§106) is a statement about the state route only.
+- **A3 route split at the feeding slots.** For slots 1 and 3, classify
+  `kv` ≥ 1.5 × `hidden` as cache-dominant, `hidden` ≥ 1.5 × `kv` as state-dominant,
+  otherwise shared. No direction is predicted; the classification rule is fixed now.
+- **A4 values over keys.** `v` ≥ `k` at a majority of {slot 1, slot 3, slot 5, tail}.
+  SCIT's direction.
+- **A5 layer localisation.** At the tail, `v_all_8_9` ≥ the layers 10–11 group
+  applied at all slots; reported per slot as well. SCIT's direction.
+- **A6 tail transplant is donor-directed.** `hidden_kv_all`: share of changed answers
+  equal to the donor's own first token ≥ 0.50 and ≥ null + 0.30. This is the one
+  condition where "the donor's answer" is the right counterfactual (the entire latent
+  tail is the donor's), so the §106 directedness caveat does not apply to it.
+- **Sanity.** `hidden_kv` ≥ max(`hidden`, `kv`) − 0.02 at every slot.
+
+Reading rules fixed now. A2 passing with A1 is the headline: the slot the architecture
+discards as a thought is consumed as a memory, and a monitor reading slot states reads
+the wrong object there. A3 cache-dominant at slots 1 and 3 says the same for the
+feeding slots; state-dominant says the §106 picture stands and SCIT's carrier is
+downstream of the state. A4–A5 failing means SCIT's value/layer localisation does not
+hold under single-slot swaps on this pool, which is itself a reportable limit of their
+claim. A6 failing means the recipient's question tokens, not the latent tail, decide
+the first token even under a complete tail transplant.
+
+### Cost
+
+≈ 55 first-token passes and 8 native decodes over 512 questions; 25–40 GPU minutes
+on a T4. 512 pairs give ≈ ±4 points on a change rate.
