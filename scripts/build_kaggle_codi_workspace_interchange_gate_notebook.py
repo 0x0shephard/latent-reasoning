@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_workspace_interchange_gate.ipynb"
-RUN_COMMIT = "c94d7f043c44c78915b437898f583a1bce1e677c"
+RUN_COMMIT = "0870f8eb0fae14c7452234f8232eaefcd44b9f42"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -57,7 +57,7 @@ must be zero) and excluded from the gates. Attach only the official reproduction
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "c94d7f043c44c78915b437898f583a1bce1e677c"
+RUN_COMMIT = "0870f8eb0fae14c7452234f8232eaefcd44b9f42"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""   # "" = discover under /kaggle/input
 OUTPUT_DIR = "/kaggle/working/codi_workspace_interchange_gate"
