@@ -3,7 +3,16 @@ import pytest
 pytest.importorskip("torch")
 
 from scripts.run_codi_directed_counterfactual import (  # noqa: E402
+    CANDIDATE_LIMIT_LONG,
     CONTRACT,
+    CONTRACT_LONG,
+    E1_MIN_TAIL_KV,
+    E2_MIN_STATE,
+    E3_MIN_SITE,
+    E3_MIN_UNIQUE,
+    EXTRA_ROWS,
+    MIN_STEPS_LONG,
+    PROFILES,
     D1_MIN_TAIL,
     D2_MIN_EVEN,
     D3_MIN_LOCATED,
@@ -13,7 +22,9 @@ from scripts.run_codi_directed_counterfactual import (  # noqa: E402
     SINGLE_CONDITIONS,
     TAIL_CONDITIONS,
     checks_from,
+    checks_long_from,
     claim_from,
+    claim_long_from,
     condition_spec,
 )
 
@@ -71,3 +82,37 @@ def test_checks_and_claim():
     assert not c["d4_layer_control"]
     c = checks_from(_report(odd=0.4))
     assert not c["d2_even_store"]
+
+
+def test_long_profile_is_frozen_and_standard_unchanged():
+    assert CONTRACT_LONG == "official_codi_directed_counterfactual_long_v1"
+    assert (EXTRA_ROWS, CANDIDATE_LIMIT_LONG, MIN_STEPS_LONG) == (14_336, 1_536, 3)
+    assert (E1_MIN_TAIL_KV, E2_MIN_STATE, E3_MIN_SITE, E3_MIN_UNIQUE) == (0.5, 0.25, 0.3, 20)
+    assert PROFILES["standard"] == {"contract": CONTRACT, "min_steps": 1, "extra_rows": 0, "prefer_latest_step": False,
+                                    "candidate_limit": 1_024}
+    assert PROFILES["long"] == {"contract": CONTRACT_LONG, "min_steps": 3, "extra_rows": 14_336, "prefer_latest_step": True,
+                                "candidate_limit": 1_536}
+
+
+def _long_report(tail_kv=0.6, state1=0.3, state3=0.2, site=0.5, elsewhere=0.1, kv_site=0.4, kv_else=0.1, n=40):
+    def o(t):
+        return {"target": t, "retain": 1 - t - 0.1, "other": 0.1, "n": 100}
+    conds = {"kv_all": {"all": o(tail_kv)}, "state_1": {"all": o(state1)}, "state_3": {"all": o(state3)}}
+    spec = {str(s): {"n": n, "state_at_site": o(site), "state_elsewhere": {str(3 if s == 1 else 1): o(elsewhere)},
+                     "store_at_site": o(0.1), "store_elsewhere": {str(4 if s == 1 else 2): o(0.1)},
+                     "kv_store_at_site": o(kv_site), "kv_store_elsewhere": {str(4 if s == 1 else 2): o(kv_else)}} for s in (1, 3)}
+    return {"conditions": conds, "unique_specificity": spec}
+
+
+def test_long_checks_and_claim():
+    c = checks_long_from(_long_report())
+    assert c["e1_long_chain_tail"] and c["e2_single_thought_transport"] and c["e3_unique_location_specificity"]
+    assert "carries it" in claim_long_from(c)
+    c = checks_long_from(_long_report(state1=0.1, state3=0.2))
+    assert not c["e2_single_thought_transport"] and "noise" in claim_long_from(c)
+    c = checks_long_from(_long_report(kv_site=0.15))
+    assert not c["e3_unique_location_specificity"]
+    c = checks_long_from(_long_report(n=10))
+    assert c["e3_per_site"] == {"1": None, "3": None} and "no site had enough" in claim_long_from(c)
+    c = checks_long_from(_long_report(tail_kv=0.4))
+    assert not c["e1_long_chain_tail"]

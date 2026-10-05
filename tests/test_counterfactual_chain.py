@@ -57,3 +57,13 @@ def test_ambiguous_rows_are_rejected():
     row = {"question": "Buy 4 pens and 4 pads at 2 each. Cost?", "cot": "<<4*2=8>> <<8+8=16>>", "answer": "16"}
     assert perturb_row(row) is None or perturb_row(row).original_number == "2"
     assert DELTAS[0] == 1
+
+
+def test_prefer_latest_step_changes_the_later_number():
+    row = {"question": "A farmer has 15 chickens laying 5 eggs each per week. How many eggs after 3 weeks?",
+           "cot": "<<15*5=75>> <<75*3=225>>", "answer": "225"}
+    first = perturb_row(row)
+    latest = perturb_row(row, prefer_latest_step=True)
+    assert first.original_number == "15" and first.step == 1 and first.changed_values == (("75", "80"), ("225", "240"))
+    assert latest.original_number == "3" and latest.step == 2 and latest.changed_values == (("225", "300"),)
+    assert latest.cot == "<<15*5=75>> <<75*4=300>>"

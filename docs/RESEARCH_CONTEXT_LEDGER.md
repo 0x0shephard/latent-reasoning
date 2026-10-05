@@ -4897,3 +4897,58 @@ single-site swap is ≈ 0. Transport through a thought appears only in longer ch
   candidates from extra train rows to reach 512 pairs, with a slot-specific location
   criterion. It would turn point 4 from a stratum reading into a preregistered result.
   Not built.
+
+## 112. Preregistered: the directed counterfactual on long chains, with a slot-unique location criterion
+
+Designed 2026-10-05 after §111. Contract `official_codi_directed_counterfactual_long_v1`,
+a second profile of the §110 runner; the §110 profile is unchanged. Official checkpoint
+only; no training. §111 found single-thought transport only in chains of three or more
+steps, in cells of 36–38 rows, and found its location criterion non-discriminating on
+short chains. This run makes both preregistered.
+
+### Changes from §110
+
+- **Pool.** Twins are built only from chains with **n ≥ 3** equations. Candidates come
+  from the 2,048 fit rows plus 14,336 further GSM8k-Aug training rows drawn by the
+  same seeded sampler after the three existing splits, which leaves those splits
+  identical. Up to 1,536 candidate pairs, gated as before, up to 512 pairs kept.
+- **Perturbation site.** Among a question's eligible numbers the one entering the
+  chain at the **latest step** is changed, so that earlier intermediates stay unchanged
+  wherever the chain allows; strata (n, k) are reported as before.
+- **Location.** A row is **uniquely located** when exactly one odd slot (of 1, 3, 5)
+  decodes a changed value in the row and its counterpart in the twin. Rows located at
+  several slots, or none, are reported but excluded from the specificity contrast.
+- **Stores.** The specificity table carries both the layers 8–9 values and the whole
+  K/V of the following even position, since §111 found K/V transports where the
+  two-layer value block does not.
+
+Everything else (interventions, instrument, both directions, native headline
+conditions) is the §110 protocol.
+
+### Checks
+
+- **E1 long-chain tail.** `kv_all` target ≥ 0.50 (reported alongside `v89_all`).
+- **E2 single-thought transport exists on long chains.** Pooled over all rows,
+  max(`state_1`, `state_3`) target ≥ 0.25.
+- **E3 unique-location specificity (primary).** Among rows uniquely located at
+  s\* ∈ {1, 3} (≥ 20 rows per site): `state_{s*}` target ≥ 0.30 and ≥ 2× the other
+  feeding slot's state; the following position's K/V target ≥ 2× the other even
+  position's K/V. Rows uniquely located at slot 5: state and K/V transport reported,
+  prediction 0.
+- Reported: fraction uniquely located and its slot distribution; the full §110 site
+  table; strata; `kv_0` (the §111 question register) on long chains; native
+  counterfactual exact match.
+
+Reading rules. E3 passing is the directed result §110 aimed at: on problems that need
+the workspace, the thought that decodes a value is the thought that carries it. E2
+passing with E3 failing means long chains make the thoughts load-bearing but the
+readout's decoding does not say which one. E2 failing means the §111 stratum effect was
+noise in small cells and the thoughts are a trace at every chain length this
+checkpoint solves. E1 failing on long chains would mean the tail cache carries less of
+the answer precisely where the workspace is used, which would be a surprise worth
+recording.
+
+### Cost
+
+CPU twin construction over ≈ 16k rows (one to two minutes); gate over ≤ 3,072 rows;
+then the §110 interventions. ≈ 35–50 GPU minutes.

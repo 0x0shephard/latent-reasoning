@@ -90,7 +90,9 @@ def question_integers(question: str) -> list[tuple[str, tuple[int, int]]]:
     return found
 
 
-def perturb_row(row: dict, deltas: tuple[int, ...] = DELTAS) -> Perturbation | None:
+def perturb_row(row: dict, deltas: tuple[int, ...] = DELTAS, *, prefer_latest_step: bool = False) -> Perturbation | None:
+    """The twin for the first eligible question number in text order, or, with
+    ``prefer_latest_step``, for the eligible number entering the chain latest."""
     question, cot = str(row["question"]), str(row["cot"])
     equations = parse_chain(cot)
     if not equations:
@@ -112,6 +114,7 @@ def perturb_row(row: dict, deltas: tuple[int, ...] = DELTAS) -> Perturbation | N
             for k in range(i):
                 if _close(op["value"], results[k]):
                     refs.setdefault(i, []).append(j)
+    found: list[Perturbation] = []
     for text, span in numbers:
         x = float(text)
         if sum(1 for t, _ in numbers if t == text) != 1 or sum(1 for op in all_operands if _close(op["value"], x)) != 1:
@@ -133,10 +136,15 @@ def perturb_row(row: dict, deltas: tuple[int, ...] = DELTAS) -> Perturbation | N
                             if not _close(results[i], new_results[i]))
             new_cot = _rewrite(cot, equations, results, new_results, refs, step, x, new_x)
             new_question = question[:span[0]] + _format(new_x) + question[span[1]:]
-            return Perturbation(question=new_question, cot=new_cot, answer=_format(new_results[-1]), gold=_format(new_results[-1]),
-                                step=step + 1, steps=len(equations), original_number=text, new_number=_format(new_x),
-                                changed_values=changed)
-    return None
+            found.append(Perturbation(question=new_question, cot=new_cot, answer=_format(new_results[-1]), gold=_format(new_results[-1]),
+                                      step=step + 1, steps=len(equations), original_number=text, new_number=_format(new_x),
+                                      changed_values=changed))
+            break
+        if found and not prefer_latest_step:
+            return found[0]
+    if not found:
+        return None
+    return max(found, key=lambda f: f.step)  # ties keep text order (max returns the first maximal element)
 
 
 def _recompute(equations, results, refs, step, x, new_x):

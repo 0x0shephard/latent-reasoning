@@ -35,6 +35,11 @@ def locate_pairs(numbers: list[list[set[str]]], partner: Sequence[int], changed_
     return located
 
 
+def unique_location(located: list[list[int]]) -> list[int | None]:
+    """The single located slot of each row, or None when none or several."""
+    return [slots[0] if len(slots) == 1 else None for slots in located]
+
+
 def outcome(pred: torch.Tensor, own_gold: torch.Tensor, target_gold: torch.Tensor, mask: torch.Tensor | None = None) -> dict:
     if mask is None:
         mask = torch.ones_like(pred, dtype=torch.bool)
@@ -47,20 +52,27 @@ def outcome(pred: torch.Tensor, own_gold: torch.Tensor, target_gold: torch.Tenso
 
 
 def located_specificity(preds: dict[str, torch.Tensor], located: list[list[int]], own_gold, target_gold, *,
-                        feeding_slots: Sequence[int] = (1, 3)) -> dict:
+                        feeding_slots: Sequence[int] = (1, 3), unique_only: bool = False) -> dict:
     """Target rates at the located site versus the other feeding site, for the state
-    route (``state_s``) and the following even store (``v89_{s+1}``)."""
-    rows = torch.arange(len(located))
+    route (``state_s``) and the following even store (``v89_{s+1}``, and ``kv_{s+1}``
+    when present).  With ``unique_only`` a row counts only if it is located at exactly
+    one slot."""
     report = {}
     for s in feeding_slots:
-        mask = torch.tensor([s in slots for slots in located])
+        if unique_only:
+            mask = torch.tensor([slots == [s] for slots in located])
+        else:
+            mask = torch.tensor([s in slots for slots in located])
         other = [o for o in feeding_slots if o != s]
-        report[str(s)] = {
+        entry = {
             "n": int(mask.sum()),
             "state_at_site": outcome(preds[f"state_{s}"], own_gold, target_gold, mask),
             "state_elsewhere": {str(o): outcome(preds[f"state_{o}"], own_gold, target_gold, mask) for o in other},
             "store_at_site": outcome(preds[f"v89_{s + 1}"], own_gold, target_gold, mask),
             "store_elsewhere": {str(o + 1): outcome(preds[f"v89_{o + 1}"], own_gold, target_gold, mask) for o in other},
         }
-    del rows
+        if f"kv_{s + 1}" in preds:
+            entry["kv_store_at_site"] = outcome(preds[f"kv_{s + 1}"], own_gold, target_gold, mask)
+            entry["kv_store_elsewhere"] = {str(o + 1): outcome(preds[f"kv_{o + 1}"], own_gold, target_gold, mask) for o in other}
+        report[str(s)] = entry
     return report
