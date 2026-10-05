@@ -4737,3 +4737,75 @@ answer computed from the equation chain. That would show the store holds *the va
 not merely *an influence*. (b) The same audit on CODI LLaMA-1B, inference-only, as the
 §107 replication item, now with a specific prediction to test (parity alternation).
 (c) Not opened: any training on this structure (§107 stands).
+
+## 110. Preregistered: directed counterfactual on the store. Does swapping one even position's layers 8–9 values, or one odd slot's state, move the answer to a counterfactual computed from the equation chain?
+
+Designed 2026-10-05 after §109. Contract `official_codi_directed_counterfactual_v1`.
+Official checkpoint only; no training. This is the test §106 recorded as not done and
+§109 named as the most valuable follow-up: it asks whether a site holds *the value*,
+not merely *an influence*.
+
+### Pairs
+
+From the 2,048 §86-fit rows, a counterfactual twin of each eligible question: one
+integer that appears exactly once in the question text and exactly once as an operand
+in the equation chain, not equal to any result or other operand, is changed by the
+smallest δ from (±1, ±2, ±3, ±5, ±10, ±20) such that every recomputed result is a
+non-negative integer, the final answer changes, and the new number collides with no
+other number in the problem. Operands equal to an earlier result are references and
+are propagated. The chain is rewritten by span substitution so the format is the
+dataset's own. Records per pair: chain length n, the step k at which the number
+enters, and the list of (old, new) result pairs that changed.
+
+Competence gate, as SCIT's: both twins answered correctly natively and at the first
+token under the forced cue, and the two gold first tokens differ. Up to 512 gated
+pairs, interleaved as [q, q′, …] so twins share a batch and therefore GPT-2's padding
+width and absolute position ids. Both directions are run (q ← q′ and q′ ← q); the
+donor of every row is its twin.
+
+### Interventions (recipient keeps its own question; donor content from the twin)
+
+Single sites: `state_s` (output state fed to the projector) for s = 0–5; `v89_s`
+(values at layers 8–9) for s = 0–5; `kv_s` (all layers) for s = 0–5; `v1011_s` for
+s = 0, 2, 4 (layer control). Tails: `v89_all`, `v89_even`, `v89_odd`, `kv_all`,
+`state_all`. Outcome per row: first token under the forced cue classed as **target**
+(the twin's gold first token), **retain** (own gold), or other. Native decoding for
+`v89_all`, `kv_all`, `state_1`, `state_3`, `v89_2`, `v89_4`: exact match to the
+twin's answer and to the own answer.
+
+### Locating the changed value (the directed part)
+
+§55 showed the odd slots store intermediates but in no fixed order. So the site is
+found per pair, with the model's own readout: decode each odd slot's state through the
+tied output head (top-5, numeric tokens, as §55); a pair is **located at odd slot s\***
+when some changed result's old value is in q's top-5 at s\* and its new value is in
+q′'s top-5 at the same s\*. Located pairs are the ones where the readout says which
+thought holds the changed number.
+
+### Checks
+
+- **D1 SCIT replication, competence-gated.** `v89_all` target ≥ 0.50.
+- **D2 the even store.** `v89_even` target ≥ 0.40 and ≥ 2× `v89_odd`; best single
+  even `v89_s` target ≥ 0.20.
+- **D3 located specificity (primary).** Among pairs located at s\* ∈ {1, 3}:
+  `state_{s*}` target ≥ 0.30 and ≥ 2× `state` target at the other feeding odd slot;
+  `v89_{s*+1}` target ≥ 2× `v89` target at the other of positions {2, 4}. Pairs
+  located at slot 5 are reported separately (its state is discarded; prediction:
+  no transfer through either route).
+- **D4 layer control.** Pooled over even positions, `v89` target ≥ 2× `v1011` target.
+- Reported: retain and other rates for every condition; strata by (n, k); located
+  fraction and its distribution over slots; native counterfactual exact match.
+
+Reading rules. D3 passing is the directed result: the thought that decodes the value
+is the thought whose state, and whose following store, carries it to the answer, and
+the other sites do not. D3 failing with D1 passing means the tail carries the
+counterfactual as a whole but no single site holds a transportable value, the
+Makelov caution realised. D1 failing under a competence gate means SCIT's result does
+not hold on GSM8k-Aug twins that differ in a question number, which is a reportable
+limit of their claim. D2 passing with D3 failing means the store is positional but not
+value-addressed in the way the readout suggests.
+
+### Cost
+
+Twin construction is CPU. Gate: two native decodes over ≤ 2,048 rows. Interventions:
+≈ 26 first-token passes over ≤ 1,024 rows and 6 native decodes. ≈ 30–45 GPU minutes.
