@@ -4952,3 +4952,102 @@ recording.
 
 CPU twin construction over ≈ 16k rows (one to two minutes); gate over ≤ 3,072 rows;
 then the §110 interventions. ≈ 35–50 GPU minutes.
+
+## 113. Completed §112: on long chains a single thought does transport the value. Slot 3, carried onward by position 4's whole K/V, is the main carrier; the readout decodes the value at every odd slot, so decoding is redundant and location is rare
+
+Run 2026-10-05, code `ce97cfd`, official checkpoint, no training, 535 s. Pool: fit plus
+14,336 extra training rows; 1,536 candidate twins with n ≥ 3 and the latest-step
+number changed; 853 pairs solved natively both ways (candidate native accuracy 0.678,
+lower than the 0.81 of §111, as long chains should be); 512 pairs kept, 1,024 rows,
+both directions pooled. Baseline 0.995 both instruments; no row predicts its twin's
+answer unpatched. Strata (rows): n3k1 138, n3k2 532, n3k3 182, n4k1 16, n4k2 34,
+n4k3 60, n4k4 48, n5k2 6, n5k3 4, n5k4 2, n6k4 2.
+
+### Target rate: the first token becomes the twin's answer
+
+| site | state | v L8–9 | kv (all layers) |
+|---|---|---|---|
+| 0 | 0.000 | 0.073 | 0.120 |
+| 1 | **0.153** | 0.000 | 0.001 |
+| 2 | 0.000 | 0.028 | **0.158** |
+| 3 | **0.325** | 0.000 | 0.000 |
+| 4 | 0.000 | 0.047 | **0.303** |
+| 5 | 0.000 | 0.000 | 0.000 |
+| all six | 0.595 (retain 0.342) | 0.305 | **0.692** (retain 0.271) |
+
+Layer control at even positions: 0.005, 0.005, 0.020. Native counterfactual exact
+match: `kv_all` 0.691, `state_3` 0.321, `state_1` 0.149, `v89_all` 0.304, `v89_4`
+0.045, `v89_2` 0.026.
+
+By stratum: `state_3` ≈ 0.41 at n3k2 (532 rows), ≈ 0.56–0.82 at n4k1–n4k3 (16–60
+rows), ≈ 0.10 at n3k1 and ≈ 0.05 at n3k3; `state_1` ≈ 0.22 at n3k2, ≈ 0.67 at n4k2.
+Where the changed number enters only at the last step (k = n: 234 rows) no single
+site transports, as it should not: the changed quantity is then not an intermediate
+the workspace holds but a question number the readout uses directly.
+
+Location: 61% of rows located, 586 of them at several odd slots at once; **uniquely
+located 3.9%** (slot 1: 32 rows, slot 3: 2, slot 5: 6). Among the 552 rows located at
+slot 1 (non-unique), state at slot 3 (0.413) exceeds state at slot 1 (0.248); among
+the 588 located at slot 3, state at slot 3 is 0.466 vs 0.214 at slot 1. The sets are
+nearly the same rows.
+
+| check | result |
+|---|---|
+| E1 `kv_all` ≥ 0.50 on long chains | pass (0.692; §111 short chains 0.595) |
+| E2 max(`state_1`, `state_3`) ≥ 0.25 | pass (0.325) |
+| E3 unique-location specificity | pass by the rule, at slot 1 only, on 32 rows (16 pairs): state 0.406 vs 0.188 at slot 3; K/V at position 2 0.406 vs 0.188 at position 4; slot 3 not evaluable (2 rows) |
+
+### Reading
+
+1. **The §111 stratum effect was real.** On chains of three or more steps a single
+   thought's state transports the counterfactual value: slot 3 in a third of rows
+   pooled, in 41% of the dominant stratum (three steps, number entering at step 2)
+   and in 56–82% of four-step chains. Slot 1 carries half as much. On short chains
+   (§111) the same swaps transported 5–10%. The workspace becomes load-bearing when
+   the chain exceeds what the readout computes from the question directly, and
+   only for quantities that are intermediates.
+2. **The carrier downstream of a thought is the following position's whole K/V, not
+   its layers 8–9 values.** `kv_4` (0.303) matches `state_3` (0.325) and `kv_2`
+   (0.158) matches `state_1` (0.153), while `v89_4` and `v89_2` transport 0.047 and
+   0.028. For *influence* (§109) the two-layer value block carried most of the
+   effect; for *transport* it does not. The transported value is spread over keys,
+   values and layers of one position. SCIT's two-layer localisation describes what
+   breaks the answer, not what carries it, on this task.
+3. **Decoding is redundant across slots, so it does not localise.** When a changed
+   value is decodable in the workspace it is decodable at slots 1, 3 and 5 together
+   in 94% of located rows. The "unordered store" of §55 is a replicated store. The
+   thought that *carries* the value is almost always slot 3 regardless of where it
+   decodes, so the readout lens says *that* the workspace holds the value, not
+   *which* thought does the work. Slot 5 decodes it too and transports nothing
+   (590 rows, 0.000 through both routes).
+4. **E3 is a pass by the preregistered rule and thin evidence.** Thirty-two rows are
+   sixteen pairs counted in both directions; the state contrast 0.41 vs 0.19 is at
+   the edge of what sixteen pairs can resolve, and the K/V contrast is the same rows.
+   It is recorded as consistent with specificity, not as establishing it. The
+   non-unique tables, with hundreds of rows, carry the weight: slot 3 dominates
+   everywhere.
+5. **The tail as a whole carries more on long chains** (0.69 vs 0.60), and a third of
+   rows still answer from the question even with the entire latent tail replaced.
+   The direct route never disappears.
+
+### What the §106–§113 sequence now says, in one paragraph
+
+CODI's six thoughts are a replicated, late-binding workspace. Intermediate values are
+decodable at every odd slot (§55), and swapping any odd slot's state disrupts about a
+third of answers (§106, §109) through the K/V its successors write. But a thought
+*carries* a value only when the problem needs it: on one- and two-step chains no
+single site transports the counterfactual and the readout computes the answer from
+the question (§111); on three-step and longer chains slot 3, and the whole K/V of
+position 4 behind it, transport it in a third to four fifths of cases (§113). The
+terminal thought decodes values and does nothing (§106, §109, §113). The first
+latent position stores the question's numbers (§111). What a probe reads at a thought
+is therefore a faithful trace whose causal weight depends on chain length, and the
+layer-8–9 value block that breaks answers is not where the transported value lives.
+
+### Decision
+
+The directed-counterfactual line is complete for the mechanism paper. Remaining
+optional spend, in order: (a) the inference-only 1B replication of §109, §111 and
+§113 (the §107 plan, now with three concrete predictions: parity alternation, no
+transport on short chains, slot-3 transport on long chains); (b) a chain-length
+sweep at fixed k to put a curve under point 1. No further GPT-2 training.
