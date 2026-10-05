@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_directed_counterfactual.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "2a99feccfd9f2a53e21c21f9a7533a6e6103daf5"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -52,7 +52,7 @@ Attach only the official reproduction dataset.
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "2a99feccfd9f2a53e21c21f9a7533a6e6103daf5"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 REPRODUCTION_SUMMARY_INPUT = ""   # "" = discover under /kaggle/input
 OUTPUT_DIR = "/kaggle/working/codi_directed_counterfactual"
