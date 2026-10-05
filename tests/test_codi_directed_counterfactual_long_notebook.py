@@ -53,3 +53,10 @@ def test_all_notebook_code_cells_parse():
 
 def test_builder_parses():
     ast.parse(BUILDER.read_text(), filename=str(BUILDER))
+
+
+def test_pinned_commit_has_the_long_profile():
+    commit = _builder_run_commit()
+    shown = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:scripts/run_codi_directed_counterfactual.py"],
+                           capture_output=True, text=True, check=True).stdout
+    assert '"--profile"' in shown and "CONTRACT_LONG" in shown
