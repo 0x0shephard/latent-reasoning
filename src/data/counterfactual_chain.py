@@ -12,8 +12,8 @@ import re
 
 DELTAS = (1, -1, 2, -2, 3, -3, 5, -5, 10, -10, 20, -20)
 _EQUATION = re.compile(r"<<([^<>=]+)=([^<>]+)>>")
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
-_SAFE_EXPRESSION = re.compile(r"^[\d.+\-*/ ]+$")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?|\.\d+")
+_SAFE_EXPRESSION = re.compile(r"^[\d.+\-*/() ]+$")
 _TOLERANCE = 1e-6
 
 
@@ -156,7 +156,10 @@ def _recompute(equations, results, refs, step, x, new_x):
                 pieces.append(op["text"])
             cursor = end
         pieces.append(left[cursor:])
-        value = _evaluate("".join(pieces))
+        try:
+            value = _evaluate("".join(pieces))
+        except (ValueError, SyntaxError, ZeroDivisionError, TypeError):
+            return None
         if not _is_integer(value) or value < 0:
             return None
         new_results.append(float(round(value)))
