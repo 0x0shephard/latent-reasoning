@@ -4809,3 +4809,91 @@ value-addressed in the way the readout suggests.
 
 Twin construction is CPU. Gate: two native decodes over ≤ 2,048 rows. Interventions:
 ≈ 26 first-token passes over ≤ 1,024 rows and 6 native decodes. ≈ 30–45 GPU minutes.
+
+## 111. Completed §110: no single thought transports a value. The counterfactual is carried by the whole latent-tail cache together with the question; single-thought transport appears only in chains of three or more steps
+
+Run 2026-10-05, code `2a99fec`, official checkpoint, no training, 438 s. Twins: 1,024
+candidates from the 2,048 fit rows; 723 pairs solved natively both ways; 512 pairs
+selected (first 512 passing the full gate), 1,024 rows, both directions pooled.
+Baseline on the selected rows: first-token accuracy 0.997, native exact match 0.996,
+no row predicts its twin's first token unpatched. Strata (rows): n1k1 236, n2k1 350,
+n2k2 108, n3k1 206, n3k2 38, n3k3 28, n4k1 36, n4k2 6, n4k3 2, n4k4 8, n5k1 4, n5k3 2.
+
+### Target rate: the first token becomes the twin's answer (retain = stays the own answer)
+
+| site | state | v L8–9 | kv (all layers) | v L10–11 |
+|---|---|---|---|---|
+| 0 | 0.000 | **0.132** | **0.232** (retain 0.735) | 0.014 |
+| 1 | 0.051 | 0.000 | 0.001 | — |
+| 2 | 0.000 | 0.010 | 0.045 | 0.001 |
+| 3 | 0.104 | 0.000 | 0.000 | — |
+| 4 | 0.000 | 0.020 | 0.095 | 0.006 |
+| 5 | 0.000 | 0.000 | 0.000 | — |
+| all six | 0.312 (retain 0.640) | 0.281 (even 0.281, odd 0.000) | **0.595** (retain 0.382) | — |
+
+Native decoding, counterfactual exact match: `kv_all` 0.593 (own 0.382), `v89_all`
+0.282 (own 0.641), `state_3` 0.102, `state_1` 0.050, `v89_4` 0.019, `v89_2` 0.010.
+
+| check | result |
+|---|---|
+| D1 `v89_all` ≥ 0.50 | **fail** (0.281; `kv_all` reaches 0.595) |
+| D2 even store ≥ 0.40 | **fail** (0.281; best single even position 0.132 at position 0) |
+| D3 located specificity | **fail** (located at 1: state 0.102 vs 0.155 at slot 3; located at 3: 0.194 vs 0.095 at slot 1; stores 0.02–0.03) |
+| D4 layers 8–9 ≥ 2× layers 10–11 | pass |
+
+By stratum (descriptive, small cells): for n ≤ 2 perturbed at step 1 (586 rows) every
+single-site swap is ≈ 0. Transport through a thought appears only in longer chains:
+`state_3` ≈ 0.39 at n3k2 (38 rows), ≈ 0.52 at n4k1 (36 rows), `state_1` ≈ 0.32 at n3k2,
+`v89_4` ≈ 0.25 at n4k1. Located-at-slot-5 rows: state and K/V transport exactly 0.
+
+### Reading
+
+1. **Influence is not transport.** §106 and §109 measured that swapping a thought's
+   state changes a third of answers under unrelated donors. Under matched twins the
+   same swap moves the answer to the correct counterfactual only 5–10% of the time and
+   leaves the own answer in place 86–92% of the time. The 31–37% was disruption. No
+   odd slot's state and no even position's layers 8–9 values hold a transportable
+   value on typical GSM8k-Aug questions. This is the Makelov caution realised, as the
+   §110 reading rules anticipated.
+2. **What does carry the counterfactual is the whole latent-tail cache, and only
+   partly.** Replacing every latent position's K/V at every layer moves 60% of answers
+   to the twin's (native 59%), and 38% still answer from their own question. Values at
+   layers 8–9 alone move 28%. SCIT's localisation to a two-layer value block
+   (0.88–0.91 target win) does not hold on GSM8k-Aug twins at the preregistered 0.5;
+   on this task the carrier is distributed across keys, values and layers, and the
+   question tokens retain a strong direct route. Both are consistent with SCIT's own
+   limitation that the layers 8–9 sufficiency was checkpoint- and task-specific.
+3. **Position 0 is a question register.** The single most transportable site is the
+   K/V of the first latent position (0.232; its layers 8–9 values 0.132), which is
+   written from the projected question summary before any thought. Swapping it
+   transports the perturbed number and the chain recomputes downstream. The thoughts
+   that §55 showed decode intermediate values transport less than the position that
+   decodes nothing.
+4. **The workspace becomes value-bearing only when the chain is long.** For one- and
+   two-step problems the answer is computed from the question at the readout, and the
+   latent content is a readable but causally redundant trace; for three-step and
+   longer problems a single thought's state begins to carry the value (0.3–0.5 in
+   cells of 36–38 rows). This is Liang & Pan's late fusion with a near-direct question
+   route, now with the chain-length dependence made explicit, and it sharpens §58 at
+   the value level: readable, writable as disruption, not writable as a value, unless
+   the problem needs the workspace.
+5. **The location criterion was not discriminating** (design limitation, recorded).
+   43% of rows were located, but 432 of them at several slots at once, because short
+   chains have one value and all odd slots decode it. The D3 contrast therefore
+   compared the same pairs with themselves. A discriminating version needs chains with
+   at least two distinct intermediates and a slot that decodes one of them and not the
+   other.
+
+### Consequences
+
+- The §109 "compute-store ladder" stands as a description of **influence routes**; it
+  is not a description of where **values** live. The paper must say so.
+- For the monitoring framing (§108): what a probe reads at a thought is decodable
+  (§55) and not what determines the answer on most questions. A monitor on slot states
+  would be reading a trace. This is a stronger statement than §58 and is the one worth
+  publishing from this line.
+- The one follow-up that would complete the picture, inference-only: the same twins
+  restricted to chains with n ≥ 3 and at least two distinct intermediates, drawing
+  candidates from extra train rows to reach 512 pairs, with a slot-specific location
+  criterion. It would turn point 4 from a stratum reading into a preregistered result.
+  Not built.
