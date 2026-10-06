@@ -5358,3 +5358,43 @@ Still owed: the released-path accuracy at batch 128 (notebook §114 Step 1a). Th
 third model is SIM-CoT's CODI-1B (`internlm/SIM_COT-LLaMA3-CODI-1B`), same interface,
 trained with per-step decoding supervision: prediction, unique location above 60% and
 specificity at both feeding slots. Not built.
+
+## 118. Preregistered: a third model with a different training objective. SIM-CoT's CODI-1B, plus the lost released-path replication of CODI-1B
+
+Designed 2026-10-07 after §117. No training. `internlm/SIM_COT-LLaMA3-CODI-1B` (revision
+`6e16fe42`) is the CODI architecture on LLaMA-3.2-1B-Instruct trained with SIM-CoT's
+per-step decoding supervision (arXiv 2509.20317): an auxiliary decoder was trained to
+reconstruct each explicit reasoning step from the corresponding latent token, then
+discarded. The checkpoint carries the same `codi.*` and `prj.*` tensors as CODI-1B plus
+the decoder under `decoder.*`, which the loader now drops and reports (whole modules the
+architecture does not define). Config `configs/official_simcot_codi_llama1b.yaml`,
+identical to the CODI-1B adapter except for the checkpoint and the gate reference
+(paper 56.1%, lower bound as in §114 addendum 2).
+
+One notebook, four steps: (0) the released-path replication of **CODI-1B** at batch 128,
+mask dropped, which was lost with the previous kernel (prediction unchanged: near 51.9%);
+(1) the SIM-CoT GSM8K gate, pad-aware; (2) the §108 audit on SIM-CoT; (3) the §110 and
+§112 twins on SIM-CoT. Thresholds unchanged.
+
+### Predictions
+
+- **S1 unique location rises.** Per-step supervision ties each latent token to one
+  reasoning step, so the readout should decode a changed value at one slot more often
+  than CODI-1B's 60%: predicted ≥ 70% on long chains, with the located slot spread over
+  more than one odd position rather than concentrated on slot 3.
+- **S2 specificity at both feeding slots.** With ≥ 20 uniquely located rows at each of
+  slots 1 and 3, the located thought carries the value and the other does not (E3 at
+  both sites). This is where CODI-1B fell short of the all-sites rule.
+- **S3 transport magnitude.** Long-chain max single-thought transport ≥ 0.25 (E2) again;
+  the step supervision is predicted to raise it above CODI-1B's 0.339, since the thoughts
+  are trained to be the steps.
+- **S4 the pairing may move.** If each token is one step, the compute-store pairs should
+  be (1 → 2) and (3 → 4) both active, unlike CODI-1B's single (3 → 4). Reported, not gated.
+- **S5 influence profile** (§108 audit): terminal slot inert, identity exact, values over
+  keys, mid group over late, as in both CODI models.
+- Gate: pad-aware accuracy ≥ 56.1% − 3 points; the direction of any excess is recorded.
+
+### Cost
+
+6.4 GB download; released-path replication ≈ 10 min; gate ≈ 8 min; audit ≈ 17 min; twins
+≈ 35 min. ≈ 1.5 hours on a T4.

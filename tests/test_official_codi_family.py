@@ -14,6 +14,8 @@ from src.models.official_codi import (  # noqa: E402
 )
 from tests.test_trajectory_supervision import ROWS, CharTokenizer, _tiny_model  # noqa: E402
 
+ROOT_CONFIGS = __import__("pathlib").Path(__file__).resolve().parents[1] / "configs"
+
 
 def test_layer_groups_reproduce_gpt2_names_and_scale_to_llama_depth():
     assert layer_groups(12) == {"0_7": tuple(range(8)), "8_9": (8, 9), "10_11": (10, 11)}
@@ -135,3 +137,28 @@ def test_prompt_logits_last_only_leaves_hidden_states_and_generation_unchanged()
         ga = generate_official_codi(full, tokenizer, questions, latent_iterations=6, max_new_tokens=4, batch_size=2, device=torch.device("cpu"))
         gb = generate_official_codi(lean, tokenizer, questions, latent_iterations=6, max_new_tokens=4, batch_size=2, device=torch.device("cpu"))
     assert ga == gb
+
+
+def test_loader_reads_safetensors_and_ignores_auxiliary_modules(tmp_path):
+    from safetensors.torch import save_file
+    from src.models.official_codi import load_official_checkpoint, sha256_file
+
+    model = _tiny_model()
+    state = {k: v.detach().clone().contiguous() for k, v in model.state_dict().items()}
+    state["decoder.model.layers.0.weight"] = torch.zeros(4, 4)   # a training-time module the architecture lacks
+    state["dynamic_cls.1.weight"] = torch.zeros(3, 3)
+    path = tmp_path / "model.safetensors"
+    save_file(state, str(path))
+    report = load_official_checkpoint(model, path, expected_sha256=sha256_file(path))
+    assert report.ignored_prefixes == ("decoder", "dynamic_cls") and report.ignored_tensors == 2
+    assert report.matched_numel_fraction > 0.99 and report.unexpected_keys == ()
+
+
+def test_simcot_config_mirrors_the_codi_1b_adapter():
+    import yaml
+
+    base = yaml.safe_load(open(ROOT_CONFIGS / "official_codi_llama1b.yaml"))
+    sim = yaml.safe_load(open(ROOT_CONFIGS / "official_simcot_codi_llama1b.yaml"))
+    assert sim["model"] == base["model"]
+    assert sim["checkpoint"]["repo_id"] == "internlm/SIM_COT-LLaMA3-CODI-1B" and sim["checkpoint"]["filename"] == "model.safetensors"
+    assert sim["accuracy_gate"]["direction"] == "at_least" and sim["accuracy_gate"]["published_accuracy"]["gsm8k"] == 0.561

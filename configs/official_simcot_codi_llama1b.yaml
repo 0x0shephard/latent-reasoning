@@ -1,0 +1,80 @@
+# Accuracy/reproduction gate for the SIM-CoT release of CODI on LLaMA-3.2-1B-Instruct
+# (InternLM/SIM-CoT, arXiv 2509.20317): the CODI architecture trained with per-step decoding
+# supervision; the auxiliary decoder is discarded at inference.  Never updates weights.
+run_name: official_simcot_codi_llama1b
+seed: 11
+output_dir: outputs/official_simcot_codi_llama1b
+data_config: configs/data_official_codi.yaml
+
+official_source:
+  repo: https://github.com/InternLM/SIM-CoT
+  revision: main
+  script: CODI/scripts/test_llama1b-copy.sh
+
+checkpoint:
+  repo_id: internlm/SIM_COT-LLaMA3-CODI-1B
+  revision: 6e16fe4215025a9c48bc90d214c57349f247b017
+  filename: model.safetensors
+  # Hugging Face LFS object id for the released 3,408,265,790-byte checkpoint.
+  # The file also holds the training-time step decoder under ``decoder.``, dropped at load.
+  sha256: fc7f2d9285e4134a0c5bfdbfc19985c322e6fa27024b5fdd41edff6bf8c183aa
+
+model:
+  # meta-llama/Llama-3.2-1B-Instruct is gated; this mirror serves the identical weights,
+  # config and tokenizer without a token.  The CODI checkpoint overrides every tensor it
+  # contains on top of it.
+  base_model: unsloth/Llama-3.2-1B-Instruct
+  base_revision: 5a8abab4a5d6f164389b1079fb721cfab8d7126c
+  model_max_length: 512
+  dtype: auto
+  lora_rank: 128
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj, gate_proj]
+  projection_dim: 2048
+  projection_dropout: 0.0
+  projection_layer_norm: true
+  # LLaMA 3 ships only a fast tokenizer; the released script's use_fast=False falls back to it.
+  tokenizer_use_fast: true
+  # The released test.py tokenizes questions with special tokens (a BOS prefix).
+  question_special_tokens: true
+  # LLaMA tokenizers put a lone space token before the answer number; the first-token
+  # instrument reads the number token (the released code's "+1 for ' '").
+  answer_space_token: true
+  # Carry the attention mask and explicit rotary positions through the thoughts and the
+  # answer, so a left-padded batch reproduces the unpadded computation (verified locally:
+  # without it, batched LLaMA decoding degenerates after the answer).
+  pad_aware_generation: true
+  # Ask the question pass for one position of logits (hidden states unaffected); the full
+  # [batch, prompt, 128k] logits tensor does not fit a 16 GB T4 at the released batch of 128.
+  prompt_logits_last_only: true
+
+eval:
+  latent_iterations: 6
+  max_new_tokens: 256
+  batch_size: 32
+  limit: null
+  datasets: [gsm8k]
+  expected_counts:
+    gsm8k: 1319
+
+accuracy_gate:
+  reference: SIM-CoT paper (arXiv 2509.20317), CODI + SIM-CoT on LLaMA-3.2-1B, GSM8K
+  primary_dataset: gsm8k
+  absolute_tolerance: 0.03
+  # Lower bound, not two-sided (ledger §114 addendum): the released evaluation drops the
+  # attention mask after the question, which corrupts left-padded LLaMA batches, so the
+  # paper's 51.9% under-measures the checkpoint.  The pad-aware path, verified to equal
+  # unpadded decoding, scored 55.50% (732/1319) in float16 and float32 alike on Kaggle.
+  # An adapter error would show as a deficit; exceeding the paper is not one.
+  direction: at_least
+  published_accuracy:
+    gsm8k: 0.561
+
+endpoint_retention:
+  data_config: configs/data.yaml
+
+kv_subspace:
+  data_config: configs/data.yaml
+  latent_positions: 6
+  importance_weight: 0.1

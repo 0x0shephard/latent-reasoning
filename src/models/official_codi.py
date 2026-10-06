@@ -32,6 +32,8 @@ class OfficialCODILoadReport:
     matched_numel_fraction: float
     missing_keys: tuple[str, ...]
     unexpected_keys: tuple[str, ...]
+    ignored_prefixes: tuple[str, ...] = ()   # whole modules the architecture does not have (e.g. SIM-CoT's training decoder)
+    ignored_tensors: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -329,7 +331,12 @@ def load_official_checkpoint(
             f"observed {observed_sha}"
         )
 
-    state = torch.load(path, map_location="cpu", weights_only=True)
+    if path.suffix == ".safetensors":
+        from safetensors.torch import load_file
+
+        state = load_file(str(path))
+    else:
+        state = torch.load(path, map_location="cpu", weights_only=True)
     if isinstance(state, dict) and isinstance(state.get("state_dict"), dict):
         state = state["state_dict"]
     if not isinstance(state, dict) or not state:
@@ -338,6 +345,14 @@ def load_official_checkpoint(
         raise TypeError("official checkpoint state dict contains non-tensor values")
 
     target = model.state_dict()
+    # Whole top-level modules the architecture does not define are training-time
+    # auxiliaries (SIM-CoT's step decoder, CODI-1B's dynamic_cls head).  They are
+    # dropped before matching and reported; anything under a module the model does
+    # have is still held to the shape and coverage checks below.
+    model_prefixes = {key.split(".")[0] for key in target}
+    ignored_prefixes = tuple(sorted({key.split(".")[0] for key in state if key.split(".")[0] not in model_prefixes}))
+    ignored_tensors = sum(1 for key in state if key.split(".")[0] in ignored_prefixes)
+    state = {key: value for key, value in state.items() if key.split(".")[0] not in ignored_prefixes}
     shape_mismatches = [
         key
         for key, value in state.items()
@@ -386,6 +401,8 @@ def load_official_checkpoint(
         matched_numel_fraction=matched_fraction,
         missing_keys=tuple(incompatible.missing_keys),
         unexpected_keys=tuple(incompatible.unexpected_keys),
+        ignored_prefixes=ignored_prefixes,
+        ignored_tensors=ignored_tensors,
     )
 
 
