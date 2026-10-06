@@ -43,6 +43,9 @@ model:
   # answer, so a left-padded batch reproduces the unpadded computation (verified locally:
   # without it, batched LLaMA decoding degenerates after the answer).
   pad_aware_generation: true
+  # Ask the question pass for one position of logits (hidden states unaffected); the full
+  # [batch, prompt, 128k] logits tensor does not fit a 16 GB T4 at the released batch of 128.
+  prompt_logits_last_only: true
 
 eval:
   latent_iterations: 6

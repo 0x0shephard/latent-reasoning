@@ -97,6 +97,7 @@ class OfficialCODIGPT2(nn.Module):
         lora_target_modules: tuple[str, ...] = GPT2_LORA_TARGET_MODULES,
         question_special_tokens: bool = False,
         pad_aware_generation: bool = False,
+        prompt_logits_last_only: bool = False,
     ) -> None:
         super().__init__()
         from peft import LoraConfig, TaskType, get_peft_model
@@ -112,6 +113,11 @@ class OfficialCODIGPT2(nn.Module):
         # positions are carried through every step, so a padded batch reproduces the
         # unpadded computation.
         self.pad_aware_generation = bool(pad_aware_generation)
+        # The question pass only needs the last position's hidden state, but the backbone
+        # computes logits for every position; over LLaMA's 128k vocabulary at batch 128
+        # that is a 4 GB tensor.  With this flag the prompt pass asks for one position of
+        # logits (``logits_to_keep=1``); hidden states are unaffected.  Off for GPT-2.
+        self.prompt_logits_last_only = bool(prompt_logits_last_only)
         original_vocab_size = int(self.codi.config.vocab_size)
         self.pad_token_id = original_vocab_size
         self.bot_id = original_vocab_size + 1
@@ -173,6 +179,12 @@ def official_codi_base_model(model: OfficialCODIGPT2) -> nn.Module:
     """
     getter = getattr(model.codi, "get_base_model", None)
     return getter() if callable(getter) else model.codi
+
+
+def prompt_logits_kwargs(model) -> dict:
+    """Extra kwargs for the question pass: one position of logits when the model asks
+    for it (LLaMA), nothing otherwise (the released GPT-2 path)."""
+    return {"logits_to_keep": 1} if getattr(model, "prompt_logits_last_only", False) else {}
 
 
 class _PadAwareStepper:
@@ -249,6 +261,7 @@ def build_official_codi_gpt2(
         lora_target_modules=tuple(str(m) for m in targets) if targets else GPT2_LORA_TARGET_MODULES,
         question_special_tokens=bool(settings.get("question_special_tokens", False)),
         pad_aware_generation=bool(settings.get("pad_aware_generation", False)),
+        prompt_logits_last_only=bool(settings.get("prompt_logits_last_only", False)),
     )
 
     tokenizer_kwargs = {
@@ -500,6 +513,7 @@ def generate_official_codi(
             output_hidden_states=True,
             return_dict=True,
             **stepper.prompt_kwargs(),
+            **prompt_logits_kwargs(model),
         )
         cache = encoded.past_key_values
         latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))

@@ -69,7 +69,7 @@ def test_answer_space_token_shift_only_when_flagged():
     assert shifted.teacher_ids == plain.teacher_ids and shifted.student_question_ids == plain.student_question_ids
 
 
-def _tiny_llama(pad_aware):
+def _tiny_llama(pad_aware, lean_logits=False):
     from transformers import LlamaConfig, LlamaForCausalLM
 
     torch.manual_seed(0)
@@ -77,7 +77,7 @@ def _tiny_llama(pad_aware):
                          num_key_value_heads=1, max_position_embeddings=128)
     model = OfficialCODIGPT2(LlamaForCausalLM(prepare_backbone_config(config)), lora_rank=4, lora_alpha=8, lora_dropout=0.0,
                              projection_dim=16, lora_target_modules=LLAMA_LORA_TARGET_MODULES, question_special_tokens=False,
-                             pad_aware_generation=pad_aware)
+                             pad_aware_generation=pad_aware, prompt_logits_last_only=lean_logits)
     with torch.no_grad():
         for name, parameter in model.named_parameters():
             if "lora_B" in name:
@@ -116,3 +116,22 @@ def test_accuracy_gate_direction():
     assert build_accuracy_gate(results={"gsm8k": 0.50}, direction="at_least", **common)["status"] == "passed"
     with pytest.raises(ValueError):
         build_accuracy_gate(results={"gsm8k": 0.5}, direction="sideways", **common)
+
+
+def test_prompt_logits_last_only_leaves_hidden_states_and_generation_unchanged():
+    from src.mech.cache_carrier import record_trajectory
+    from src.models.official_codi import generate_official_codi, prompt_logits_kwargs
+    from tests.test_cache_carrier import BatchCharTokenizer
+
+    tokenizer = BatchCharTokenizer()
+    full, lean = _tiny_llama(True, lean_logits=False), _tiny_llama(True, lean_logits=True)
+    lean.load_state_dict(full.state_dict())
+    assert prompt_logits_kwargs(full) == {} and prompt_logits_kwargs(lean) == {"logits_to_keep": 1}
+    a, pa, _ = record_trajectory(full, tokenizer, ROWS, latent_positions=6, batch_size=2, device=torch.device("cpu"))
+    b, pb, _ = record_trajectory(lean, tokenizer, ROWS, latent_positions=6, batch_size=2, device=torch.device("cpu"))
+    assert torch.allclose(a.states, b.states, atol=1e-6) and torch.equal(pa, pb)
+    questions = [r["question"] for r in ROWS]
+    with torch.inference_mode():
+        ga = generate_official_codi(full, tokenizer, questions, latent_iterations=6, max_new_tokens=4, batch_size=2, device=torch.device("cpu"))
+        gb = generate_official_codi(lean, tokenizer, questions, latent_iterations=6, max_new_tokens=4, batch_size=2, device=torch.device("cpu"))
+    assert ga == gb

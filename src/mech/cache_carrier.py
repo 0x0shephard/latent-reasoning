@@ -19,7 +19,7 @@ import torch
 from src.data.official_codi_training import collate_official_codi_kv_rows
 from src.mech.kv_risk_cache import cache_to_legacy
 from src.mech.trajectory_supervision import _student_answer_io
-from src.models.official_codi import _PadAwareStepper, generate_official_codi
+from src.models.official_codi import _PadAwareStepper, generate_official_codi, prompt_logits_kwargs
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,8 @@ def latent_path(model, batch, *, latent_positions: int, hidden_donors: dict[int,
     """
     stepper = _PadAwareStepper(model, batch.student_question_mask)
     encoded = model.codi(input_ids=batch.student_question_ids, attention_mask=batch.student_question_mask,
-                         use_cache=True, output_hidden_states=True, return_dict=True, **stepper.prompt_kwargs())
+                         use_cache=True, output_hidden_states=True, return_dict=True, **stepper.prompt_kwargs(),
+                         **prompt_logits_kwargs(model))
     cache = encoded.past_key_values
     latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
     states, keys, values = [], [], []

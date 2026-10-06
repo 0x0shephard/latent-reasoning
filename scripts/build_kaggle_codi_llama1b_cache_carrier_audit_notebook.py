@@ -71,6 +71,7 @@ BATCH_SIZE = "32"
 import glob, json, os, pathlib, subprocess, sys, time
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 assert len(RUN_COMMIT) == 40
 if not pathlib.Path(REPO_DIR).exists():
     subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
