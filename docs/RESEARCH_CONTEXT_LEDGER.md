@@ -5398,3 +5398,12 @@ mask dropped, which was lost with the previous kernel (prediction unchanged: nea
 
 6.4 GB download; released-path replication ≈ 10 min; gate ≈ 8 min; audit ≈ 17 min; twins
 ≈ 35 min. ≈ 1.5 hours on a T4.
+
+### §118 addendum: local verification of the SIM-CoT load (2026-10-07, Mac, MPS float16)
+
+`internlm/SIM_COT-LLaMA3-CODI-1B` loads through the shared wrapper with every one of its
+377 architecture tensors matched (parameter fraction 1.000, no missing or unexpected keys);
+the 147 `decoder.*` tensors of the training-time step decoder are dropped and reported.
+`lm_head` equals `embed_tokens` in the file. Pad-aware batched decoding stops cleanly and
+scores 50% on the first 24 GSM8K test questions (CODI-1B scored the same on the same 24;
+the full-set gate is the Kaggle run). The notebook pinned at `dba9ce0` needs no change.
