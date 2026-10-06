@@ -5143,3 +5143,15 @@ masking defect and the 3.6-point gap is a reportable correction to the CODI LLaM
 result. If it does not, the paper's path differs from ours in some further way, which is
 recorded as unresolved without affecting the audit, whose instrument is the verified
 pad-aware path.
+
+### §114 addendum 3: independent cross-check of the 1B figure (2026-10-07)
+
+The full GSM8K evaluation of the pad-aware path was repeated on the local Mac (MPS,
+float16, batch 16, 48 new tokens): **732/1319 = 55.50%**, the same count as Kaggle's
+float16 and float32 runs at batch 32. Three environments, two batch widths, two
+precisions, one number. The checkpoint's accuracy under unpadded-equivalent decoding is
+established; what remains open is only whether the released path at batch 128 reproduces
+the paper's 51.9% (the notebook's Step 1a). The released-path replication at batch 128
+first failed on the T4 with an out-of-memory in the question pass (full 128k-vocabulary
+logits for every prompt position); the LLaMA config now requests one position of prompt
+logits, which leaves hidden states and generations unchanged (tested).
