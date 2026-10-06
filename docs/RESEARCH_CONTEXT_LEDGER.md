@@ -5155,3 +5155,75 @@ the paper's 51.9% (the notebook's Step 1a). The released-path replication at bat
 first failed on the T4 with an out-of-memory in the question pass (full 128k-vocabulary
 logits for every prompt position); the LLaMA config now requests one position of prompt
 logits, which leaves hidden states and generations unchanged (tested).
+
+## 115. Completed §114 at 1B: the structural facts replicate, the magnitudes halve, and the compute-store pairing shifts by one position
+
+Run 2026-10-07, code `d61d0ae`, CODI LLaMA-3.2-1B-Instruct through the §114 adapter,
+pad-aware path, gate passed at 55.50% (lower bound vs the paper's 51.9%), 512 fit
+questions, derangement pairs, no training, 1,014 s. Baseline on the pool: first-token
+accuracy 0.945, native exact match 0.938 (GPT-2 on the same protocol: 0.822 / 0.805);
+99.6% of pairs differ. Backbone 16 layers; value groups 0–10 / 11–12 / 13–15.
+
+### First-token change rate by slot and route (GPT-2 §109 values in brackets)
+
+| slot | state | k | v | kv | v L0–10 | v L11–12 | v L13–15 | state+kv |
+|---|---|---|---|---|---|---|---|---|
+| 0 | **0.117** [0.137] | 0.037 | 0.104 | 0.059 [0.424] | 0.025 | 0.057 | 0.016 | 0.176 |
+| 1 | 0.035 [0.305] | 0.031 | **0.135** | 0.062 [0.117] | 0.006 | **0.100** | 0.016 | 0.180 |
+| 2 | 0.018 [0.168] | 0.025 | 0.029 | 0.035 [0.238] | 0.008 | 0.018 | 0.004 | 0.043 |
+| 3 | **0.176** [0.369] | 0.016 | 0.014 | 0.008 [0.078] | 0.014 | 0.004 | 0.004 | 0.184 |
+| 4 | 0.047 [0.059] | 0.043 | **0.189** | 0.070 [0.275] | 0.020 | **0.129** | 0.014 | 0.254 |
+| 5 | 0.000 [0.000] | 0.014 | 0.033 | 0.027 [0.039] | 0.006 | 0.020 | 0.000 | 0.027 |
+
+Tails: `hidden_all` 0.414 (accuracy 0.580); `k_all` 0.193; `v_all` **0.639**; `kv_all`
+0.508 (accuracy 0.484); `hidden_kv_all` 0.508, identical to `kv_all` in every statistic;
+`v_all_11_12` 0.471; `v_all_13_15` 0.055; toward-donor under the complete transplant
+0.038 (null 0.000). Native: slot 3 state 18.4% of answers change (exact match 0.938 →
+0.797), slot 1 state 4.3%, slot 5 state 0.0%, slot 5 K/V 3.5%, complete tail 46.1%
+(→ 0.529).
+
+### Predictions scored
+
+| prediction (§114) | result |
+|---|---|
+| P1 parity alternation (odd = state, even = cache) | **half**: slot 3 state-dominant (0.176 vs 0.008), but slot 1 cache-dominant (0.135 vs 0.035) and slot 0's state matters (0.117) |
+| P2 terminal slot inert through both routes | holds (state 0.000; K/V 0.027; native 3.5%) |
+| P3 `kv_all` ≡ `hidden_kv_all` | holds exactly (0.508 / 0.508 / toward 0.038) |
+| P4 values over keys; mid depth group over late | both hold (0.639 vs 0.193; 0.471 vs 0.055) |
+| A6 complete transplant donor-directed | fails, as at GPT-2 (0.038) |
+
+### Reading
+
+1. **What is architectural replicates; what is trained moves.** The identity that a
+   thought acts only through the K/V its successors write holds exactly, the terminal
+   thought is inert, values carry more than keys, the carrier sits in the same relative
+   depth (layers 11–12 of 16 ≈ layers 8–9 of 12, about 70–75% of depth), and a
+   transplanted tail still does not deliver the donor's answer. These are the facts the
+   mechanism paper can state across the two models.
+2. **The compute-store pairing exists at 1B but starts one position earlier.** At GPT-2
+   the pairs were (1 → 2, 4) and (3 → 4) with position 0 as a question register. At 1B
+   slot 0 computes and slot 1 stores (slot 0 state 0.117 feeding slot 1's values 0.135),
+   slot 3 computes and slot 4 stores (0.176 → 0.189), and slots 2 and 5 do little either
+   way. Parity is not the invariant; the pairing is, and which positions pair is a
+   property of the trained model.
+3. **The 1B model leans on its workspace about half as much.** Every single-slot and
+   tail magnitude is roughly halved relative to GPT-2, and half of the answers survive a
+   complete latent-tail transplant (accuracy 0.484 from 0.938, against 0.25 from 0.805 at
+   GPT-2). The direct question route is stronger in the stronger model. The §114 note
+   that a weaker direct route would show as larger change rates had the sign right and
+   the model wrong: the larger model has the stronger direct route. This is the
+   cross-scale form of §111's chain-length result: the workspace is used when needed,
+   and a more capable readout needs it less on GSM8K.
+4. **Values alone disrupt more than keys and values together at 1B** (0.639 vs 0.508),
+   the reverse of GPT-2 (0.684 vs 0.748). A donor's keys with its values make a coherent
+   memory that the recipient can partly use; donor values behind the recipient's own keys
+   do not. Descriptive, recorded.
+
+### Consequence and next
+
+The adapter and the first replication are done; the gate and P3 held, so the §110/§112
+twin runs at 1B follow (the directed test of whether a thought transports a value), with
+the §113 prediction adapted to the 1B pairing: the carrying thought should be slot 3,
+realised through position 4's K/V, and transport should be rarer than at GPT-2 because
+the direct route is stronger. The released-path replication (Step 1a) result is to be
+recorded when available.
