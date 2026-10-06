@@ -5260,3 +5260,101 @@ Reading rules as in §110 and §112; each prediction is scored, none is a go/no-
 ### Cost
 
 Gate ≈ 8 min (float16); standard profile ≈ 25–40 min; long profile ≈ 30–50 min on a T4.
+
+## 117. Completed §116: at 1B, long-chain transport through slot 3 replicates at the same magnitude, and the readout now localises it. The thought that decodes the value is the thought that carries it, on 582 rows
+
+Run 2026-10-07, code `96d44ab`, CODI LLaMA-3.2-1B-Instruct, pad-aware path, gate passed
+(lower bound), both profiles, 512 pairs each, both directions pooled (1,024 rows). Standard
+950 s, long 1,068 s. Baselines 1.000 on both pools (the 1B model solves every gated twin);
+long-profile gate: 1,156 of 1,536 candidate pairs solved both ways.
+
+### Standard profile (all chains; GPT-2 §111 in brackets)
+
+Tails: `kv_all` 0.550 [0.595]; `state_all` 0.445 [0.312]; `v89_all` 0.288 [0.281];
+`v89_even` 0.087; `v89_odd` 0.062. Single sites: `state_0` **0.125** [0.000], `kv_0`
+0.072 [0.232], `kv_1` 0.097, `state_3` 0.080 [0.104], `kv_4` 0.061, `state_1` 0.036, every
+`v89_s` ≤ 0.04, slot 5 zero. Native counterfactual exact match: `kv_all` 0.550, `state_3`
+0.079. Uniquely located 47% (slot 3: 332 rows, slot 1: 148). Unique specificity: located at
+3, state 0.130 vs 0.000 at slot 1, K/V at 4 0.096 vs 0.000 at 2; located at 1, state 0.182
+vs 0.000, K/V at 2 0.162 vs 0.000. D1, D2, D3 fail at their thresholds; D4 holds.
+
+### Long profile (n ≥ 3; GPT-2 §113 in brackets)
+
+Tails: `kv_all` 0.671 [0.692]; `state_all` 0.607 [0.595]; `v89_all` 0.481 [0.305];
+`v89_even` 0.176; `v89_odd` 0.036. Single sites: `state_3` **0.339** [0.325]; `kv_4`
+**0.260** [0.303]; `v89_4` 0.131 [0.047]; `state_1` 0.011 [0.153]; `kv_2` 0.011 [0.158];
+`state_0` 0.041; `kv_0` 0.045; `state_5` 0.000; `kv_5` 0.050. Native: `state_3` 33.5% of
+answers become the twin's (own 0.611), `kv_all` 66.8%, `v89_4` 12.9%. Strata: n3k2 500
+rows with `state_3` ≈ 0.51 and `kv_4` ≈ 0.37; n4k1–k3 ≈ 0.55–0.65; n3k1 ≈ 0.08; k = n ≈ 0.
+**Uniquely located 60.2%** (slot 3: 582 rows, slot 1: 34, slot 5: 0; multi-slot 54 of 670
+located). Unique specificity at slot 3 (582 rows): **state 0.529 vs 0.000** at slot 1;
+**K/V at position 4 0.393 vs 0.000** at position 2. At slot 1 (34 rows): state 0.235 vs
+0.000; K/V at 2 0.235 vs 0.000.
+
+| check | result |
+|---|---|
+| E1 `kv_all` ≥ 0.50 | pass (0.671) |
+| E2 max state ≥ 0.25 | **pass** (0.339), predicted to fail |
+| E3 unique-location specificity | slot 3 **pass** on 582 rows; slot 1 fails the 0.30 floor at 0.235 on 34 rows with a perfect ratio; the all-sites rule therefore reads "fail" |
+
+### Predictions scored
+
+| | prediction | outcome |
+|---|---|---|
+| T1 | tail carries less at 1B | marginal: 0.550 vs 0.595 short, 0.671 vs 0.692 long |
+| T2 | no single-site transport on short chains | **wrong**: slot 0's state transports 12.5% (GPT-2 0.0) |
+| T3 | slot 3 → position 4 carries on long chains; E2 fails | site right (0.339, 0.260; slot 1 and position 2 ≈ 0.01); **E2 passes**, same magnitude as GPT-2 |
+| T4 | position 0 is a thought, not a register | right (`kv_0` 0.072 vs 0.232; `state_0` 0.125 vs 0.000) |
+| T5 | decoding stays redundant, unique location < 10% | **wrong**: 60% uniquely located, almost all at slot 3 |
+| terminal | zero transport | right (state 0.000; K/V 0.050) |
+
+### Reading
+
+1. **Long-chain transport through one thought is scale-stable.** Slot 3's state moves the
+   answer to the correct counterfactual in a third of rows at both 124M and 1B (0.325,
+   0.339), and position 4's whole K/V behind it carries most of that (0.303, 0.260) while
+   the two-layer value block carries less (0.047, 0.131). The §115 halving was a halving
+   of *disruption*; transport on problems that need the workspace did not shrink. The
+   stronger direct route makes the thoughts harder to break, not less used.
+2. **At 1B the readout localises the carrier, and the carrier is specific.** Where GPT-2
+   decoded the changed value at slots 1, 3 and 5 together (94% multi-slot), the 1B model
+   decodes it at one slot, slot 3, in 60% of rows. On those 582 rows the located
+   thought's state carries 53% and the other feeding thought 0%; the store behind it
+   carries 39% and the other store 0%. This is the directed result §110 set out to get:
+   the thought that decodes a value is the thought that carries it, with the readout
+   itself as the locator. At GPT-2 the same contrast rested on 16 pairs because the
+   store was replicated; at 1B it rests on 291 pairs in both directions.
+3. **The compute-store pair at 1B is (3 → 4), alone.** Slot 1 and position 2, half of the
+   GPT-2 ladder, transport nothing at 1B (0.011) even though slot 1's values disrupt
+   answers (§115). Slot 0 computes a little on short chains (0.125) and is no longer a
+   question register. The pairing is model-specific; its existence is not.
+4. **The k-dependence is the same in both models.** Transport is high when the changed
+   number enters at the second step of three (or steps 2–3 of four), near zero when it
+   enters at the first step, and zero when it enters at the last. The last-step case is
+   expected (the quantity is not an intermediate). The first-step case is not explained
+   and is recorded as open: a plausible reading is that when every intermediate conflicts
+   with the question text the readout's direct route wins, but it has not been tested.
+5. **The E3 all-sites rule misfires.** Slot 1 at 1B has 34 uniquely located rows with a
+   perfect contrast and a site rate of 0.235; the preregistered floor of 0.30 was set for
+   GPT-2's magnitudes. The slot-3 result is the one with the rows; the formal "fail" is a
+   rule artifact and is recorded as such without changing the rule after the fact.
+
+### What the two-model record now supports
+
+Across 124M and 1B, inference-only, preregistered: influence is not transport; a complete
+latent-tail transplant moves 55–69% of answers and the rest follow the question; no
+single site transports on short chains except, at 1B, a weak first thought; on chains of
+three or more steps one thought transports the value at a third of rows at both scales,
+carried by the whole K/V of the next position and not by a two-layer value block; the
+terminal thought is inert at both scales; the readout decodes the value redundantly at
+124M and specifically at 1B, and where it is specific the decoded site is the causal site.
+The monitoring statement becomes conditional and testable: whether a probe on a thought
+reads the load-bearing site depends on whether that model's readout localises, and the
+twin protocol measures it in an hour.
+
+### Next
+
+Still owed: the released-path accuracy at batch 128 (notebook §114 Step 1a). The natural
+third model is SIM-CoT's CODI-1B (`internlm/SIM_COT-LLaMA3-CODI-1B`), same interface,
+trained with per-step decoding supervision: prediction, unique location above 60% and
+specificity at both feeding slots. Not built.
