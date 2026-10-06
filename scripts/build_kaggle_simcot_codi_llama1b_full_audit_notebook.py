@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_simcot_codi_llama1b_full_audit.ipynb"
-RUN_COMMIT = "96d44ab463374a22f3415fca6d605c2a4573b082"
+RUN_COMMIT = "dba9ce0e7bc05a3d93b3bee73712e2635b15c0b2"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -33,7 +33,7 @@ md(r"""
 
 Same inference-only protocol, third model: `internlm/SIM_COT-LLaMA3-CODI-1B`, the CODI
 architecture on LLaMA-3.2-1B-Instruct trained with SIM-CoT's per-step decoding supervision.
-Four steps, **no training**, no dataset to attach, about 1.5 hours:
+Four steps, **No training**, no dataset to attach, about 1.5 hours:
 
 0. The released-path replication of **CODI-1B** (mask dropped, batch 128), lost with the
    previous kernel. Prediction: near the paper's 51.9%.
@@ -50,7 +50,7 @@ replicates (terminal slot inert, identity exact, values over keys, mid depth gro
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "96d44ab463374a22f3415fca6d605c2a4573b082"
+RUN_COMMIT = "dba9ce0e7bc05a3d93b3bee73712e2635b15c0b2"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 CONFIG = "configs/official_simcot_codi_llama1b.yaml"
 CODI1B_CONFIG = "configs/official_codi_llama1b.yaml"
