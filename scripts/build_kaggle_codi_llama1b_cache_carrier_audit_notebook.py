@@ -43,6 +43,15 @@ and GSM8k-Aug from Hugging Face datasets.
 Predictions stated in advance (§114): parity alternation of the two routes, the terminal
 slot inert through both, `kv_all` identical to `hidden_kv_all`, values over keys and the
 mid layer group over the late one.
+
+| check (as in §108) | rule |
+|---|---|
+| A1 replication | state swap ≥ 0.25 change at slots 1 and 3; 0 at slot 5 |
+| A2 terminal slot is a memory | K/V swap at slot 5 changes ≥ 10% of first tokens (predicted to fail at 1B too) |
+| A3 route split | slots 1 and 3: cache-dominant / state-dominant / shared at ratio 1.5 |
+| A4 values over keys | values ≥ keys at a majority of slot 1, slot 3, slot 5, tail |
+| A5 layer localisation | values at the mid depth group ≥ the late group at the tail (16 layers: 11–12 vs 13–15) |
+| A6 tail transplant | complete latent-tail transplant sends changed answers to the donor's (≥ 0.5, ≥ null + 0.3) |
 """)
 
 md("## Setup")
