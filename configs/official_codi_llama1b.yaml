@@ -1,0 +1,69 @@
+# Accuracy/reproduction gate for the author-released CODI LLaMA-3.2-1B-Instruct checkpoint.
+# Same contract as configs/official_codi_gpt2.yaml; this run never updates model weights.
+run_name: official_codi_llama1b
+seed: 11
+output_dir: outputs/official_codi_llama1b
+data_config: configs/data_official_codi.yaml
+
+official_source:
+  repo: https://github.com/zhenyi4/codi
+  revision: 2c2314662c63e9f482ebc46614ffe9af17a241e5
+  script: scripts/test_llama1b.sh
+
+checkpoint:
+  repo_id: zen-E/CODI-llama3.2-1b-Instruct
+  revision: b2c88ba224b06b12b52ef39b87f794b98a6eb1c8
+  filename: pytorch_model.bin
+  # Hugging Face LFS object id for the released 3,408,265,790-byte checkpoint.
+  sha256: c6d4b4b096f03fafca18409a4a7535ac9539f558ed741b31878fecadb40ed23b
+
+model:
+  # meta-llama/Llama-3.2-1B-Instruct is gated; this mirror serves the identical weights,
+  # config and tokenizer without a token.  The CODI checkpoint overrides every tensor it
+  # contains on top of it.
+  base_model: unsloth/Llama-3.2-1B-Instruct
+  base_revision: 5a8abab4a5d6f164389b1079fb721cfab8d7126c
+  model_max_length: 512
+  dtype: auto
+  lora_rank: 128
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj, gate_proj]
+  projection_dim: 2048
+  projection_dropout: 0.0
+  projection_layer_norm: true
+  # LLaMA 3 ships only a fast tokenizer; the released script's use_fast=False falls back to it.
+  tokenizer_use_fast: true
+  # The released test.py tokenizes questions with special tokens (a BOS prefix).
+  question_special_tokens: true
+  # LLaMA tokenizers put a lone space token before the answer number; the first-token
+  # instrument reads the number token (the released code's "+1 for ' '").
+  answer_space_token: true
+  # Carry the attention mask and explicit rotary positions through the thoughts and the
+  # answer, so a left-padded batch reproduces the unpadded computation (verified locally:
+  # without it, batched LLaMA decoding degenerates after the answer).
+  pad_aware_generation: true
+
+eval:
+  latent_iterations: 6
+  max_new_tokens: 256
+  batch_size: 32
+  limit: null
+  datasets: [gsm8k]
+  expected_counts:
+    gsm8k: 1319
+
+accuracy_gate:
+  reference: CODI paper LLaMA-3.2-1B-Instruct result (Table 1)
+  primary_dataset: gsm8k
+  absolute_tolerance: 0.03
+  published_accuracy:
+    gsm8k: 0.519
+
+endpoint_retention:
+  data_config: configs/data.yaml
+
+kv_subspace:
+  data_config: configs/data.yaml
+  latent_positions: 6
+  importance_weight: 0.1

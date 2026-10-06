@@ -241,6 +241,13 @@ def encode_official_codi_row(
     answer_start = endpoint + 1
     if endpoint >= len(teacher_ids) or answer_start >= len(teacher_ids):
         raise RuntimeError("official CODI answer boundary reconstruction failed")
+    if getattr(tokenizer, "official_codi_answer_space_token", False):
+        # LLaMA-family tokenizers emit a lone space token between "The answer is:" and
+        # the number (the released code's "one more token standing for ' '").  The
+        # first answer token is the first number token, so the boundary moves by one.
+        if answer_start + 1 < len(teacher_ids) and not tokenizer.decode([teacher_ids[answer_start]]).strip():
+            endpoint += 1
+            answer_start += 1
     return OfficialCODIEncodedRow(
         student_question_ids=question_ids + [int(bot_token_id)],
         teacher_ids=teacher_ids,

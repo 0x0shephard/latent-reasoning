@@ -5051,3 +5051,74 @@ optional spend, in order: (a) the inference-only 1B replication of §109, §111 
 §113 (the §107 plan, now with three concrete predictions: parity alternation, no
 transport on short chains, slot-3 transport on long chains); (b) a chain-length
 sweep at fixed k to put a curve under point 1. No further GPT-2 training.
+
+## 114. Preregistered: the CODI LLaMA-3.2-1B adapter and the §108 cache-carrier audit at 1B
+
+Designed 2026-10-06 after §113. No training. Two parts: an adapter that runs the
+author-released CODI LLaMA-3.2-1B-Instruct checkpoint (`zen-E/CODI-llama3.2-1b-Instruct`,
+revision `b2c88ba2`) through the same code path as GPT-2, and the first inference-only
+replication: the §108 audit, contract `official_codi_cache_carrier_audit_v1` with the
+layer groups rescaled to the backbone's depth.
+
+### Adapter (what differs from GPT-2, each mirrored from the released `test.py` / `model.py`)
+
+- LoRA rank 128, α 32, dropout 0.1 on `q_proj, k_proj, v_proj, o_proj, up_proj,
+  down_proj, gate_proj`; projector 2048 → 2048 with LayerNorm; six thoughts; special
+  ids pad 128256, BOT 128257, EOT 128258 appended to the 128256 vocabulary.
+- Base weights, config and tokenizer from `unsloth/Llama-3.2-1B-Instruct` (ungated
+  mirror of the gated Meta repo, identical tensors); the CODI checkpoint overrides every
+  tensor it contains. Fast tokenizer (LLaMA 3 has no slow one). Questions are tokenized
+  with special tokens, i.e. a BOS prefix, as the released script does.
+- **Instrument change.** The LLaMA tokenizer emits a lone space token between
+  "The answer is:" and the number. The first answer token is therefore the first number
+  token, one position later than the GPT-2 boundary; the released training code applies
+  the same "+1 for ' '". Enabled per config (`answer_space_token`), inert for GPT-2.
+- Value-cache layer groups scale with depth: for 16 layers, 0–10 / 11–12 / 13–15 (for
+  12 layers the frozen §108 names 0–7 / 8–9 / 10–11 are reproduced exactly).
+- Compatibility shim: with torch < 2.5 Transformers rejects LLaMA's tensor-parallel
+  plan; it is dropped on such hosts only. Kaggle is unaffected.
+
+### Gate before any measurement
+
+The full GSM8K reproduction (1,319 questions, greedy, six thoughts) must land within
+0.03 of the paper's 51.9% for LLaMA-3.2-1B-Instruct. Run first in float16 (the T4 has no
+bfloat16); if the gate fails, rerun in float32 before concluding anything about the
+adapter. The §108 runner refuses to start without a passed full gate.
+
+### Predictions for the audit at 1B (from §109; stated before the run)
+
+- P1 parity alternation: the state route is larger at the odd slots, the K/V route at
+  the even slots (A3 state-dominant at slots 1 and 3; `kv` at slots 0, 2, 4 above `kv` at
+  1, 3).
+- P2 the terminal slot is inert through both routes (A2 fails again, K/V ≤ 0.10).
+- P3 `kv_all` ≡ `hidden_kv_all` (architectural identity, must hold exactly).
+- P4 values over keys and mid-group over late-group values (A4, A5) hold.
+- No prediction on magnitudes; a weaker direct question route at 1B would show as
+  larger change rates throughout.
+
+Reading rules as in §108. The run is the first of the three-model replication the
+mechanism paper needs (§107, §113); the §110/§112 twin runs at 1B follow only if the gate
+and P3 hold.
+
+### Cost
+
+GSM8K gate ≈ 5–10 min on a T4 in float16; the audit ≈ 55 first-token passes and 8
+native decodes over 512 questions with a 1B model, ≈ 40–70 min. 512 fit rows are
+re-sampled with the LLaMA tokenizer, so the pool may differ from GPT-2's by rows that
+fail the token filters under one tokenizer only; the sampling hash is recorded.
+
+### §114 addendum: local verification of the adapter (2026-10-06, Mac, MPS float32)
+
+- Checkpoint loads through the shared wrapper: 377 of 381 tensors matched (99.74% of
+  parameters); the four unmatched are an auxiliary `dynamic_cls` head absent from the
+  released architecture and unused by the released evaluation; `lm_head` and
+  `embed_tokens` in the checkpoint are identical, so re-tying is exact.
+- **The released path's dropped attention mask breaks LLaMA in batches.** A question
+  that decodes to "The answer is: 3" alone decoded to "3rdry1 redeemed1<<1…" inside a
+  left-padded batch, in float16 and float32 alike. With the mask and rotary positions
+  carried through every step (`pad_aware_generation`, LLaMA config only) the batched
+  output equals the unpadded one exactly and 48 GSM8K test questions score 50.0%
+  (paper 51.9%). The GPT-2 path is unchanged and byte-identical.
+- The §108 runner's smoke (24 questions) completed on the 1B: 16 layers, value groups
+  0–10 / 11–12 / 13–15, `kv_all` ≡ `hidden_kv_all` (0.708 both), slot-5 state 0.000.
+  Smoke magnitudes are not evidence; the Kaggle run with the full gate is.

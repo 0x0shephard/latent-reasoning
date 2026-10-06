@@ -40,7 +40,10 @@ from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import extract_official_answer_number
 from src.mech.cache_carrier import (
     CacheEdit,
+    backbone_layers,
     donor_view,
+    group_names,
+    layer_groups,
     generate_under,
     latent_path,
     outcomes_under,
@@ -105,15 +108,19 @@ PROFILES = {
 }
 
 
-def condition_spec(name: str) -> tuple[tuple[int, ...], list[CacheEdit]]:
-    """(slots whose output state is swapped, cache edits)."""
+def condition_spec(name: str, n_layers: int = LAYERS) -> tuple[tuple[int, ...], list[CacheEdit]]:
+    """(slots whose output state is swapped, cache edits).  ``v89`` is SCIT's
+    mid-late value group and ``v1011`` the final group; for GPT-2 these are layers
+    8-9 and 10-11, for deeper backbones the groups are rescaled (``layer_groups``)."""
+    groups = layer_groups(n_layers); names = group_names(n_layers)
+    mid, late, all_layers = groups[names["mid"]], groups[names["late"]], tuple(range(n_layers))
     if name == "state_all":
         return SLOTS, []
     if name in ("v89_all", "v89_even", "v89_odd"):
         slots = {"v89_all": SLOTS, "v89_even": EVEN_SLOTS, "v89_odd": ODD_SLOTS}[name]
-        return (), [CacheEdit(s, (8, 9), False, True) for s in slots]
+        return (), [CacheEdit(s, mid, False, True) for s in slots]
     if name == "kv_all":
-        return (), [CacheEdit(s, tuple(range(LAYERS)), True, True) for s in SLOTS]
+        return (), [CacheEdit(s, all_layers, True, True) for s in SLOTS]
     kind, _, slot = name.rpartition("_")
     if not slot.isdigit() or int(slot) not in SLOTS:
         raise ValueError(f"unknown condition {name}")
@@ -121,11 +128,11 @@ def condition_spec(name: str) -> tuple[tuple[int, ...], list[CacheEdit]]:
     if kind == "state":
         return (s,), []
     if kind == "v89":
-        return (), [CacheEdit(s, (8, 9), False, True)]
+        return (), [CacheEdit(s, mid, False, True)]
     if kind == "v1011":
-        return (), [CacheEdit(s, (10, 11), False, True)]
+        return (), [CacheEdit(s, late, False, True)]
     if kind == "kv":
-        return (), [CacheEdit(s, tuple(range(LAYERS)), True, True)]
+        return (), [CacheEdit(s, all_layers, True, True)]
     raise ValueError(f"unknown condition {name}")
 
 
@@ -254,6 +261,8 @@ def run(args):
     model.to(device=device, dtype=dtype).eval()
     latent_positions = int(cfg.eval.latent_iterations)
     bs = args.batch_size
+    n_layers = backbone_layers(model)
+    print("backbone layers", n_layers, "value groups", layer_groups(n_layers))
 
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
@@ -329,7 +338,7 @@ def run(args):
     direction_t = {"q_receives_twin": torch.tensor([i % 2 == 0 for i in range(len(rows))]),
                    "twin_receives_q": torch.tensor([i % 2 == 1 for i in range(len(rows))])}
     for name in SINGLE_CONDITIONS + TAIL_CONDITIONS:
-        hidden_slots, edits = condition_spec(name)
+        hidden_slots, edits = condition_spec(name, n_layers)
         pred = outcomes_under(model, tokenizer, rows, latent_positions=latent_positions, batch_size=bs, device=device,
                               hidden_donors={s: donor.states[:, s] for s in hidden_slots}, cache_edits=edits, donor=donor)
         preds[name] = pred
@@ -367,7 +376,7 @@ def run(args):
     baseline["native_exact_match"] = float(sum(1 for a, b in zip(base_numbers, own_numbers) if a == b) / len(rows))
     report["native"] = {}
     for name in NATIVE_CONDITIONS:
-        hidden_slots, edits = condition_spec(name)
+        hidden_slots, edits = condition_spec(name, n_layers)
         outputs = generate_under(model, tokenizer, questions, latent_iterations=latent_positions, batch_size=bs, device=device,
                                  hidden_donors={s: native_donor.states[:, s] for s in hidden_slots}, cache_edits=edits, donor=native_donor)
         numbers = [extract_official_answer_number(o) for o in outputs]
@@ -386,6 +395,8 @@ def run(args):
                                    "tail_conditions": list(TAIL_CONDITIONS), "native_conditions": list(NATIVE_CONDITIONS),
                                    "d1_min_tail": D1_MIN_TAIL, "d2_min_even": D2_MIN_EVEN, "d2_ratio": D2_RATIO, "d2_min_single": D2_MIN_SINGLE,
                                    "d3_min_site": D3_MIN_SITE, "d3_ratio": D3_RATIO, "d3_min_located": D3_MIN_LOCATED, "d4_ratio": D4_RATIO,
+                                   "backbone_layers": n_layers, "layer_groups": {k: list(v) for k, v in layer_groups(n_layers).items()},
+                                   "base_model": str(cfg.model.base_model),
                                    "profile": dict(profile), "e1_min_tail_kv": E1_MIN_TAIL_KV, "e2_min_state": E2_MIN_STATE,
                                    "e3_min_site": E3_MIN_SITE, "e3_ratio": E3_RATIO, "e3_min_unique": E3_MIN_UNIQUE},
                "gate": gate, "baseline": baseline, "strata_counts": {k: int(m.sum()) for k, m in strata_t.items()},

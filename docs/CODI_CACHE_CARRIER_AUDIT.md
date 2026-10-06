@@ -38,3 +38,15 @@ Reported as a profile; the reading rules are fixed in §108. Not included: a cor
 probe on the value cache (a linear map of the layer-ℓ residual §52 already probed).
 Notebook `notebooks/kaggle_codi_cache_carrier_audit.ipynb`; runner
 `scripts/run_codi_cache_carrier_audit.py`; module `src/mech/cache_carrier.py`.
+
+## At 1B (ledger §114)
+
+The same contract runs on the author-released CODI LLaMA-3.2-1B-Instruct checkpoint
+through `configs/official_codi_llama1b.yaml`. Differences are confined to the adapter:
+LLaMA LoRA targets and a 2048-wide projector; BOS-prefixed questions; the first answer
+token is the first number token because the LLaMA tokenizer emits a lone space token
+after "The answer is:"; the mask and rotary positions are carried through every step so
+left padding is invisible (the released path drops the mask, which GPT-2 tolerates and
+LLaMA does not); value-cache layer groups scale with depth (16 layers: 0–10 / 11–12 /
+13–15). The full GSM8K reproduction gate (paper 51.9%, ±0.03) must pass first.
+Notebook `notebooks/kaggle_codi_llama1b_cache_carrier_audit.ipynb`.

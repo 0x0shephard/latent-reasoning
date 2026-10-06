@@ -19,7 +19,7 @@ import torch
 from src.data.official_codi_training import collate_official_codi_kv_rows
 from src.mech.kv_risk_cache import cache_to_legacy
 from src.mech.trajectory_supervision import _student_answer_io
-from src.models.official_codi import generate_official_codi
+from src.models.official_codi import _PadAwareStepper, generate_official_codi
 
 
 @dataclass(frozen=True)
@@ -81,14 +81,15 @@ def latent_path(model, batch, *, latent_positions: int, hidden_donors: dict[int,
     that slot wrote.  Returns ``(first-token logits [B, V], gold first token [B],
     recorded Trajectory or None)``.
     """
+    stepper = _PadAwareStepper(model, batch.student_question_mask)
     encoded = model.codi(input_ids=batch.student_question_ids, attention_mask=batch.student_question_mask,
-                         use_cache=True, output_hidden_states=True, return_dict=True)
+                         use_cache=True, output_hidden_states=True, return_dict=True, **stepper.prompt_kwargs())
     cache = encoded.past_key_values
     latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
     states, keys, values = [], [], []
     for position in range(latent_positions):
         out = model.codi(inputs_embeds=latent, past_key_values=cache, use_cache=True,
-                         output_hidden_states=True, return_dict=True)
+                         output_hidden_states=True, return_dict=True, **stepper.step_kwargs(1))
         cache = apply_edits(out.past_key_values, position, cache_edits, donor, rows)
         state = out.hidden_states[-1][:, -1, :]
         if record:
@@ -99,7 +100,8 @@ def latent_path(model, batch, *, latent_positions: int, hidden_donors: dict[int,
         latent = model.prj(state.unsqueeze(1))
     answer_inputs, _, _ = _student_answer_io(batch, eot_token_id=model.eot_id, pad_token_id=model.pad_token_id)
     decoded = model.codi(inputs_embeds=model.input_embeddings()(answer_inputs), past_key_values=cache,
-                         use_cache=True, output_hidden_states=False, return_dict=True)
+                         use_cache=True, output_hidden_states=False, return_dict=True,
+                         **stepper.step_kwargs(int(answer_inputs.shape[1])))
     endpoints = (batch.teacher_answer_start - batch.teacher_trace_end).to(answer_inputs.device)
     row = torch.arange(answer_inputs.shape[0], device=answer_inputs.device)
     logits = decoded.logits[row, endpoints, : model.eot_id]
@@ -204,3 +206,28 @@ def generate_under(model, tokenizer, questions: Sequence[str], *, latent_iterati
 def donor_view(trajectory: Trajectory, perm: Sequence[int]) -> Trajectory:
     index = torch.tensor(list(perm))
     return Trajectory(states=trajectory.states[index], keys=trajectory.keys[index], values=trajectory.values[index])
+
+
+def layer_groups(n_layers: int) -> dict[str, tuple[int, ...]]:
+    """SCIT's predeclared value-cache groups scaled to the backbone depth: the first
+    two thirds, then the final third split in two.  For 12 layers: 0-7, 8-9, 10-11."""
+    if n_layers < 6:
+        raise ValueError("need at least six layers for three groups")
+    final = n_layers - round(n_layers / 3)
+    mid_end = final + (n_layers - final) // 2
+    groups = {"early": tuple(range(0, final)), "mid": tuple(range(final, mid_end)), "late": tuple(range(mid_end, n_layers))}
+    return {f"{v[0]}_{v[-1]}": v for v in groups.values()}
+
+
+def group_names(n_layers: int) -> dict[str, str]:
+    """role -> suffix, e.g. {'early': '0_7', 'mid': '8_9', 'late': '10_11'}."""
+    names = list(layer_groups(n_layers))
+    return {"early": names[0], "mid": names[1], "late": names[2]}
+
+
+def backbone_layers(model) -> int:
+    config = model.config
+    for name in ("num_hidden_layers", "n_layer"):
+        if getattr(config, name, None) is not None:
+            return int(getattr(config, name))
+    raise ValueError("cannot read the backbone depth")

@@ -75,8 +75,14 @@ def resolve_torch_dtype(name: str, device: torch.device) -> torch.dtype:
     return dtype
 
 
+#: LoRA targets of the released checkpoints, per backbone family (official test.py).
+GPT2_LORA_TARGET_MODULES = ("c_attn", "c_proj", "c_fc")
+LLAMA_LORA_TARGET_MODULES = ("q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj")
+
+
 class OfficialCODIGPT2(nn.Module):
-    """The exact module topology used by the released GPT-2 checkpoint."""
+    """The exact module topology used by the released checkpoints (GPT-2, and the
+    LLaMA family through ``lora_target_modules`` and the embedding accessor)."""
 
     def __init__(
         self,
@@ -88,16 +94,34 @@ class OfficialCODIGPT2(nn.Module):
         projection_dim: int = 768,
         projection_dropout: float = 0.0,
         projection_layer_norm: bool = True,
+        lora_target_modules: tuple[str, ...] = GPT2_LORA_TARGET_MODULES,
+        question_special_tokens: bool = False,
+        pad_aware_generation: bool = False,
     ) -> None:
         super().__init__()
         from peft import LoraConfig, TaskType, get_peft_model
 
         self.codi = backbone
+        # The released LLaMA path tokenizes questions with the tokenizer's special
+        # tokens (a BOS prefix); the GPT-2 path adds none.  Read by the generator.
+        self.question_special_tokens = bool(question_special_tokens)
+        # The released path drops the attention mask after the question, so with left
+        # padding the pad positions become visible to the thoughts and the answer and
+        # rotary positions shift.  GPT-2 tolerates this (and the released GPT-2 numbers
+        # were produced that way); LLaMA does not.  With this flag the mask and explicit
+        # positions are carried through every step, so a padded batch reproduces the
+        # unpadded computation.
+        self.pad_aware_generation = bool(pad_aware_generation)
         original_vocab_size = int(self.codi.config.vocab_size)
         self.pad_token_id = original_vocab_size
         self.bot_id = original_vocab_size + 1
         self.eot_id = original_vocab_size + 2
-        self.codi.resize_token_embeddings(original_vocab_size + 3)
+        try:
+            # The released checkpoints overwrite the three new rows, so the covariance
+            # based initialisation newer Transformers performs is wasted work.
+            self.codi.resize_token_embeddings(original_vocab_size + 3, mean_resizing=False)
+        except TypeError:  # older Transformers without the keyword
+            self.codi.resize_token_embeddings(original_vocab_size + 3)
 
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
@@ -105,7 +129,7 @@ class OfficialCODIGPT2(nn.Module):
             r=int(lora_rank),
             lora_alpha=int(lora_alpha),
             lora_dropout=float(lora_dropout),
-            target_modules=["c_attn", "c_proj", "c_fc"],
+            target_modules=list(lora_target_modules),
             init_lora_weights=True,
         )
         self.codi = get_peft_model(self.codi, lora_config)
@@ -128,9 +152,12 @@ class OfficialCODIGPT2(nn.Module):
 
     def input_embeddings(self) -> nn.Module:
         base = official_codi_base_model(self)
-        if not hasattr(base, "transformer") or not hasattr(base.transformer, "wte"):
-            raise TypeError("official CODI GPT-2 requires transformer.wte embeddings")
-        return base.transformer.wte
+        if hasattr(base, "transformer") and hasattr(base.transformer, "wte"):
+            return base.transformer.wte                      # GPT-2
+        embeddings = base.get_input_embeddings()             # LLaMA and other HF causal LMs
+        if embeddings is None:
+            raise TypeError("official CODI backbone exposes no input embeddings")
+        return embeddings
 
     def tie_weights(self) -> None:
         self.codi.tie_weights()
@@ -146,6 +173,47 @@ def official_codi_base_model(model: OfficialCODIGPT2) -> nn.Module:
     """
     getter = getattr(model.codi, "get_base_model", None)
     return getter() if callable(getter) else model.codi
+
+
+class _PadAwareStepper:
+    """Carries the attention mask and explicit position ids across incremental
+    forwards (``None`` inputs when the model is not pad-aware, i.e. the released path)."""
+
+    def __init__(self, model, attention_mask: torch.Tensor | None):
+        self.active = bool(getattr(model, "pad_aware_generation", False)) and attention_mask is not None
+        if self.active:
+            self.mask = attention_mask.to(torch.long)
+            positions = (self.mask.cumsum(-1) - 1).clamp_min(0)
+            self.prompt_positions = positions
+            self.next_position = positions[:, -1:] + 1
+
+    def prompt_kwargs(self) -> dict:
+        return {"position_ids": self.prompt_positions} if self.active else {}
+
+    def step_kwargs(self, new_tokens: int) -> dict:
+        """Call once per incremental forward of ``new_tokens`` positions."""
+        if not self.active:
+            return {}
+        ones = torch.ones(self.mask.shape[0], new_tokens, dtype=self.mask.dtype, device=self.mask.device)
+        self.mask = torch.cat((self.mask, ones), dim=1)
+        offsets = torch.arange(new_tokens, device=self.mask.device).unsqueeze(0)
+        positions = self.next_position + offsets
+        self.next_position = positions[:, -1:] + 1
+        return {"attention_mask": self.mask, "position_ids": positions}
+
+
+def prepare_backbone_config(config):
+    """Compatibility shim: with torch < 2.5 Transformers 4.52 has no tensor-parallel
+    styles and rejects any backbone that declares a TP plan (LLaMA).  The plan is
+    irrelevant to single-device inference, so it is dropped there and left alone
+    elsewhere.  GPT-2 declares none, so it is never touched."""
+    try:
+        from transformers.integrations import tensor_parallel as tp
+    except ImportError:  # pragma: no cover - older Transformers
+        return config
+    if getattr(tp, "ALL_PARALLEL_STYLES", None) is None and getattr(config, "base_model_tp_plan", None):
+        config.base_model_tp_plan = None
+    return config
 
 
 def build_official_codi_gpt2(
@@ -165,7 +233,11 @@ def build_official_codi_gpt2(
     }
     if token:
         pretrained_kwargs["token"] = token
-    backbone = AutoModelForCausalLM.from_pretrained(base_model, **pretrained_kwargs)
+    from transformers import AutoConfig
+
+    config = prepare_backbone_config(AutoConfig.from_pretrained(base_model, revision=base_revision, token=token or None))
+    backbone = AutoModelForCausalLM.from_pretrained(base_model, config=config, **pretrained_kwargs)
+    targets = settings.get("lora_target_modules")
     model = OfficialCODIGPT2(
         backbone,
         lora_rank=int(settings["lora_rank"]),
@@ -174,24 +246,31 @@ def build_official_codi_gpt2(
         projection_dim=int(settings["projection_dim"]),
         projection_dropout=float(settings["projection_dropout"]),
         projection_layer_norm=bool(settings["projection_layer_norm"]),
+        lora_target_modules=tuple(str(m) for m in targets) if targets else GPT2_LORA_TARGET_MODULES,
+        question_special_tokens=bool(settings.get("question_special_tokens", False)),
+        pad_aware_generation=bool(settings.get("pad_aware_generation", False)),
     )
 
     tokenizer_kwargs = {
         "revision": base_revision,
         "model_max_length": int(settings["model_max_length"]),
         "padding_side": "left",
-        "use_fast": False,
+        "use_fast": bool(settings.get("tokenizer_use_fast", False)),
     }
     if token:
         tokenizer_kwargs["token"] = token
     tokenizer = AutoTokenizer.from_pretrained(base_model, **tokenizer_kwargs)
     if tokenizer.pad_token_id is None:
+        # GPT-2: the released code adds [PAD], which lands on the model's pad id.
         tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-    if tokenizer.pad_token_id != model.pad_token_id:
-        raise RuntimeError(
-            "official tokenizer/model special-token contract changed: "
-            f"pad={tokenizer.pad_token_id}, expected={model.pad_token_id}"
-        )
+        if tokenizer.pad_token_id != model.pad_token_id:
+            raise RuntimeError(
+                "official tokenizer/model special-token contract changed: "
+                f"pad={tokenizer.pad_token_id}, expected={model.pad_token_id}"
+            )
+    # LLaMA: the tokenizer already has a pad id; the released code keeps it for
+    # question padding (positions are masked), so no contract is imposed.
+    tokenizer.official_codi_answer_space_token = bool(settings.get("answer_space_token", False))
     return model, tokenizer
 
 
@@ -271,12 +350,14 @@ def load_official_checkpoint(
             f"sample unmatched keys={unexpected[:5]}"
         )
 
-    required_fragments = ("prj.1.weight", "prj.3.weight", "lora_A", "lora_B", "wte.weight")
+    required_fragments = ("prj.1.weight", "prj.3.weight", "lora_A", "lora_B")
     absent = [
         fragment
         for fragment in required_fragments
         if not any(fragment in key for key in matched)
     ]
+    if not any("wte.weight" in key or "embed_tokens.weight" in key for key in matched):
+        absent.append("input embeddings (wte.weight or embed_tokens.weight)")
     if absent:
         raise RuntimeError(
             "official checkpoint did not load required components: " + ", ".join(absent)
@@ -397,7 +478,7 @@ def generate_official_codi(
             chunk,
             return_tensors="pt",
             padding="longest",
-            add_special_tokens=False,
+            add_special_tokens=bool(getattr(model, "question_special_tokens", False)),
         ).to(device)
         bot = torch.full(
             (len(chunk), 1),
@@ -410,6 +491,7 @@ def generate_official_codi(
             (batch["attention_mask"], torch.ones_like(bot)), dim=1
         )
 
+        stepper = _PadAwareStepper(model, attention_mask)
         _set_output_head_answer_position(model, None)
         encoded = model.codi(
             input_ids=input_ids,
@@ -417,6 +499,7 @@ def generate_official_codi(
             use_cache=True,
             output_hidden_states=True,
             return_dict=True,
+            **stepper.prompt_kwargs(),
         )
         cache = encoded.past_key_values
         latent = model.prj(encoded.hidden_states[-1][:, -1, :].unsqueeze(1))
@@ -428,6 +511,7 @@ def generate_official_codi(
                 use_cache=True,
                 output_hidden_states=True,
                 return_dict=True,
+                **stepper.step_kwargs(1),
             )
             cache = latent_output.past_key_values
             if kv_intervention is not None:
@@ -459,6 +543,7 @@ def generate_official_codi(
                     output_hidden_states=answer_state_observer is not None,
                     output_attentions=False,
                     return_dict=True,
+                    **stepper.step_kwargs(int(forced.shape[1])),
                 )
             cache = decoded.past_key_values
             endpoint_applied |= endpoint_mask
@@ -525,6 +610,7 @@ def generate_official_codi(
                     output_hidden_states=answer_state_observer is not None,
                     output_attentions=False,
                     return_dict=True,
+                    **stepper.step_kwargs(1),
                 )
             cache = decoded.past_key_values
             if answer_state_observer is not None:

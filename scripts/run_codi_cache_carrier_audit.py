@@ -38,8 +38,11 @@ from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import extract_official_answer_number
 from src.mech.cache_carrier import (
     CacheEdit,
+    backbone_layers,
     donor_view,
     generate_under,
+    group_names,
+    layer_groups,
     outcomes_under,
     record_native_trajectory,
     record_trajectory,
@@ -55,10 +58,22 @@ from src.utils.config import load_config
 
 
 CONTRACT = "official_codi_cache_carrier_audit_v1"
-LAYERS = 12
-LAYER_GROUPS = {"0_7": tuple(range(0, 8)), "8_9": (8, 9), "10_11": (10, 11)}
-SLOT_CONDITIONS = ("hidden", "k", "v", "kv", "v_layers_0_7", "v_layers_8_9", "v_layers_10_11", "hidden_kv")
-TAIL_CONDITIONS = ("hidden_all", "k_all", "v_all", "kv_all", "v_all_8_9", "v_all_10_11", "hidden_kv_all")
+LAYERS = 12                       # GPT-2 default; ``protocol_for(n_layers)`` rescales for other depths
+LAYER_GROUPS = layer_groups(LAYERS)   # {"0_7", "8_9", "10_11"} for GPT-2
+
+
+def protocol_for(n_layers: int) -> dict:
+    """Condition names for a backbone of ``n_layers``; GPT-2 (12) reproduces the
+    frozen §108 names exactly."""
+    groups = layer_groups(n_layers)
+    names = group_names(n_layers)
+    slot = ("hidden", "k", "v", "kv") + tuple(f"v_layers_{g}" for g in groups) + ("hidden_kv",)
+    tail = ("hidden_all", "k_all", "v_all", "kv_all", f"v_all_{names['mid']}", f"v_all_{names['late']}", "hidden_kv_all")
+    return {"layers": n_layers, "groups": groups, "names": names, "slot_conditions": slot, "tail_conditions": tail}
+
+
+SLOT_CONDITIONS = protocol_for(LAYERS)["slot_conditions"]
+TAIL_CONDITIONS = protocol_for(LAYERS)["tail_conditions"]
 NATIVE_SLOT = {1: ("hidden", "kv"), 3: ("hidden", "kv"), 5: ("hidden", "kv")}
 NATIVE_TAIL = ("kv_all", "hidden_kv_all")
 FEEDING_SLOTS = (1, 3)
@@ -72,32 +87,27 @@ SANITY_SLACK = 0.02
 SMOKE = {"questions": 24}
 
 
-TAIL_TO_BASE = {"hidden_all": "hidden", "k_all": "k", "v_all": "v", "kv_all": "kv", "v_all_8_9": "v_layers_8_9",
-                "v_all_10_11": "v_layers_10_11", "hidden_kv_all": "hidden_kv"}
-BASE_SPEC = {  # name -> (swap hidden state, keys, values, layers)
-    "hidden": (True, False, False, ()),
-    "k": (False, True, False, tuple(range(LAYERS))),
-    "v": (False, False, True, tuple(range(LAYERS))),
-    "kv": (False, True, True, tuple(range(LAYERS))),
-    "v_layers_0_7": (False, False, True, LAYER_GROUPS["0_7"]),
-    "v_layers_8_9": (False, False, True, LAYER_GROUPS["8_9"]),
-    "v_layers_10_11": (False, False, True, LAYER_GROUPS["10_11"]),
-    "hidden_kv": (True, True, True, tuple(range(LAYERS))),
-}
-
-
-def condition_spec(name: str, slots: tuple[int, ...]) -> tuple[tuple[int, ...], list[CacheEdit]]:
+def condition_spec(name: str, slots: tuple[int, ...], n_layers: int = LAYERS) -> tuple[tuple[int, ...], list[CacheEdit]]:
     """(slots whose hidden state is swapped, cache edits) for a condition name."""
-    base = TAIL_TO_BASE.get(name, name)
-    if base not in BASE_SPEC:
+    groups = layer_groups(n_layers)
+    all_layers = tuple(range(n_layers))
+    base = name[:-4] if name.endswith("_all") and not name.startswith("v_all_") else name
+    if name.startswith("v_all_"):
+        base = "v_layers_" + name[len("v_all_"):]
+    spec = {"hidden": (True, False, False, ()), "k": (False, True, False, all_layers), "v": (False, False, True, all_layers),
+            "kv": (False, True, True, all_layers), "hidden_kv": (True, True, True, all_layers)}
+    spec |= {f"v_layers_{g}": (False, False, True, layers) for g, layers in groups.items()}
+    if base not in spec:
         raise ValueError(f"unknown condition {name}")
-    hidden, keys, values, layers = BASE_SPEC[base]
+    hidden, keys, values, layers = spec[base]
     edits = [CacheEdit(slot, layers, keys, values) for slot in slots] if (keys or values) else []
     return (slots if hidden else ()), edits
 
 
 def checks_from(report: dict) -> dict:
     slots, tail = report["slots"], report["tail"]
+    names = group_names(int(report.get("layers", LAYERS)))
+    mid, late = f"v_all_{names['mid']}", f"v_all_{names['late']}"
     rate = lambda s, c: slots[str(s)][c]["change_rate"]
     feeding = {s: {"hidden": rate(s, "hidden"), "kv": rate(s, "kv")} for s in FEEDING_SLOTS}
 
@@ -118,7 +128,7 @@ def checks_from(report: dict) -> dict:
         "a2_terminal_slot_is_a_memory": rate(TERMINAL_SLOT, "kv") >= A2_MIN_TERMINAL_KV,
         "a3_route_split": {str(s): classify(feeding[s]["hidden"], feeding[s]["kv"]) for s in FEEDING_SLOTS},
         "a4_values_over_keys": sum(values_over_keys) > len(values_over_keys) / 2,
-        "a5_layers_8_9_over_10_11": tail["v_all_8_9"]["change_rate"] >= tail["v_all_10_11"]["change_rate"],
+        "a5_layers_8_9_over_10_11": tail[mid]["change_rate"] >= tail[late]["change_rate"],
         "a6_tail_transplant_donor_directed": (toward is not None and null is not None
                                               and toward >= A6_MIN_TOWARD_DONOR and toward >= null + A6_MIN_OVER_NULL),
         "sanity_both_routes_at_least_each": all(
@@ -173,6 +183,10 @@ def run(args):
     model.to(device=device, dtype=dtype).eval()
     latent_positions = int(cfg.eval.latent_iterations)
     all_slots = tuple(range(latent_positions))
+    n_layers = backbone_layers(model)
+    protocol = protocol_for(n_layers)
+    slot_conditions, tail_conditions = protocol["slot_conditions"], protocol["tail_conditions"]
+    print("backbone layers", n_layers, "value groups", protocol["groups"])
 
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
     test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
@@ -197,18 +211,18 @@ def run(args):
     print("baseline", baseline)
 
     def measure(name, slots):
-        hidden_slots, edits = condition_spec(name, slots)
+        hidden_slots, edits = condition_spec(name, slots, n_layers)
         hidden_donors = {s: donor.states[:, s] for s in hidden_slots}
         pred = outcomes_under(model, tokenizer, rows, latent_positions=latent_positions, batch_size=args.batch_size,
                               device=device, hidden_donors=hidden_donors, cache_edits=edits, donor=donor)
         return _outcome(pred, base_pred, donor_pred, gold)
 
-    report = {"slots": {}, "tail": {}}
+    report = {"slots": {}, "tail": {}, "layers": n_layers, "layer_groups": {k: list(v) for k, v in protocol["groups"].items()}}
     for slot in all_slots:
-        entry = {c: measure(c, (slot,)) for c in SLOT_CONDITIONS}
+        entry = {c: measure(c, (slot,)) for c in slot_conditions}
         report["slots"][str(slot)] = entry
         print("slot", slot, {c: round(v["change_rate"], 3) for c, v in entry.items()})
-    for name in TAIL_CONDITIONS:
+    for name in tail_conditions:
         report["tail"][name] = measure(name, all_slots)
         print("tail", name, round(report["tail"][name]["change_rate"], 3),
               "toward donor", report["tail"][name]["toward_donor_among_changed"])
@@ -222,7 +236,7 @@ def run(args):
     baseline["native_exact_match"] = native_em
 
     def native(name, slots):
-        hidden_slots, edits = condition_spec(name, slots)
+        hidden_slots, edits = condition_spec(name, slots, n_layers)
         hidden_donors = {s: native_donor.states[:, s] for s in hidden_slots}
         outputs = generate_under(model, tokenizer, questions, latent_iterations=latent_positions, batch_size=args.batch_size,
                                  device=device, hidden_donors=hidden_donors, cache_edits=edits, donor=native_donor)
@@ -246,8 +260,9 @@ def run(args):
     summary = {"schema_version": 1, "contract": contract, "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
                "preregistration": {"questions": len(rows), "pair_seed": PAIR_SEED, "data_seed": DATA_SEED,
-                                   "sampling_hash_fit": sampling["hashes"]["fit"], "slot_conditions": list(SLOT_CONDITIONS),
-                                   "tail_conditions": list(TAIL_CONDITIONS), "layer_groups": {k: list(v) for k, v in LAYER_GROUPS.items()},
+                                   "sampling_hash_fit": sampling["hashes"]["fit"], "slot_conditions": list(slot_conditions),
+                                   "tail_conditions": list(tail_conditions), "layer_groups": {k: list(v) for k, v in protocol["groups"].items()},
+                                   "backbone_layers": n_layers, "base_model": str(cfg.model.base_model),
                                    "a1_min_feeding": A1_MIN_FEEDING, "a2_min_terminal_kv": A2_MIN_TERMINAL_KV,
                                    "a3_dominance": A3_DOMINANCE, "a6_min_toward_donor": A6_MIN_TOWARD_DONOR,
                                    "a6_min_over_null": A6_MIN_OVER_NULL, "sanity_slack": SANITY_SLACK},
