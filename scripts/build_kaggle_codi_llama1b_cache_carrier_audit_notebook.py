@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_codi_llama1b_cache_carrier_audit.ipynb"
-RUN_COMMIT = "a2150e577f89b70a3e8a7e52a7685b2b1d64a6a6"
+RUN_COMMIT = "d61d0aee9f290ca90269fcfd8873f430fefc9ea8"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -61,7 +61,7 @@ mid layer group over the late one.
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "a2150e577f89b70a3e8a7e52a7685b2b1d64a6a6"
+RUN_COMMIT = "d61d0aee9f290ca90269fcfd8873f430fefc9ea8"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 CONFIG = "configs/official_codi_llama1b.yaml"
 OUTPUT_DIR = "/kaggle/working/codi_llama1b_cache_carrier_audit"
