@@ -5227,3 +5227,36 @@ the §113 prediction adapted to the 1B pairing: the carrying thought should be s
 realised through position 4's K/V, and transport should be rarer than at GPT-2 because
 the direct route is stronger. The released-path replication (Step 1a) result is to be
 recorded when available.
+
+## 116. Preregistered: the directed counterfactual at 1B, both profiles
+
+Designed 2026-10-07 after §115. No training. The §110 (`standard`) and §112 (`long`)
+profiles of the directed-counterfactual runner, unchanged in protocol and thresholds, on
+CODI LLaMA-3.2-1B-Instruct through the §114 adapter (value groups 0–10 / 11–12 / 13–15,
+so `v89` means layers 11–12 and `v1011` layers 13–15 at this depth). The pad-aware GSM8K
+gate (lower bound, §114 addendum 2) runs first in the same notebook.
+
+### Predictions, from §111, §113 and §115
+
+- **T1 the tail carries less at 1B.** `kv_all` target below GPT-2's 0.595 (short) and
+  0.692 (long); D1/E1 at ≥ 0.50 may fail on short chains; the direct question route is
+  stronger in the larger model (§115 point 3).
+- **T2 no single-site transport on short chains**, as at GPT-2 (§111): every single
+  `state_s` and `v89_s` target ≤ 0.10 pooled.
+- **T3 the carrying thought on long chains is slot 3, through position 4's K/V**
+  (the 1B pairing, §115 point 2): `state_3` ≥ `state_1` and `kv_4` ≥ `kv_2` on long
+  chains, with `state_3` ≈ `kv_4`. E2 (≥ 0.25) is predicted to **fail** because transport
+  is rarer at 1B; a pass would mean the long-chain reliance survives the stronger direct
+  route and is the more interesting outcome.
+- **T4 position 0 is not the question register at 1B.** At GPT-2 `kv_0` was the most
+  transportable single site (0.232); at 1B slot 0 is a computing thought (§115), so
+  `kv_0` target is predicted small and `state_0` target non-zero.
+- **T5 decoding stays redundant**: located rows are located at several slots at once
+  and uniquely located rows are rare (< 10%), as at GPT-2.
+- Terminal slot: zero transport through either route.
+
+Reading rules as in §110 and §112; each prediction is scored, none is a go/no-go.
+
+### Cost
+
+Gate ≈ 8 min (float16); standard profile ≈ 25–40 min; long profile ≈ 30–50 min on a T4.
