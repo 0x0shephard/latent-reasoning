@@ -32,7 +32,7 @@ def test_notebook_exposes_the_gate_and_its_inputs():
     text = _text()
     assert "scripts/run_codi_cache_carrier_audit.py" in text
     assert '"--smoke"' in text and "RUN_SMOKE" in text
-    assert "REPRODUCTION_SUMMARY_INPUT" in text
+    assert "REPRODUCTION_SUMMARY = latest_summary()" in text   # this notebook produces its own gate file
     for check in ("A1", "A2", "A3", "A4", "A5", "A6"):
         assert check in text
     assert "K/V" in text and "No training" in text and "official_codi_llama1b.yaml" in text and "src.eval.official_codi" in text
@@ -54,3 +54,14 @@ def test_all_notebook_code_cells_parse():
 
 def test_builder_parses():
     ast.parse(BUILDER.read_text(), filename=str(BUILDER))
+
+
+def test_pinned_commit_has_the_llama_adapter():
+    commit = _builder_run_commit()
+    runner = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:scripts/run_codi_cache_carrier_audit.py"],
+                            capture_output=True, text=True, check=True).stdout
+    config = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:configs/official_codi_llama1b.yaml"],
+                            capture_output=True, text=True, check=True).stdout
+    model = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:src/models/official_codi.py"],
+                           capture_output=True, text=True, check=True).stdout
+    assert "protocol_for" in runner and "pad_aware_generation: true" in config and "_PadAwareStepper" in model
