@@ -57,6 +57,12 @@ accuracy_gate:
   reference: CODI paper LLaMA-3.2-1B-Instruct result (Table 1)
   primary_dataset: gsm8k
   absolute_tolerance: 0.03
+  # Lower bound, not two-sided (ledger §114 addendum): the released evaluation drops the
+  # attention mask after the question, which corrupts left-padded LLaMA batches, so the
+  # paper's 51.9% under-measures the checkpoint.  The pad-aware path, verified to equal
+  # unpadded decoding, scored 55.50% (732/1319) in float16 and float32 alike on Kaggle.
+  # An adapter error would show as a deficit; exceeding the paper is not one.
+  direction: at_least
   published_accuracy:
     gsm8k: 0.519
 

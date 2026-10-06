@@ -33,7 +33,11 @@ md(r"""
 
 First inference-only replication at 1B. Step 1 reproduces the author-released CODI
 LLaMA-3.2-1B-Instruct checkpoint on the full GSM8K test set (paper: 51.9%; gate ±0.03). It
-runs in float16 first and falls back to float32 if the gate fails. Step 2 runs the §108
+runs in float16 first and falls back to float32 if the gate fails. The gate is a **lower bound**
+(ledger §114 addendum 2): the released evaluation drops the attention mask after the question,
+which corrupts left-padded LLaMA batches, so the paper under-measures the checkpoint; the
+pad-aware path scored 55.5%. Step 1a replicates the released path itself (mask dropped, batch
+128) with the prediction that it lands near 51.9%. Step 2 runs the §108
 audit on 512 training questions: swap each thought's output **state**, its **K/V**, values
 only, keys only, values at the depth-scaled layer groups, or both routes, between paired
 questions, and read the first answer token. **No training.** No dataset to attach: the
@@ -96,7 +100,7 @@ import torch
 print("torch", torch.__version__, "cuda", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
 ''')
 
-md("## Step 1: GSM8K reproduction gate (float16, then float32 if it fails)")
+md("## Step 1a: replicate the released evaluation path (mask dropped, batch 128) as a diagnostic")
 code(r'''
 def run_with_retry(command, attempts=3, wait=60):
     for attempt in range(1, attempts + 1):
@@ -108,21 +112,36 @@ def run_with_retry(command, attempts=3, wait=60):
         print(f"runner exited with {result.returncode}; retrying in {wait}s ({attempt + 1}/{attempts})")
         time.sleep(wait)
 
-def latest_summary():
-    found = sorted(glob.glob("outputs/official_codi_llama1b/eval/revision_*/full_*/summary.json"), key=os.path.getmtime)
+def summary_under(root):
+    found = sorted(glob.glob(f"{root}/eval/revision_*/full_*/summary.json"), key=os.path.getmtime)
     return found[-1] if found else None
 
+PAPER = 0.519
+RELEASED_DIR = "outputs/official_codi_llama1b_released_path"
+run_with_retry([sys.executable, "-u", "-m", "src.eval.official_codi", "--config", CONFIG, "--device", "cuda",
+                "--output-dir", RELEASED_DIR, "--set", "model.dtype=float16", "--set", "eval.batch_size=128",
+                "--set", "model.pad_aware_generation=false"])
+released = json.loads(open(summary_under(RELEASED_DIR)).read())
+RELEASED_ACC = released["datasets"]["gsm8k"]
+print(f"released path (mask dropped, batch 128): {RELEASED_ACC:.4f}; paper {PAPER}; |delta| = {abs(RELEASED_ACC - PAPER):.4f}")
+print("prediction (ledger §114): within 0.03 of the paper ->", abs(RELEASED_ACC - PAPER) <= 0.03)
+''')
+
+md("## Step 1b: the pad-aware path (the audit's instrument); lower-bound gate against the paper")
+code(r'''
 PRECISION = None
 for precision in ("float16", "float32"):
     run_with_retry([sys.executable, "-u", "-m", "src.eval.official_codi", "--config", CONFIG, "--device", "cuda",
                     "--set", f"model.dtype={precision}", "--set", f"eval.batch_size={BATCH_SIZE}"])
-    REPRODUCTION_SUMMARY = latest_summary()
+    REPRODUCTION_SUMMARY = summary_under("outputs/official_codi_llama1b")
     gate = json.loads(open(REPRODUCTION_SUMMARY).read())
-    print(precision, "gsm8k", gate["datasets"], "gate", gate["accuracy_gate"]["status"])
+    acc = gate["datasets"]["gsm8k"]
+    print(f"{precision}: pad-aware gsm8k {acc:.4f} (paper {PAPER}, delta {acc - PAPER:+.4f}); gate {gate['accuracy_gate']['status']} ({gate['accuracy_gate']['direction']})")
     if gate["accuracy_gate"]["status"] == "passed":
         PRECISION = precision
         break
-assert PRECISION, "the 1B reproduction gate failed in both precisions; do not run the audit"
+assert PRECISION, "the 1B lower-bound gate failed in both precisions; do not run the audit"
+print("pad-aware minus released path:", round(acc - RELEASED_ACC, 4))
 print("reproduction passed in", PRECISION, "->", REPRODUCTION_SUMMARY)
 ''')
 

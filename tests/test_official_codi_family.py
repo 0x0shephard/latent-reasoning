@@ -103,3 +103,16 @@ def test_pad_aware_path_makes_left_padding_invisible_on_llama():
                 singles.append(logits[0])
         same = torch.allclose(batched, torch.stack(singles), atol=1e-4)
         assert same == expect_equal, f"pad_aware={pad_aware}: padded batch equals unpadded rows? {same}"
+
+
+def test_accuracy_gate_direction():
+    from src.eval.official_codi_gate import build_accuracy_gate
+
+    common = dict(evaluated_counts={"gsm8k": 1319}, expected_counts={"gsm8k": 1319}, published_accuracy={"gsm8k": 0.519},
+                  primary_dataset="gsm8k", absolute_tolerance=0.03)
+    assert build_accuracy_gate(results={"gsm8k": 0.555}, **common)["status"] == "failed"
+    assert build_accuracy_gate(results={"gsm8k": 0.555}, direction="at_least", **common)["status"] == "passed"
+    assert build_accuracy_gate(results={"gsm8k": 0.48}, direction="at_least", **common)["status"] == "failed"
+    assert build_accuracy_gate(results={"gsm8k": 0.50}, direction="at_least", **common)["status"] == "passed"
+    with pytest.raises(ValueError):
+        build_accuracy_gate(results={"gsm8k": 0.5}, direction="sideways", **common)

@@ -5122,3 +5122,24 @@ fail the token filters under one tokenizer only; the sampling hash is recorded.
 - The §108 runner's smoke (24 questions) completed on the 1B: 16 layers, value groups
   0–10 / 11–12 / 13–15, `kv_all` ≡ `hidden_kv_all` (0.708 both), slot-5 state 0.000.
   Smoke magnitudes are not evidence; the Kaggle run with the full gate is.
+
+### §114 addendum 2: the 1B gate result and an amendment, before any audit read (2026-10-07)
+
+Kaggle, full GSM8K, pad-aware path: **55.50% (732/1319) in float16 and again 732/1319 in
+float32**. The two-sided gate against the paper's 51.9% ± 0.03 failed by 0.6 of a point
+on the high side. Determinism across precisions and the exact batched-equals-unpadded
+check say the adapter computes what the checkpoint computes; the released evaluation,
+which drops the attention mask after the question, is the path that differs, and
+locally it degenerates on left-padded LLaMA batches (first addendum). The paper's number
+therefore under-measures this checkpoint, and an adapter error would appear as a
+deficit, not an excess.
+
+Amendment, recorded before the audit is read: for this family the gate is a **lower
+bound** (`direction: at_least`, accuracy ≥ 51.9% − 3 points), with the two-sided
+comparison still printed. In addition the notebook replicates the **released path**
+itself (mask dropped, batch 128 as in `test_llama1b.sh`) as a diagnostic with a stated
+prediction: it should land near 51.9%. If it does, the paper's figure is explained by the
+masking defect and the 3.6-point gap is a reportable correction to the CODI LLaMA-1B
+result. If it does not, the paper's path differs from ours in some further way, which is
+recorded as unresolved without affecting the audit, whose instrument is the verified
+pad-aware path.

@@ -256,6 +256,7 @@ def evaluate_official_codi(
         published_accuracy=cfg.accuracy_gate.published_accuracy,
         primary_dataset=str(cfg.accuracy_gate.primary_dataset),
         absolute_tolerance=float(cfg.accuracy_gate.absolute_tolerance),
+        direction=str(cfg.accuracy_gate.get("direction", "two_sided")),
     )
     summary = {
         "checkpoint_repo": str(cfg.checkpoint.repo_id),

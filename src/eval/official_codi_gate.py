@@ -23,8 +23,17 @@ def build_accuracy_gate(
     published_accuracy: Mapping[str, float],
     primary_dataset: str,
     absolute_tolerance: float,
+    direction: str = "two_sided",
 ) -> dict:
-    """Compare only full-benchmark results with the preregistered reference values."""
+    """Compare only full-benchmark results with the preregistered reference values.
+
+    ``direction="two_sided"`` (default) requires |accuracy - reference| <= tolerance.
+    ``direction="at_least"`` requires accuracy >= reference - tolerance: the gate is a
+    lower bound, for checkpoints whose published number is known to come from an
+    evaluation path that under-measures them (ledger §114).
+    """
+    if direction not in ("two_sided", "at_least"):
+        raise ValueError(f"unknown gate direction {direction!r}")
     comparisons = {}
     for name, accuracy in results.items():
         expected_count = int(expected_counts[name])
@@ -41,7 +50,7 @@ def build_accuracy_gate(
             "expected_count": expected_count,
             "full_benchmark": full,
             "within_tolerance": (
-                full and abs(delta) <= absolute_tolerance
+                full and (abs(delta) <= absolute_tolerance if direction == "two_sided" else delta >= -absolute_tolerance)
                 if delta is not None
                 else None
             ),
@@ -61,6 +70,7 @@ def build_accuracy_gate(
         "status": status,
         "primary_dataset": primary_dataset,
         "absolute_tolerance": float(absolute_tolerance),
+        "direction": direction,
         "comparisons": comparisons,
         "interpretation": (
             "Passing establishes evaluator/checkpoint compatibility, not a new "

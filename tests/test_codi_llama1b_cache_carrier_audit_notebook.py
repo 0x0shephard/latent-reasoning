@@ -32,7 +32,8 @@ def test_notebook_exposes_the_gate_and_its_inputs():
     text = _text()
     assert "scripts/run_codi_cache_carrier_audit.py" in text
     assert '"--smoke"' in text and "RUN_SMOKE" in text
-    assert "REPRODUCTION_SUMMARY = latest_summary()" in text   # this notebook produces its own gate file
+    assert 'REPRODUCTION_SUMMARY = summary_under("outputs/official_codi_llama1b")' in text   # produces its own gate file
+    assert "model.pad_aware_generation=false" in text and "eval.batch_size=128" in text   # released-path replication
     for check in ("A1", "A2", "A3", "A4", "A5", "A6"):
         assert check in text
     assert "K/V" in text and "No training" in text and "official_codi_llama1b.yaml" in text and "src.eval.official_codi" in text
@@ -65,3 +66,4 @@ def test_pinned_commit_has_the_llama_adapter():
     model = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:src/models/official_codi.py"],
                            capture_output=True, text=True, check=True).stdout
     assert "protocol_for" in runner and "pad_aware_generation: true" in config and "_PadAwareStepper" in model
+    assert "direction: at_least" in config
