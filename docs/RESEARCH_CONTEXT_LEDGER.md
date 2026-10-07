@@ -5551,3 +5551,13 @@ The same analyzer applies to the GPT-2 (§111, §113) and CODI-1B (§117) runs o
 notebook outputs are published as datasets; their `predictions.pt` files were not
 downloaded at the time. Intervals for those are the remaining item for the paper's
 headline table.
+
+### §119 addendum 2: rerun for intervals
+
+The outputs of the GPT-2 (§111, §113) and CODI-1B (§117) twin runs could not be recovered
+from Kaggle, so a single notebook (`notebooks/kaggle_twins_rerun_for_intervals.ipynb`)
+reruns all four on the current code and computes the paired-bootstrap intervals in place.
+The GPT-2 code path is unchanged since those runs (pad-aware off, 12-layer groups), so the
+rerun should reproduce the recorded figures up to GPU nondeterminism in rare argmax ties;
+any difference beyond a few thousandths is to be recorded. The notebook's intervals, not
+the earlier point estimates, go into the paper's table.
