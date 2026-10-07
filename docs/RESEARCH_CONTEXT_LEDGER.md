@@ -5407,3 +5407,112 @@ the 147 `decoder.*` tensors of the training-time step decoder are dropped and re
 `lm_head` equals `embed_tokens` in the file. Pad-aware batched decoding stops cleanly and
 scores 50% on the first 24 GSM8K test questions (CODI-1B scored the same on the same 24;
 the full-set gate is the Kaggle run). The notebook pinned at `dba9ce0` needs no change.
+
+## 119. Completed §118: SIM-CoT's CODI-1B. Step supervision splits transport across both feeding thoughts and turns the first latent position into a question register; it does not make the model's own readout slot-specific. The released-path replication does not support the mask explanation of the CODI-1B gap
+
+Run 2026-10-07, code `dba9ce0`, four steps on a T4. Audit 932 s, standard twins 988 s,
+long twins 1,069 s.
+
+### Step 0: CODI-1B released path (mask dropped, batch 128): 55.34%
+
+Paper 51.9%, pad-aware 55.50%. The prediction that the released path would reproduce the
+paper (§114 addendum 2) **fails**: on CUDA at the authors' batch size the released path
+scores within 0.2 of the pad-aware path. The 3.4–3.6 point excess over the paper is
+therefore real under both decoding paths and is **not explained by the dropped mask**.
+The local MPS/CPU degeneration that motivated the pad-aware path (first addendum) is an
+environment-specific failure of the mask-dropped path, not the cause of the paper's lower
+figure. What stands: the pad-aware path equals unpadded decoding exactly, which is the
+property the instrument needs; the checkpoint scores 55.3–55.5% on GSM8K under either path
+on CUDA; why the paper reports 51.9% (SIM-CoT's own rerun of the same baseline reports
+52.7%) is unresolved and is to be stated as such, not as a defect in the released
+evaluation. The §114 addendum-2 wording is superseded by this paragraph.
+
+### Step 1: SIM-CoT gate
+
+Passed (lower bound against 56.1%); the accuracy is to be entered from the notebook's
+Step 1 line when available.
+
+### Step 2: influence audit on SIM-CoT (512 questions; CODI-1B §115 in brackets)
+
+Baseline first-token 0.949, native 0.938. State route: slot 0 0.074, slot 1 **0.141**
+[0.035], slot 2 0.111, slot 3 **0.156** [0.176], slot 4 0.053, slot 5 0.000. K/V route:
+**position 0 0.510** [0.059], values at position 0 **0.627**, its mid-depth values 0.449;
+positions 1–4 K/V 0.05–0.10; position 5 0.031. Tails: `kv_all` ≡ `hidden_kv_all` 0.744,
+`v_all` 0.736, `k_all` 0.393, mid-depth values 0.525 vs late 0.086. Identity exact,
+terminal slot inert, values over keys, mid over late: S5 holds. Both feeding slots
+state-dominant; A1 fails on magnitude (0.14, 0.16 < 0.25).
+
+### Step 3: twins on SIM-CoT
+
+**Standard** (857 of 1,024 candidates solved both ways; 512 pairs; baseline 1.000):
+`kv_0` **0.537** target [CODI-1B 0.072; GPT-2 0.232], `v89_0` 0.242; `kv_all` 0.624;
+`state_all` 0.150; every thought state ≤ 0.07 (`state_1` 0.070, `state_3` 0.034);
+`kv_2` 0.069, `kv_4` 0.032. Native: `kv_all` 0.624, `state_1` 0.069. Located 38%,
+uniquely located 24%, almost all at slot 1 (238 rows), and at those rows slot 1's state
+transports **0.029**: decodable there, not carried there.
+
+**Long** (1,165 of 1,536; 512 pairs; baseline 1.000): `state_1` **0.191** [0.011],
+`state_3` **0.247** [0.339], `kv_2` **0.185** [0.011], `kv_4` **0.229** [0.260], `kv_0`
+0.130, `state_0` 0.038, slot 5 0.000 / 0.044; `kv_all` 0.729 [0.671], `state_all` 0.626,
+`v89_all` 0.471, `v89_even` 0.379, `v89_odd` 0.067. Native: `kv_all` 0.724, `state_3`
+0.246, `state_1` 0.190. Strata: at n3k2 (488 rows) `state_1` ≈ 0.41 and `state_3` ≈ 0.33,
+`kv_2` ≈ `kv_4` ≈ 0.30; n3k1 ≈ 0.2–0.3; k = n ≈ 0. Located 59%, **540 of 600 at several
+slots; uniquely located 5.9%** (slot 1: 42, slot 3: 12). E1 passes (0.729); **E2 fails by
+0.003** (0.247 vs 0.25); E3 not evaluable at the row floor; the 42-row slot-1 contrast is
+0.214 vs 0.095 (state) and 0.214 vs 0.071 (K/V).
+
+### Predictions scored
+
+| | prediction | outcome |
+|---|---|---|
+| S1 | unique location ≥ 70%, spread over slots | **wrong**: 5.9%, as redundant as GPT-2 (3.9%), far below CODI-1B (60%) |
+| S2 | specificity at both feeding slots | not evaluable; weakly positive at slot 1 on 42 rows |
+| S3 | long-chain transport above 0.339 | **wrong**: per-thought maximum 0.247; the two feeding thoughts together carry about as much as CODI-1B's one |
+| S4 | both pairs (1 → 2) and (3 → 4) active | **right**: 0.191 / 0.185 and 0.247 / 0.229, against CODI-1B's 0.011 / 0.011 and 0.339 / 0.260 |
+| S5 | influence profile replicates | right |
+| Step 0 | released path near 51.9% | **wrong**: 55.3% |
+
+### Reading
+
+1. **Step supervision redistributes the carrying; it does not concentrate it.** With
+   each latent token trained to decode its own step, the value is carried by both
+   feeding thoughts, each through the K/V of the position after it, at roughly half
+   CODI-1B's single-thought rate. The compute-store ladder predicted in §109 for GPT-2
+   appears in its cleanest form here, (1 → 2) and (3 → 4), as a consequence of the
+   training objective. The pairing is trained, and now one training change moved it in
+   the predicted direction.
+2. **The model's own readout is not what SIM-CoT supervised.** SIM-CoT's auxiliary
+   decoder read the latent tokens through its own network; the tied output head of the
+   model, our locator, decodes the changed value at every odd slot at once, as at GPT-2.
+   Unique location collapses from 60% (CODI-1B) to 6%. So readout localisation is not a
+   function of how faithful the thoughts are to the steps; CODI-1B, with no step
+   supervision, is the model whose own head localises. Any monitoring claim based on
+   "the thoughts decode the steps" must say *which* readout, because the one that is
+   free at inference and the one that was trained can disagree.
+3. **The first latent position becomes a question register under step supervision.**
+   Position 0's K/V transports the counterfactual in 54% of short-chain rows, the largest
+   single-site transport measured in any model, and dominates influence (0.51, values
+   0.63). On short chains the SIM-CoT model answers from a copy of the question written
+   into the first latent position, and the thoughts transport nothing (all ≤ 0.07). The
+   question register was weak at CODI-1B (0.07) and intermediate at GPT-2 (0.23).
+4. **The three-model invariants.** Identity exact; terminal thought inert; values over
+   keys; the carrier in the same relative depth; influence ≠ transport; no thought
+   transports on short chains (the register is not a thought); on long chains the feeding
+   thoughts transport through the following position's whole K/V; the tail as a whole
+   carries 55–73% and the question keeps the rest.
+5. **E2 at 0.247 is a threshold artifact**, as E3 was for CODI-1B's slot 1: the rule was
+   set for a single carrying thought and SIM-CoT has two. Recorded, not changed.
+6. **The evaluation correction loses its proposed cause.** CODI-1B scores 55.3–55.5%
+   under both decoding paths on CUDA; the paper's 51.9% is unexplained. The local
+   mask-dropped degeneration is real but environment-specific. The correction is reported
+   as a measurement with an open cause.
+
+### What the paper now has, and what it does not
+
+Three models, one protocol, preregistered, inference-only: the invariants in point 4, a
+training-objective manipulation that moves the pairing as predicted (S4) and does not
+move readout localisation as predicted (S1), and a model-specific question register. What
+it does not have: a model where the free readout localises *and* was trained to; a
+non-CODI architecture; confidence intervals on the headline contrasts (the saved
+predictions permit paired bootstraps over pairs). Those are the remaining items before
+submission; none needs a GPU beyond the bootstrap.
