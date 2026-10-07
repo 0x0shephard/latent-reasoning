@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 
 
 OUTPUT = ROOT / "notebooks" / "kaggle_twins_rerun_for_intervals.ipynb"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "1e5954987ab924e1672e170fa4740e781acd7474"
 nb = nbf.v4.new_notebook()
 cells = []
 
@@ -44,7 +44,7 @@ so the predictions are kept this time.
 md("## Setup")
 code('''
 REPO_URL = "https://github.com/0x0shephard/latent-reasoning.git"
-RUN_COMMIT = "__RUN_COMMIT__"
+RUN_COMMIT = "1e5954987ab924e1672e170fa4740e781acd7474"
 REPO_DIR = "/kaggle/working/latent-reasoning"
 GPT2_CONFIG = "configs/official_codi_gpt2.yaml"
 CODI1B_CONFIG = "configs/official_codi_llama1b.yaml"
