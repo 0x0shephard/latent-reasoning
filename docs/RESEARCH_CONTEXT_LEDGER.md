@@ -5516,3 +5516,38 @@ it does not have: a model where the free readout localises *and* was trained to;
 non-CODI architecture; confidence intervals on the headline contrasts (the saved
 predictions permit paired bootstraps over pairs). Those are the remaining items before
 submission; none needs a GPU beyond the bootstrap.
+
+### §119 addendum: gate figures from the published outputs, and paired bootstrap intervals (2026-10-07)
+
+From the Kaggle dataset `jonraza15/sim-cots-with-a-different-training-objective`
+(the full notebook output): **SIM-CoT CODI-1B GSM8K 55.72% (735/1319)** against the
+paper's 56.1%, a reproduction within 0.4 points; **CODI-1B released path 55.34%
+(730/1319)** against its paper's 51.9%, confirming §119 point 6. So the SIM-CoT paper's
+figure reproduces under our adapter and the CODI paper's does not, under either decoding
+path; the CODI-1B discrepancy is the paper's, not the adapter's.
+
+Paired bootstrap over pairs (both directions of a twin resampled together, 2,000
+resamples, `scripts/analyze_directed_counterfactual_bootstrap.py`), SIM-CoT:
+
+| long chains | target | 95% CI | | short chains | target | 95% CI |
+|---|---|---|---|---|---|---|
+| `state_1` | 0.191 | [0.164, 0.221] | | `kv_0` | 0.537 | [0.496, 0.578] |
+| `state_3` | 0.247 | [0.219, 0.275] | | `kv_all` | 0.624 | [0.580, 0.664] |
+| `kv_2` | 0.185 | [0.157, 0.214] | | `state_all` | 0.150 | [0.120, 0.182] |
+| `kv_4` | 0.229 | [0.199, 0.259] | | `state_1` | 0.070 | [0.052, 0.091] |
+| `kv_all` | 0.729 | [0.692, 0.766] | | `state_3` | 0.034 | [0.020, 0.050] |
+
+Contrasts (long): `state_3 − state_1` +0.056 [+0.015, +0.096]; `kv_4 − kv_2` +0.044
+[+0.003, +0.084]; `kv_all − v89_all` +0.258 [+0.230, +0.287]; `state_3 − v89_4` +0.198
+[+0.172, +0.226]; `state_1 − v89_2` +0.146 [+0.124, +0.172]. Both feeding thoughts
+transport with intervals well clear of zero, and each thought's state carries far more
+than the two-layer value block behind it. Short chains: `kv_0 − state_0` +0.529 [+0.487,
++0.571], the question register; every thought state below 0.10 with upper bounds
+below 0.10. Uniquely located at slot 1 on long chains (42 rows): state site − other
++0.119 [−0.024, +0.262], K/V store +0.143 [+0.048, +0.262]: consistent with specificity,
+not established, as recorded.
+
+The same analyzer applies to the GPT-2 (§111, §113) and CODI-1B (§117) runs once their
+notebook outputs are published as datasets; their `predictions.pt` files were not
+downloaded at the time. Intervals for those are the remaining item for the paper's
+headline table.
