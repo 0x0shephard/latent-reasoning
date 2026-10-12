@@ -41,7 +41,12 @@ def numeric_vocabulary(tokenizer, embeddings: torch.Tensor, *, limit: int = 1000
     preferring the space-prefixed form when both exist), with their strings."""
     best: dict[str, int] = {}
     for token in range(embeddings.shape[0]):
-        text = tokenizer.decode([token])
+        try:
+            text = tokenizer.decode([token])
+        except (TypeError, KeyError, IndexError):   # ids CODI appends past the tokenizer's vocabulary (pad, BOT, EOT)
+            continue
+        if not isinstance(text, str):
+            continue
         stripped = text.strip()
         if stripped.isascii() and stripped.isdigit() and int(stripped) < limit and (stripped not in best or text.startswith(" ")):
             best[stripped] = token

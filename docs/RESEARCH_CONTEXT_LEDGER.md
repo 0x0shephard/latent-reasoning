@@ -5640,3 +5640,61 @@ For the paper: readability does not predict faithfulness across slots (rank corr
 near zero on these six points), the model's own readout tracks the carrying thoughts
 better than a trained probe does, and the terminal slot is the clean case of a monitor
 that would alarm on a value the model never uses.
+
+### §120 addendum 2: GPT-2 results, run through the Kaggle API (2026-10-12)
+
+Kernel `jonraza15/codi-gpt-2-monitors-and-masks`, code `f35f0ef`, 23 GPU-minutes. It
+failed at its last cell (the monitor analyzer's numeric-vocabulary bug, fixed in `9ad543d`
+and, for GPT-2's slow tokenizer, in the commit recording this addendum); the twins,
+bootstrap and masking outputs were complete and were pulled; the monitor analysis was run
+locally on them with the fixed code.
+
+**Twins reproduce §111 and §113 exactly.** Standard: `state_3` 0.104, `kv_0` 0.232,
+`kv_all` 0.595, `v89_all` 0.281; long: `state_1` 0.153, `state_3` 0.325, `kv_2` 0.158,
+`kv_4` 0.303, `kv_all` 0.692, `v89_all` 0.305. Same pairs, same numbers to three
+decimals: the pipeline is deterministic on the T4.
+
+**Paired bootstrap, 95% over 512 pairs.** Long: `state_3` 0.325 [0.293, 0.358];
+`state_1` 0.153 [0.131, 0.177]; `kv_4` 0.303 [0.271, 0.334]; `kv_2` 0.158 [0.135, 0.183];
+`kv_all` 0.692 [0.652, 0.731]; `v89_all` 0.305 [0.272, 0.339]; `state_3 − v89_4` +0.278
+[+0.249, +0.309]. Short: `kv_0` 0.232 [0.199, 0.269]; `kv_all` 0.595 [0.555, 0.637];
+`state_3` 0.104 [0.085, 0.127]. Located at slot 1 (32 rows): state site − other +0.219
+[+0.094, +0.375], which replaces the "thin" reading of §113 point 4 with an interval
+clear of zero.
+
+**Masking (contract `official_codi_masking_audit_v1`, 512 questions, 249 short / 263
+long, mask-carrying path forced on; baseline 0.8125).** K1, K2, K3 all pass.
+
+| accuracy drop (points) | slot 0 | 1 | 2 | 3 | 4 | 5 | all | even | odd |
+|---|---|---|---|---|---|---|---|---|---|
+| short, mean-ablate state | 0.4 | 0.4 | 2.0 | 0.0 | 0.8 | 0.0 | 8.8 | | |
+| short, mask K/V | 3.6 | 2.4 | 0.8 | 1.2 | 1.2 | 0.8 | 29.3 | 40.6 | 8.4 |
+| long, mean-ablate state | 4.6 | **12.2** | 9.1 | **12.5** | 3.0 | 0.0 | 45.2 | | |
+| long, mask K/V | **37.6** | 20.2 | 12.2 | 4.6 | 13.7 | 1.9 | 52.9 | 59.7 | 26.2 |
+
+Reading. On short chains no single thought is necessary (largest cost 3.6 points, the
+question register's K/V). On long chains the two carrying thoughts are necessary as
+*states* (12 points each) and the even positions plus position 0 are necessary as
+*memory* (K/V masks of 12–38 points; the even positions together cost 60 points, the odd
+ones 26). The terminal slot costs nothing anywhere (≤ 1.9). Necessity and sufficiency now
+agree: the compute-store ladder of §109 is where the answer is both carried and needed,
+and position 0's K/V, the question register, is the single most necessary memory on long
+chains (38 points) while transporting only on short ones.
+
+**Monitor faithfulness (penultimate intermediate, long chains, 982 rows).**
+
+| slot | readability (probe) | readout top-5 | faithfulness | transport |
+|---|---|---|---|---|
+| 0 | 0.094 | 0.000 | 0.000 | 0.000 |
+| 1 | 0.333 | 0.673 | **0.193** | 0.155 |
+| 2 | **0.456** | 0.000 | 0.000 | 0.000 |
+| 3 | 0.402 | 0.760 | **0.403** | 0.327 |
+| 4 | **0.536** | 0.000 | 0.000 | 0.000 |
+| 5 | 0.415 | **0.757** | **0.000** | 0.000 |
+
+The same dissociation as SIM-CoT, with one sharper feature: the terminal slot is the
+slot the model's own head reads *best* (0.757, above slot 3) and the one whose reading
+is never confirmed by behaviour. The even slots are the most probe-readable (0.46, 0.54),
+invisible to the model's head (0.000), and transport nothing. Readability and faithfulness
+are uncorrelated across slots in both models measured so far. On all chains (740 rows)
+every slot is readable (0.22–0.67) and faithfulness is ≤ 0.10 everywhere.

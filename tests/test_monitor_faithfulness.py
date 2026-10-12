@@ -19,6 +19,8 @@ class NumTok:
     (``str.isdigit`` is true for it, ``int`` fails); 21.. decode to letters."""
     def decode(self, ids):
         i = int(ids[0])
+        if i >= 29:
+            raise TypeError("sequence item 0: expected str instance, NoneType found")   # GPT-2 slow tokenizer past its vocabulary
         return str(i) if i < 20 else ("\u00b2" if i == 20 else chr(97 + i - 21))
 
 
