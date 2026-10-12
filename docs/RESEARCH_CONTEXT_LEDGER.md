@@ -5605,3 +5605,38 @@ that carry values are the ones the answer needs, only on problems that need them
 terminal thought is neither. A readable-unfaithful terminal slot in all three models is
 the figure the monitoring claim rests on. K2 failing means the model has redundant
 carriers (masking one is compensated), which the swap results would then have overstated.
+
+### §120 addendum: first monitor-faithfulness result, SIM-CoT CODI-1B (local, from the published twin outputs, 2026-10-12)
+
+Ridge probes per slot, five pair-aligned folds, nearest numeric token over a vocabulary
+of 1,110 integer tokens. The answer-token target is uninformative: readability 0.03 at
+every slot in both runs, in line with §53 (the thoughts hold intermediates, not the final
+answer), so the penultimate intermediate is the monitor target from here on.
+
+Long chains (512 pairs, 978 indexable rows), penultimate intermediate:
+
+| slot | readability (probe) | readout top-5 | faithfulness | transport |
+|---|---|---|---|---|
+| 0 | 0.253 | 0.251 | 0.016 | 0.038 |
+| 1 | 0.616 | 0.748 | **0.206** | 0.192 |
+| 2 | **0.692** | 0.183 | 0.018 | 0.042 |
+| 3 | 0.723 | 0.771 | **0.280** | 0.245 |
+| 4 | **0.735** | 0.166 | 0.028 | 0.043 |
+| 5 | **0.566** | 0.508 | **0.000** | 0.000 |
+
+All chains (760 indexable rows): readability 0.39–0.67 at slots 1–5, faithfulness ≤ 0.08
+everywhere (slot 1 on the long subset 0.14), slot 5 0.000.
+
+Reading. The predicted dissociation is there, and sharper than expected. A trained linear
+monitor reads the penultimate intermediate from slots 2, 4 and 5 at 0.57–0.74, yet after a
+swap at any of those slots its alarm is confirmed by the model's answer 0–3% of the time;
+at slot 5, never. The two carrying thoughts, 1 and 3, are the only slots where the monitor
+is faithful (0.21, 0.28), and even there it is faithful only on long chains. The even
+slots hold the value in a form the model's own head does not decode (top-5 0.17–0.18)
+but a probe does: readable by the monitor, invisible to the model's readout, and causally
+inert as states. On short chains every slot is readable and no slot is faithful.
+
+For the paper: readability does not predict faithfulness across slots (rank correlation
+near zero on these six points), the model's own readout tracks the carrying thoughts
+better than a trained probe does, and the terminal slot is the clean case of a monitor
+that would alarm on a value the model never uses.
