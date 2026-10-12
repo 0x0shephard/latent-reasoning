@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/error-detection-from-carriers-codi-gpt-2",
+  "title": "Error detection from carriers CODI GPT-2",
+  "code_file": "kaggle_correctness_readout_gpt2.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
