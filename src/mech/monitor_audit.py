@@ -289,7 +289,8 @@ def verdict_from(card: dict, carriers: list[int]) -> dict:
     readable_inert = [s for s in SLOTS if slots[str(s)]["role"] == "readable_inert"]
     stores = [s for s in SLOTS if slots[str(s)]["role"] == "store"]
     if checks["c2_max_long_transport"] is None:
-        regime = "not_evaluable"
+        # no long profile (one-step pool): if the standard profile shows no transport anywhere, nothing is monitorable here
+        regime = "no_transport" if checks["c1_no_single_site_transport_on_short_chains"] is True else "not_evaluable"
     elif not carriers:
         regime = "no_transport"
     elif checks["c5_carriers_necessary"]:
@@ -299,7 +300,8 @@ def verdict_from(card: dict, carriers: list[int]) -> dict:
     if regime == "not_evaluable":
         summary = "No long-chain profile: transport, faithfulness and necessity were not measured; only short-chain results are on the card."
     elif regime == "no_transport":
-        summary = "No thought carries a value on this pool; nothing here is monitorable through the thoughts."
+        summary = ("No thought carries a value on this pool; nothing here is monitorable through the thoughts"
+                   + (" (one-step chains; no long profile)." if checks["c2_max_long_transport"] is None else "."))
     else:
         summary = (f"Carrying thought(s) {carriers}; place a monitor only at {placement or 'none'}; "
                    f"{'the carriers are necessary (critical path)' if regime == 'critical_path' else 'the carriers are sufficient but not necessary (backup route)'}; "

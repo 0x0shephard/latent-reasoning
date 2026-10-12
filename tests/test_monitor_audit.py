@@ -120,8 +120,12 @@ def test_no_transport_and_not_evaluable_regimes():
     card = _card(twins_long=_twins({1: 0.05, 3: 0.08}), masking=_masking({}, {}))
     assert card["verdict"]["regime"] == "no_transport" and "nothing here is monitorable" in card["verdict"]["summary"]
     card = _card(twins_long=None, bootstrap=None, monitor=None, masking=_masking({}, {}))
-    assert card["verdict"]["regime"] == "not_evaluable" and card["checks"]["c2_chain_length_gate"] is None
-    assert card["checks"]["c1_no_single_site_transport_on_short_chains"] is True
+    assert card["verdict"]["regime"] == "no_transport" and card["checks"]["c2_chain_length_gate"] is None
+    assert card["checks"]["c1_no_single_site_transport_on_short_chains"] is True and "one-step" in card["verdict"]["summary"]
+    card = _card(twins_long=None, bootstrap=None, monitor=None, masking=_masking({}, {}), twins_standard=_twins({3: 0.3}))
+    assert card["verdict"]["regime"] == "not_evaluable"
+    card = _card(twins_long=None, bootstrap=None, monitor=None, masking=None, twins_standard=None)
+    assert card["verdict"]["regime"] == "not_evaluable"
 
 
 def test_c1_fails_when_a_single_site_transports_on_short_chains():

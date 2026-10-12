@@ -1,6 +1,6 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 5,
+  "cards": 6,
   "rows": [
     {
       "model": "codi1b",
@@ -301,6 +301,55 @@
         "twins_long": {
           "predictions": "15a854eb6d44218b92589ec8ee398766b225de87710a2692ba407af9eca0c7c6",
           "pairs": "f496e50b1e2736cbf4eb284f1b66e1c2848e2261e0dbf86a4baceb0bd40ec36e"
+        }
+      }
+    },
+    {
+      "model": "gpt2",
+      "pool": "svamp",
+      "pool_hash": "323e815c4a9bd0a6ea0fb806e92f4aecc4dd6eddb8ec3259e9b6add21ae65f92",
+      "device": "Tesla T4",
+      "dtype": "float32",
+      "gate_accuracy": 0.4359363153904473,
+      "carriers": [],
+      "placement": [],
+      "regime": "no_transport",
+      "transport_long": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
+      "transport_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
+      "mask_cost_long": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
+      "register_cost_long": null,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": true,
+        "c2_chain_length_gate": null,
+        "c3_terminal_inert_unfaithful_unnecessary": true,
+        "c4_readability_dissociated_from_faithfulness": null,
+        "c5_carriers_necessary": null
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "b2bcedf442f3212f5d76b763a7a63f68e3a289a9360fafbac35e384cd26732c1",
+          "pairs": "81cac081960602e07a341da0805bd43b1c5783e98a2f4ed671d3f77b42eb6361"
         }
       }
     },
