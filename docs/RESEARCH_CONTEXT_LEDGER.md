@@ -6302,3 +6302,41 @@ prompt-only control at the same slot, and the paper will propose exactly that.
 Not a prediction, noted: on long chains alone the operator is decoded worse (0.28–0.81)
 and still best at positions 0–1, consistent with the register holding the question and
 later thoughts holding values.
+
+### §124 addendum 2: P7 and P8 scored; fourteen cards (2026-10-13)
+
+Seven §124 kernels on dannyism11 (Tesla T4, ≈ 4.3 GPU-hours): the large natural pool for
+three models, test-pool reruns for three, the training-pool rerun for GPT-2. Every rerun's
+twin predictions fingerprints are byte-identical to the first run (five further
+confirmations of session invariance). Cards: `docs/latent_monitor_audit/`.
+
+**P7, `gsm8k_train_original` (6,998 usable rows; 512 / 512 pairs for every model).**
+
+| model | carriers | stores | slot-3 transport long | vs `gsm8k_test` | carrier cost long (pts) [95% CI] | register (pts) | regime |
+|---|---|---|---|---|---|---|---|
+| GPT-2 | {3} (slot 1 at 0.137 [0.11, 0.16]) | {4} | 0.296 [0.26, 0.33] | 0.359 [0.28, 0.44], overlap | 11.7 [7.7, 16.0] | 29.5 | critical_path |
+| CODI-1B | {3} | {4} | 0.346 [0.31, 0.38] | 0.296 [0.23, 0.37], overlap | 2.3 [0.3, 4.3] | 3.2 | backup_route |
+| SIM-CoT | {1, 3} | {2, 4} | 0.231 [0.20, 0.26] | 0.196 [0.14, 0.25], overlap | 12.3 [8.3, 16.3], 9.2 [5.7, 13.2] | 49.0 [43.6, 54.7] | backup_route |
+
+Carrier sets, stores, the terminal result and the overlapping transport intervals:
+**holds** for all three. Regime `backup_route` for all three: **wrong for GPT-2**, whose
+slot-3 cost on the large pool is 11.7 [7.7, 16.0]. C4b-both holds on all three (slots
+{4}, {4, 5}, {2, 4, 5}).
+
+**P8, necessity intervals.** CODI-1B: the carrier's cost has an upper bound below 10 on
+every pool with an interval (4.3 on `gsm8k_train_original`, 6.5 on `gsm8k_test`; the §120
+training-pool run predates the intervals and its point estimate is 2.7): **holds**.
+GPT-2: slot 3 costs 12.5 [7.2, 17.9] on `gsm8k_aug_train` and 6.5 [2.4, 10.6] on
+`gsm8k_test`; the intervals overlap, so the "regime flip" of §123 addendum 2 is **not
+established**: P8's GPT-2 half is wrong, and the earlier reading ("necessity does not
+transfer for GPT-2") is withdrawn in favour of "GPT-2's carrier cost on natural questions
+is 6–12 points with intervals that straddle the 10-point line". The comparison's one
+flag (GPT-2's regime across pools) is a threshold-crossing artefact and the necessity
+flag, which looks at intervals, correctly stays silent.
+
+**What is solid about necessity after fourteen cards.** The cross-model ordering: GPT-2's
+carrier costs 6.5–12.5 points, SIM-CoT's 4.3–12.3, CODI-1B's 2.3–3.8, with CODI-1B's upper
+bounds below every GPT-2 point estimate. The register at position 0 costs 18.7–37.6
+(GPT-2), 32.5–58.6 (SIM-CoT) and 3.2–4.3 (CODI-1B) points. Position 0 is the most
+necessary single site in two of three models and the thoughts are nowhere individually
+necessary at 1B without step supervision.
