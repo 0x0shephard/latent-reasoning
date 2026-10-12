@@ -1,0 +1,39 @@
+# Latent Monitor Audit card: gpt2 on `gsm8k_aug_train`
+
+- model: `configs/official_codi_gpt2.yaml` (checkpoint sha `fd223b14932b`, 12 layers)
+- pool: gsm8k_aug_train · n = 2048 · hash `1dbcf2169165` · steps {'0': 6, '1': 338, '2': 748, '3': 550, '4': 267, '5': 100, '6': 26, '7': 9, '8': 2, '9': 2}
+- environment: Tesla T4 · float32 · batch 32 · torch 2.11.0+cu128 · transformers 4.52.4
+- gate: accuracy 0.4359 vs published 0.4370 (passed)
+
+| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | weak | 0.000 | 0.000 [0.00, 0.00] | 0.052 | 0.120 | 0.09 | 0.00 | 3.6 | 37.6 |
+| 1 | carrier | 0.035 | 0.153 [0.13, 0.18] | 0.000 | 0.001 | 0.33 | 0.19 | 2.4 | 20.2 |
+| 2 | store | 0.000 | 0.000 [0.00, 0.00] | 0.026 | 0.158 | 0.46 | 0.00 | 2.0 | 12.2 |
+| 3 | carrier | 0.061 | 0.325 [0.29, 0.36] | 0.000 | 0.000 | 0.40 | 0.40 | 1.2 | 12.5 |
+| 4 | store | 0.000 | 0.000 [0.00, 0.00] | 0.048 | 0.303 | 0.54 | 0.00 | 1.2 | 13.7 |
+| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.000 | 0.000 | 0.42 | 0.00 | 0.8 | 1.9 |
+
+- position-0 K/V (question register): transport short 0.052, long 0.120; mask cost long 37.6 pts
+- tails: kv_all transport all 0.595 (other 0.023), long 0.692; mask_all cost long 52.9 pts, mean_all 45.2 pts
+
+## Checks
+
+- c1_no_single_site_transport_on_short_chains: **True**
+- c2_chain_length_gate: **True**
+- c3_terminal_inert_unfaithful_unnecessary: **True**
+- c4_readability_dissociated_from_faithfulness: **True**
+- c5_carriers_necessary: **True**
+- register_position_0: **True**
+- details: max short transport 0.061, max long transport 0.325, most readable slot 4, spearman(readability, faithfulness) -0.37, carrier costs {'1': 0.20152091254752846, '3': 0.12547528517110262}, register cost 37.6 pts
+
+## Verdict
+
+- regime: **critical_path**
+- carrying slots: [1, 3]
+- placement slots: [1, 3]
+- store slots (K/V carries, state does not): [2, 4]
+- inert slots: [5] (readable but inert: [])
+- Carrying thought(s) [1, 3]; place a monitor only at [1, 3]; the carriers are necessary (critical path); inert slots [5].
+
+- stage seconds: {'twins_standard': 487.7, 'twins_long': 569.3, 'masking': 148.5}

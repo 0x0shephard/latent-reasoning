@@ -19,18 +19,19 @@
     "source": "zen-E/GSM8k-Aug train, deterministic fit split (+extra) of ledger \u00a7110"
   },
   "environment": {
-    "python": "3.12.14",
-    "platform": "macOS-26.3-arm64-arm-64bit",
-    "executable": "/Users/muhammadjonraza/.cache/codi-kava-testenv/bin/python",
+    "python": null,
+    "platform": null,
+    "executable": null,
     "dtype": "float16",
     "batch_size": 32,
     "device": "cuda",
-    "device_name": "kaggle-gpu (\u00a7120 run)",
+    "device_name": "Kaggle GPU (\u00a7120 run)",
     "cuda_capability": null,
-    "torch": "2.4.1",
-    "transformers": "4.52.4",
-    "peft": "0.15.2",
+    "torch": null,
+    "transformers": null,
+    "peft": null,
     "cuda": null,
+    "environment_source": "unknown (pre-card run)",
     "from_existing": true
   },
   "gate": null,
@@ -304,6 +305,6 @@
     "register_position_0": false,
     "summary": "Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [1, 2, 5]."
   },
-  "created_at_utc": "2026-10-12T19:35:41.825757+00:00",
+  "created_at_utc": "2026-10-12T20:02:54.044004+00:00",
   "smoke": false
 }

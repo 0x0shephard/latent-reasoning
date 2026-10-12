@@ -2,7 +2,7 @@
 
 - model: `configs/official_simcot_codi_llama1b.yaml` (checkpoint sha `fc7f2d9285e4`, 16 layers)
 - pool: gsm8k_test · n = 1206 · hash `cd309bf1a382` · steps {'1': 30, '2': 321, '3': 354, '4': 280, '5': 136, '6': 55, '7': 21, '8': 9}
-- environment: Tesla T4 · float16 · batch 32 · torch 2.4.1 · transformers 4.52.4
+- environment: Tesla T4 · float16 · batch 32 · torch 2.11.0+cu128 · transformers 4.52.4
 - gate: accuracy 0.5572 vs published 0.5610 (passed)
 
 | slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |

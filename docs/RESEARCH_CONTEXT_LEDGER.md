@@ -6055,3 +6055,66 @@ environments of one model. Code at b4a4b58; notebooks pinned to it. Kaggle kerne
 pushed: `lma-codi-gpt-2-on-gsm8k-test` and `lma-codi-gpt-2-on-svamp` (the two-session
 limit); CODI-1B and SIM-CoT on `gsm8k_test`, and GPT-2 on the default pool for the GPU
 invariance check, follow as slots free. Predictions P1–P5 stand as written.
+
+### §123 addendum 2: five cards from the Kaggle API, predictions scored (2026-10-13)
+
+All five kernels ran on dannyism11 (Tesla T4; jonraza15's queue never started and its two
+kernels were deleted unrun), 2.5 GPU-hours in total. Cards and the comparison are under
+`docs/latent_monitor_audit/`; raw outputs in `outputs/kaggle_runs/lma/` (not versioned).
+
+| model | pool | pairs std / long | carriers | stores | regime | slot-3 transport long | carrier cost long (pts) | register cost (pts) | C1 C2 C3 C4 C5 |
+|---|---|---|---|---|---|---|---|---|---|
+| GPT-2 | gsm8k_aug_train (§120) | 512 / 512 | {1,3} | {2,4} | critical_path | 0.325 [0.29, 0.36] | 20.2, 12.5 | 37.6 | ✓ ✓ ✓ ✓ ✓ |
+| GPT-2 | gsm8k_aug_train, rerun | 512 / 512 | {1,3} | {2,4} | critical_path | 0.325 | 20.2, 12.5 | 37.6 | ✓ ✓ ✓ ✓ ✓ |
+| GPT-2 | gsm8k_test | 234 / 103 | {3} (slot 1 at 0.126 [0.08, 0.18]) | {0 register, 4} | backup_route | 0.359 [0.28, 0.44] | 6.5 | 18.7 | ✓ ✓ ✓ ✓ ✗ |
+| GPT-2 | svamp | 100 / — | none | none | no_transport | — (max short 0.045) | — (max single mask 1.3) | — | ✓ – ✓ – – |
+| CODI-1B | gsm8k_aug_train (§120) | 512 / 512 | {3} | {4} | backup_route | 0.339 [0.30, 0.38] | 2.7 | 3.4 | ✓ ✓ ✓ ✓ ✗ |
+| CODI-1B | gsm8k_test | 312 / 152 | {3} | {4} | backup_route | 0.296 [0.23, 0.37] | 3.8 | 4.3 | ✓ ✓ ✓ ✓ ✗ |
+| SIM-CoT | gsm8k_aug_train (§120) | 512 / 512 | {1,3} | {2,4} | backup_route (9.1 < 10) | 0.247 | 10.6, 9.1 | 58.6 | ✓ ✓ ✓ ✓ ✗ |
+| SIM-CoT | gsm8k_test | 319 / 168 | {1,3} | {0 register, 2, 4} | backup_route | 0.196 [0.14, 0.25] | 9.8, 4.3 | 32.5 | ✓ ✓ ✓ ✗ ✗ |
+
+Gates on the test-pool runs: GPT-2 43.59% (paper 43.7%), CODI-1B 55.50% (55.6%, two-sided
+after §122), SIM-CoT 55.72% (56.1%).
+
+**Predictions scored.**
+
+- P1 (GPT-2, gsm8k_test): carriers ⊆ {1,3} with 3 present, C1–C4 hold: **holds**. Regime
+  `critical_path`: **wrong**, it is `backup_route`. Masking slot 3 costs 6.5 points on the
+  original GSM8K test questions against 12.5 on the GPT-4-augmented training rows (the
+  intervals of transport overlap, 0.359 vs 0.325). The thought is used as much and needed
+  about half as much on the natural problems. The comparison flags this as the single
+  disagreement across the eight cards; slot 1's crossing of the carrier threshold (0.126
+  vs 0.153, overlapping intervals) is recorded as a threshold-edge note.
+- P2 (GPT-2, svamp): **holds** in full. Max single-site transport 0.045, largest single
+  mask cost 1.3 points, terminal inert, verdict "nothing here is monitorable". One rule
+  was clarified to express it: a one-step pool whose standard profile shows no transport
+  reads `no_transport`, not `not_evaluable` (the prereg's P2 said so; the code did not).
+- P3 (CODI-1B, gsm8k_test): **holds**. Carrier {3}, store {4}, backup route, interval
+  overlapping the training pool.
+- P4 (SIM-CoT, gsm8k_test): **holds**. Carriers {1,3}, position-0 register costs 32.5
+  points (and transports 0.66 of short-chain twins through its K/V alone). Not predicted:
+  C4 fails here. The most readable slot is carrier 3 (0.56, faithfulness 0.26) and the
+  rank correlation is +0.31. On the training pool SIM-CoT's slots 3 and 4 were a near tie
+  (0.72 / 0.74). The "most readable slot is inert" statement holds for GPT-2 and CODI-1B on
+  both pools and for SIM-CoT on one; the paper states it that way.
+- P5 (GPU invariance): **holds as a session-invariance result, not as written.** The rerun
+  landed on a Tesla T4 again (Kaggle assigns the type; the P100 could not be requested
+  through the API), on another account, a day later: both twin runs' predictions
+  fingerprints are byte-identical to the §120 run and every card number agrees to the
+  last digit. Cross-architecture invariance remains untested.
+
+**Two code corrections made while assembling, both to derived quantities, none to
+measurements:** C1 reads short-chain K/V transport from the strata (the all-chain pool of
+`gsm8k_test` is two-thirds long chains); re-assembled cards carry the kernel's own
+environment and gate rather than the assembling machine's.
+
+**What the five cards add to §121.** (i) The chain-length gate, the terminal result and
+the ladder (odd carries, even stores) transfer from the augmented training rows to the
+original GSM8K test questions for all three models. (ii) Necessity does not transfer for
+GPT-2: on natural questions its carrier is dispensable, which moves GPT-2 toward the 1B
+picture and makes "sufficiency without necessity" the common case rather than the 1B
+exception. (iii) The question register is the dominant single site on short natural
+chains for SIM-CoT (0.66) and costs 19–33 points on long ones for GPT-2 and SIM-CoT; a
+monitor that reads thoughts and ignores position 0 misses the site the model leans on
+most. (iv) On a one-step dataset the audit correctly reports that there is nothing to
+monitor. (v) Two independent sessions reproduce the twin predictions bit for bit.

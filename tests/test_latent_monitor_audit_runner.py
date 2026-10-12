@@ -71,6 +71,11 @@ def test_assemble_from_existing_runs_without_a_model(tmp_path):
     assert card["model"]["name"] == "gpt2" and card["model"]["layers"] == 12 and card["gate"] is None
     assert card["verdict"]["carrying_slots"] == [1, 3] and card["slots"]["3"]["transport_long_ci95"] == [0.29, 0.36]
     assert card["slots"]["4"]["readability_long"] == 0.5 and card["environment"]["device_name"] == "Tesla T4" and card["environment"]["from_existing"]
+    assert card["environment"]["torch"] is None and card["environment"]["environment_source"] == "unknown (pre-card run)"
+    (tmp_path / "card.json").write_text(json.dumps({"environment": {"device_name": "Tesla P100", "torch": "2.11.0", "dtype": "float32"}, "gate": {"accuracy": 0.436, "status": "passed"}}))
+    args.device_name = None
+    card = assemble(args, lay, stage_seconds={"twins_standard": 400.0}, cfg=load_config("configs/official_codi_gpt2.yaml"))
+    assert card["environment"]["device_name"] == "Tesla P100" and card["environment"]["torch"] == "2.11.0" and card["gate"]["accuracy"] == 0.436
     assert set(card["fingerprints"]) == {"twins_standard", "twins_long"} and len(card["fingerprints"]["twins_long"]["predictions"]) == 64
     assert card["fingerprints"]["twins_long"]["predictions"] == card["fingerprints"]["twins_standard"]["predictions"]
     assert card["pool"]["pool"] == "gsm8k_aug_train" and card["stage_seconds"]["twins_standard"] == 400.0

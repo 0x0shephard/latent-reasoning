@@ -1,12 +1,12 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 7,
+  "cards": 8,
   "rows": [
     {
       "model": "codi1b",
       "pool": "gsm8k_aug_train",
       "pool_hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
-      "device": "kaggle-gpu (\u00a7120 run)",
+      "device": "Kaggle GPU (\u00a7120 run)",
       "dtype": "float16",
       "gate_accuracy": null,
       "carriers": [
@@ -156,9 +156,86 @@
       "model": "gpt2",
       "pool": "gsm8k_aug_train",
       "pool_hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
-      "device": "kaggle-gpu (\u00a7120 run)",
+      "device": "Kaggle GPU (\u00a7120 run)",
       "dtype": "float32",
       "gate_accuracy": null,
+      "carriers": [
+        1,
+        3
+      ],
+      "placement": [
+        1,
+        3
+      ],
+      "regime": "critical_path",
+      "transport_long": {
+        "0": 0.0,
+        "1": 0.1533203125,
+        "2": 0.0,
+        "3": 0.3251953125,
+        "4": 0.0,
+        "5": 0.0
+      },
+      "transport_long_ci95": {
+        "0": [
+          0.0,
+          0.0
+        ],
+        "1": [
+          0.130859375,
+          0.1767578125
+        ],
+        "2": [
+          0.0,
+          0.0
+        ],
+        "3": [
+          0.29296875,
+          0.3583984375
+        ],
+        "4": [
+          0.0,
+          0.0
+        ],
+        "5": [
+          0.0,
+          0.0
+        ]
+      },
+      "mask_cost_long": {
+        "0": 0.376425855513308,
+        "1": 0.20152091254752846,
+        "2": 0.12167300380228141,
+        "3": 0.12547528517110262,
+        "4": 0.1368821292775665,
+        "5": 0.019011406844106404
+      },
+      "register_cost_long": 0.376425855513308,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": true,
+        "c2_chain_length_gate": true,
+        "c3_terminal_inert_unfaithful_unnecessary": true,
+        "c4_readability_dissociated_from_faithfulness": true,
+        "c5_carriers_necessary": true
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "d0ce8e46cf6f9c6260ce1e378fcf1c3d54056d46a0dcd35fe7aff210b0e53d8f",
+          "pairs": "e76bc5e5881f03cdda010ed2f1747771a18d533bcb824f2d74e994118fa97eab"
+        },
+        "twins_long": {
+          "predictions": "35a3fc5773254d0b6a9363d5fa3c3504cc599afd915c8e317a2114a0e1db982b",
+          "pairs": "123b132337952535eea36e02d7b5e429f53796d699449c7855c5ec63065071ee"
+        }
+      }
+    },
+    {
+      "model": "gpt2",
+      "pool": "gsm8k_aug_train",
+      "pool_hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
+      "device": "Tesla T4",
+      "dtype": "float32",
+      "gate_accuracy": 0.4359363153904473,
       "carriers": [
         1,
         3
@@ -357,7 +434,7 @@
       "model": "simcot",
       "pool": "gsm8k_aug_train",
       "pool_hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
-      "device": "kaggle-gpu (\u00a7120 run)",
+      "device": "Kaggle GPU (\u00a7120 run)",
       "dtype": "float16",
       "gate_accuracy": null,
       "carriers": [
@@ -509,10 +586,10 @@
     }
   ],
   "flags": [
-    "gpt2: regime differs across pools: gsm8k_aug_train=critical_path, gsm8k_test=backup_route"
+    "gpt2: regime differs across pools: gsm8k_aug_train=critical_path, gsm8k_aug_train=critical_path, gsm8k_test=backup_route"
   ],
   "notes": [
-    "gpt2: carrier set differs across pools: gsm8k_aug_train=[1, 3], gsm8k_test=[3] (threshold edge: intervals overlap at slot(s) [1])"
+    "gpt2: carrier set differs across pools: gsm8k_aug_train=[1, 3], gsm8k_aug_train=[1, 3], gsm8k_test=[3] (threshold edge: intervals overlap at slot(s) [1])"
   ],
   "consistent": false
 }

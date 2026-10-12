@@ -160,14 +160,22 @@ def assemble(args, lay: dict, *, stage_seconds: dict, cfg) -> dict:
     source = twins_std or twins_long or masking or {}
     pool_meta = source.get("pool") or {"pool": str(args.pool), "hash": (source.get("preregistration") or {}).get("sampling_hash_fit"), "n": None,
                                        "steps_histogram": None, "source": POOLS[str(args.pool)]["source"]}
-    environment = environment_fingerprint(device=args.device, dtype=args.precision, batch_size=args.batch_size)
+    existing_card = _load(Path(args.from_existing) / "card.json") if getattr(args, "from_existing", None) else None
+    if existing_card and existing_card.get("environment"):
+        environment = dict(existing_card["environment"]); environment["environment_source"] = "kernel card"
+    elif getattr(args, "from_existing", None):
+        # runs made before the card existed: the local machine's versions say nothing about the GPU that ran them
+        environment = {k: None for k in environment_fingerprint()} | {"dtype": str(args.precision), "batch_size": args.batch_size,
+                                                                      "device": str(args.device), "environment_source": "unknown (pre-card run)"}
+    else:
+        environment = environment_fingerprint(device=args.device, dtype=args.precision, batch_size=args.batch_size)
+        environment["environment_source"] = "this run"
     environment["from_existing"] = bool(getattr(args, "from_existing", None))
     if getattr(args, "device_name", None):
         environment["device_name"] = args.device_name   # the GPU the runs were made on, when assembling off-line
     gate = gate_from(getattr(args, "reproduction_summary", None), cfg)
-    if gate is None and getattr(args, "from_existing", None):
-        # the kernel's own card carries the gate it ran under; keep it when the eval summary was not downloaded
-        gate = (_load(Path(args.from_existing) / "card.json") or {}).get("gate")
+    if gate is None and existing_card:
+        gate = existing_card.get("gate")   # the kernel's own card carries the gate it ran under
     card = build_card(model=model_block(cfg, args.config, twins_std or twins_long, getattr(args, "model_name", None)), pool=pool_meta,
                       environment=environment, gate=gate,
                       twins_standard=twins_std, twins_long=twins_long, bootstrap=bootstrap, masking=masking, monitor=monitor,
