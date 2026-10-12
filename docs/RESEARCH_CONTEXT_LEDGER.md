@@ -6223,3 +6223,47 @@ behaviour never confirms; the last thought is that slot in every model.* The str
 C4 stays on the card as defined; C4b sits beside it. Cards and comparison rebuilt
 (`docs/latent_monitor_audit/`); the comparison's single flag is unchanged (GPT-2's regime
 across pools).
+
+## 125. Preregistered: building on the audit. Build 1, prompt-leakage probes; Build 2, carrier-based error detection
+
+Designed 2026-10-13. The ranking and literature are in
+`docs/DIRECTIONS_BUILDING_ON_THE_AUDIT.md`. No model training.
+
+### Build 1: prompt-leakage probes (local, on the eight recorded twin-run sets)
+
+For every slot, both probe families, pair-aligned five folds as §120/§124:
+(a) **first operator** of the gold chain (+, −, ×, ÷; four classes; fixed by the
+question's wording, needs no computation), (b) **long chain** (≥ 3 steps; binary; a
+difficulty attribute of the question), beside (c) the penultimate-intermediate
+readability already on the card (a computed value). Majority-class baselines reported.
+Output: `prompt_leakage.json` per run set and a table on the card's companion page.
+
+Prediction P9: on every model, the question attributes (a) and (b) are decoded above
+baseline at *every* slot including position 0 and the terminal slot, with the best
+slot for (a) not a carrier in at least two of the three models; the computed value (c)
+is decoded best at a carrier or a store. Consequence if it holds: a monitor's accuracy on
+a prompt-borne attribute is uninformative about whether it reads the plan, which is the
+confound in a trigger-in-the-prompt backdoor evaluation.
+
+### Build 2: carrier-based error detection (one GPU run per model, ≈ 10 min each)
+
+`scripts/run_codi_correctness_readout.py`: for the full GSM8K test set (1,319 rows,
+correct and wrong), record the six slot states, the first-answer-token logits and the
+native answer. Features per slot from the model's own output head applied to the state:
+top-1 numeric value, its probability, the entropy over the numeric vocabulary, and
+agreement of the top-1 value with the final answer and with the other slots. Classifiers
+(logistic, 5 folds): carrier slots only (card-chosen), inert slots only, all slots; the
+answer-confidence baseline (first-token margin alone); an LTO-style classifier on the raw
+concatenated states. Metric: AUROC for "the native answer is wrong", with bootstrap
+intervals.
+
+Prediction P10: carrier-slot readout features beat the confidence baseline by ≥ 0.05
+AUROC on every model and beat inert-slot features by ≥ 0.05; the raw-state classifier is
+the strongest but the carrier-readout classifier reaches ≥ 80% of its gain over
+baseline with a fraction of the parameters. If carriers do not beat inert slots, the
+card's placement carries no information for this use and the paper says so.
+
+### Cost
+
+Build 1: CPU, minutes. Build 2: three kernels of ≈ 10 min on dannyism11 after the §124
+queue drains.
