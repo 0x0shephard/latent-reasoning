@@ -14,7 +14,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "9ad543d0404a857a251be8028591d747e9de3ccc"
+RUN_COMMIT = "d361d9695480c26287b17b0198d0ce8c06f4c0f3"
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "gate": "dataset",
