@@ -7,12 +7,12 @@
 
 | slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability ridge / mlp | faithfulness ridge / mlp | mask cost short (pts) | mask cost long (pts) [95% CI] |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | weak | 0.047 | 0.062 [0.03, 0.10] | 0.093 | 0.069 | 0.19 / 0.15 | 0.04 / 0.05 | 0.7 | 5.7 |
-| 1 | weak | 0.000 | 0.013 [0.00, 0.03] | 0.050 | 0.062 | 0.06 / 0.06 | 0.06 / 0.06 | 0.0 | 4.1 |
-| 2 | inert | 0.000 | 0.000 [0.00, 0.00] | 0.003 | 0.013 | 0.16 / 0.08 | 0.00 / 0.00 | 0.0 | 1.9 |
-| 3 | carrier | 0.065 | 0.296 [0.23, 0.37] | 0.000 | 0.000 | 0.59 / 0.52 | 0.34 / 0.35 | 0.0 | 3.8 |
-| 4 | store | 0.022 | 0.026 [0.01, 0.05] | 0.053 | 0.240 | 0.69 / 0.62 | 0.02 / 0.02 | 0.0 | 4.3 |
-| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.022 | 0.030 | 0.68 / 0.48 | 0.00 / 0.00 | 0.0 | 1.1 |
+| 0 | weak | 0.047 | 0.062 [0.03, 0.10] | 0.093 | 0.069 | 0.19 / 0.15 | 0.04 / 0.05 | 0.7 | 5.7 [3.0, 8.4] |
+| 1 | weak | 0.000 | 0.013 [0.00, 0.03] | 0.050 | 0.062 | 0.06 / 0.06 | 0.06 / 0.06 | 0.0 | 4.1 [1.6, 7.0] |
+| 2 | inert | 0.000 | 0.000 [0.00, 0.00] | 0.003 | 0.013 | 0.16 / 0.08 | 0.00 / 0.00 | 0.0 | 1.9 [0.0, 4.1] |
+| 3 | carrier | 0.065 | 0.296 [0.23, 0.37] | 0.000 | 0.000 | 0.59 / 0.52 | 0.34 / 0.35 | 0.0 | 3.8 [1.3, 6.5] |
+| 4 | store | 0.022 | 0.026 [0.01, 0.05] | 0.053 | 0.240 | 0.69 / 0.62 | 0.02 / 0.02 | 0.0 | 4.3 [1.4, 7.3] |
+| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.022 | 0.030 | 0.68 / 0.48 | 0.00 / 0.00 | 0.0 | 1.1 [-0.5, 3.0] |
 
 - position-0 K/V (question register): transport short 0.093, long 0.069; mask cost long 4.3 pts
 - tails: kv_all transport all 0.702 (other 0.032), long 0.671; mask_all cost long 28.5 pts, mean_all 16.3 pts
@@ -40,4 +40,4 @@
 - inert slots: [2, 5] (readable but inert: [])
 - Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [2, 5].
 
-- stage seconds: {'twins_standard': 735.7, 'twins_long': 400.6, 'masking': 318.1}
+- stage seconds: {'twins_standard': 748.6, 'twins_long': 408.3, 'masking': 325.1}

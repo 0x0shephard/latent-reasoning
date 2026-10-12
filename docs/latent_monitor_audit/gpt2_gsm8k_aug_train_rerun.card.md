@@ -7,12 +7,12 @@
 
 | slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability ridge / mlp | faithfulness ridge / mlp | mask cost short (pts) | mask cost long (pts) [95% CI] |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | weak | 0.000 | 0.000 [0.00, 0.00] | 0.052 | 0.120 | 0.09 / 0.10 | 0.00 / 0.00 | 3.6 | 37.6 |
-| 1 | carrier | 0.035 | 0.153 [0.13, 0.18] | 0.000 | 0.001 | 0.33 / 0.49 | 0.19 / 0.17 | 2.4 | 20.2 |
-| 2 | store | 0.000 | 0.000 [0.00, 0.00] | 0.026 | 0.158 | 0.46 / 0.48 | 0.00 / 0.00 | 2.0 | 12.2 |
-| 3 | carrier | 0.061 | 0.325 [0.29, 0.36] | 0.000 | 0.000 | 0.40 / 0.58 | 0.40 / 0.36 | 1.2 | 12.5 |
-| 4 | store | 0.000 | 0.000 [0.00, 0.00] | 0.048 | 0.303 | 0.54 / 0.56 | 0.00 / 0.00 | 1.2 | 13.7 |
-| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.000 | 0.000 | 0.42 / 0.57 | 0.00 / 0.00 | 0.8 | 1.9 |
+| 0 | weak | 0.000 | 0.000 [0.00, 0.00] | 0.052 | 0.120 | 0.09 / 0.10 | 0.00 / 0.00 | 3.6 | 37.6 [31.2, 44.5] |
+| 1 | carrier | 0.035 | 0.153 [0.13, 0.18] | 0.000 | 0.001 | 0.33 / 0.49 | 0.19 / 0.17 | 2.4 | 20.2 [14.4, 26.2] |
+| 2 | store | 0.000 | 0.000 [0.00, 0.00] | 0.026 | 0.158 | 0.46 / 0.48 | 0.00 / 0.00 | 2.0 | 12.2 [7.6, 16.7] |
+| 3 | carrier | 0.061 | 0.325 [0.29, 0.36] | 0.000 | 0.000 | 0.40 / 0.58 | 0.40 / 0.36 | 1.2 | 12.5 [7.2, 17.9] |
+| 4 | store | 0.000 | 0.000 [0.00, 0.00] | 0.048 | 0.303 | 0.54 / 0.56 | 0.00 / 0.00 | 1.2 | 13.7 [8.7, 19.0] |
+| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.000 | 0.000 | 0.42 / 0.57 | 0.00 / 0.00 | 0.8 | 1.9 [0.0, 3.8] |
 
 - position-0 K/V (question register): transport short 0.052, long 0.120; mask cost long 37.6 pts
 - tails: kv_all transport all 0.595 (other 0.023), long 0.692; mask_all cost long 52.9 pts, mean_all 45.2 pts
@@ -40,4 +40,4 @@
 - inert slots: [5] (readable but inert: [])
 - Carrying thought(s) [1, 3]; place a monitor only at [1, 3]; the carriers are necessary (critical path); inert slots [5].
 
-- stage seconds: {'twins_standard': 487.7, 'twins_long': 569.3, 'masking': 148.5}
+- stage seconds: {'twins_standard': 479.3, 'twins_long': 558.2, 'masking': 145.4}

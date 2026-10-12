@@ -45,8 +45,8 @@
     "transformers": "4.52.4",
     "peft": "0.15.2",
     "cuda": "12.8",
-    "from_existing": true,
-    "environment_source": "kernel card"
+    "environment_source": "kernel card",
+    "from_existing": true
   },
   "gate": {
     "accuracy": 0.5549658832448825,
@@ -160,8 +160,14 @@
       "mask_cost_long": 0.05691056910569103,
       "mask_cost_all": 0.041015625,
       "mask_cost_long_condition": "mean_0",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.02981029810298103,
+        0.08407859078590749
+      ],
+      "mask_cost_short_ci95": [
+        -0.013986013986013986,
+        0.03496503496503497
+      ],
       "role": "weak"
     },
     "1": {
@@ -184,8 +190,14 @@
       "mask_cost_long": 0.04065040650406504,
       "mask_cost_all": 0.029296875,
       "mask_cost_long_condition": "mask_1",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.016260162601626018,
+        0.07046070460704607
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "weak"
     },
     "2": {
@@ -208,8 +220,14 @@
       "mask_cost_long": 0.01897018970189701,
       "mask_cost_all": 0.013671875,
       "mask_cost_long_condition": "mask_2",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.0,
+        0.04065040650406504
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "inert"
     },
     "3": {
@@ -232,8 +250,14 @@
       "mask_cost_long": 0.03794037940379402,
       "mask_cost_all": 0.02734375,
       "mask_cost_long_condition": "mean_3",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.013482384823848243,
+        0.06504065040650407
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "carrier"
     },
     "4": {
@@ -256,8 +280,14 @@
       "mask_cost_long": 0.043360433604336,
       "mask_cost_all": 0.03125,
       "mask_cost_long_condition": "mask_4",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.013550135501355014,
+        0.07317073170731707
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "store"
     },
     "5": {
@@ -280,8 +310,14 @@
       "mask_cost_long": 0.010840108401084014,
       "mask_cost_all": 0.0078125,
       "mask_cost_long_condition": "mask_5",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        -0.005420054200542005,
+        0.02981029810298103
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "terminal_inert"
     }
   },
@@ -292,7 +328,10 @@
       "kv_transport_long": 0.06907894736842106,
       "kv_mask_cost_short": 0.006993006993006978,
       "kv_mask_cost_long": 0.043360433604336,
-      "kv_mask_cost_long_ci95": null
+      "kv_mask_cost_long_ci95": [
+        0.02168021680216802,
+        0.06775067750677506
+      ]
     }
   },
   "tails": {
@@ -301,7 +340,10 @@
     "kv_all_transport_long": 0.6710526315789473,
     "state_all_transport_long": 0.5657894736842105,
     "mask_all_cost_long": 0.2845528455284553,
-    "mask_all_cost_long_ci95": null,
+    "mask_all_cost_long_ci95": [
+      0.23577235772357724,
+      0.33604336043360433
+    ],
     "mean_all_cost_long": 0.16260162601626016,
     "mask_even_cost_long": 0.09485094850948506,
     "mask_odd_cost_long": 0.035230352303523005
@@ -317,9 +359,9 @@
     }
   },
   "stage_seconds": {
-    "twins_standard": 735.7,
-    "twins_long": 400.6,
-    "masking": 318.1
+    "twins_standard": 748.6,
+    "twins_long": 408.3,
+    "masking": 325.1
   },
   "checks": {
     "c1_no_single_site_transport_on_short_chains": true,
@@ -375,6 +417,6 @@
     "register_position_0": false,
     "summary": "Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [2, 5]."
   },
-  "created_at_utc": "2026-10-12T21:08:41.279644+00:00",
+  "created_at_utc": "2026-10-12T23:52:36.760770+00:00",
   "smoke": false
 }
