@@ -32,14 +32,14 @@ from src.mech.monitor_audit import (
     predictions_fingerprint,
 )
 
-STAGES = ("twins_standard", "twins_long", "masking", "bootstrap", "monitor", "card")
+STAGES = ("twins_standard", "twins_long", "masking", "masking_bootstrap", "bootstrap", "monitor", "card")
 TWINS_SCRIPT = "scripts/run_codi_directed_counterfactual.py"
 MASKING_SCRIPT = "scripts/run_codi_masking_audit.py"
 
 
 def layout(root: Path) -> dict:
     return {"twins_standard": root / "twins_standard", "twins_long": root / "twins_long", "masking": root / "masking",
-            "bootstrap": root / "bootstrap.json", "monitor": root / "monitor_faithfulness.json",
+            "bootstrap": root / "bootstrap.json", "monitor": root / "monitor_faithfulness.json", "masking_bootstrap": root / "masking_bootstrap.json",
             "card": root / "card.json", "card_md": root / "card.md", "stage_seconds": root / "stage_seconds.json", "logs": root / "logs"}
 
 
@@ -57,7 +57,7 @@ def locate_existing(root: Path, prefix: str | None = None) -> dict:
     for stage in ("twins_standard", "twins_long", "masking"):
         globbed = sorted(p for p in root.glob(f"*_{stage}") if p.is_dir() and not p.name.endswith("_smoke"))
         out[stage] = first([root / stage, root / f"{prefix}_{stage}" if prefix else None] + globbed, True)
-    for key, suffix in (("bootstrap", "bootstrap.json"), ("monitor", "monitor_faithfulness.json")):
+    for key, suffix in (("bootstrap", "bootstrap.json"), ("monitor", "monitor_faithfulness.json"), ("masking_bootstrap", "masking_bootstrap.json")):
         globbed = sorted(root.glob(f"*_{suffix}"))
         out[key] = first([root / suffix, root / f"{prefix}_{suffix}" if prefix else None] + globbed, False)
     return out
@@ -137,6 +137,11 @@ def assemble(args, lay: dict, *, stage_seconds: dict, cfg) -> dict:
     masking = _load(None if lay["masking"] is None else Path(lay["masking"]) / "summary.json")
     runs = {p: Path(lay[f"twins_{p}"]) for p in ("standard", "long") if lay[f"twins_{p}"] is not None and (Path(lay[f"twins_{p}"]) / "predictions.pt").exists()}
 
+    masking_boot = _load(lay.get("masking_bootstrap"))
+    if masking_boot is None and lay["masking"] is not None and (Path(lay["masking"]) / "predictions.pt").exists() and "masking_bootstrap" in args.stages:
+        from scripts.analyze_masking_bootstrap import analyze as mask_boot_analyze
+        t = time.perf_counter(); masking_boot = mask_boot_analyze(Path(lay["masking"])); stage_seconds["masking_bootstrap"] = round(time.perf_counter() - t, 1)
+        Path(lay["masking_bootstrap"]).write_text(json.dumps(masking_boot, indent=2))
     bootstrap = _load(lay["bootstrap"])
     if bootstrap is None and runs and "bootstrap" in args.stages:
         from scripts.analyze_directed_counterfactual_bootstrap import analyze as boot_analyze
@@ -179,7 +184,7 @@ def assemble(args, lay: dict, *, stage_seconds: dict, cfg) -> dict:
     card = build_card(model=model_block(cfg, args.config, twins_std or twins_long, getattr(args, "model_name", None)), pool=pool_meta,
                       environment=environment, gate=gate,
                       twins_standard=twins_std, twins_long=twins_long, bootstrap=bootstrap, masking=masking, monitor=monitor,
-                      fingerprints=fingerprints, stage_seconds=stage_seconds)
+                      fingerprints=fingerprints, stage_seconds=stage_seconds, masking_bootstrap=masking_boot)
     card["created_at_utc"] = datetime.now(timezone.utc).isoformat()
     card["smoke"] = bool(getattr(args, "smoke", False))
     return card
@@ -195,6 +200,8 @@ def run(args) -> dict:
         lay = locate_existing(Path(args.from_existing), args.prefix)
         for key in ("card", "card_md", "stage_seconds"):
             lay[key] = layout(root)[key]
+        if lay.get("masking_bootstrap") is None:
+            lay["masking_bootstrap"] = layout(root)["masking_bootstrap"]
         for p in ("standard", "long"):
             s = _load(None if lay[f"twins_{p}"] is None else Path(lay[f"twins_{p}"]) / "summary.json")
             if s:

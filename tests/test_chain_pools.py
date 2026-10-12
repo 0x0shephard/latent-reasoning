@@ -16,8 +16,12 @@ from src.data.counterfactual_chain import parse_chain, perturb_row
 
 
 def test_pools_are_declared():
-    assert DEFAULT_POOL == "gsm8k_aug_train" and set(POOLS) == {"gsm8k_aug_train", "gsm8k_test", "svamp"}
+    assert DEFAULT_POOL == "gsm8k_aug_train" and set(POOLS) == {"gsm8k_aug_train", "gsm8k_test", "svamp", "gsm8k_train_original"}
     assert POOLS["svamp"]["long_profile"] is False and POOLS["gsm8k_test"]["long_profile"] is True
+    spec = POOLS["gsm8k_train_original"]["spec"]
+    assert spec["data_file"].endswith("3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/train.jsonl") and spec["split"] == "train"
+    assert POOLS["gsm8k_train_original"]["adapter"] == "gsm8k" and POOLS["gsm8k_train_original"]["long_profile"] is True
+    assert chain_rows("gsm8k_train_original", [{"question": "q 2 and 3", "answer": "<<2+3=5>>\n#### 5"}])[0]["cot"] == "<<2+3=5>>"
 
 
 def test_gsm8k_annotations_become_the_chain():

@@ -6118,3 +6118,60 @@ chains for SIM-CoT (0.66) and costs 19–33 points on long ones for GPT-2 and SI
 monitor that reads thoughts and ignores position 0 misses the site the model leans on
 most. (iv) On a one-step dataset the audit correctly reports that there is nothing to
 monitor. (v) Two independent sessions reproduce the twin predictions bit for bit.
+
+## 124. Preregistered: a second probe family, a large natural pool, and intervals on necessity
+
+Designed 2026-10-13 after §123 addendum 2, as the first three of the publish-readiness
+items. No training of the models; the only training is of probes on recorded states.
+Card contract stays `latent_monitor_audit_card_v1` with additive fields.
+
+### Item 2: a second probe family (`mlp`)
+
+The §120 monitor is a ridge map from a slot's state to the tied embedding of the target
+number, decoded by nearest numeric token. A referee will ask whether "readable but
+unfaithful" is an artefact of a linear probe. Added: a two-layer MLP classifier (hidden
+256, GELU, AdamW, weight decay 1e-2, 300 full-batch steps, seeded) over the numeric
+vocabulary, trained in the same pair-aligned five folds, reported beside the ridge probe
+for every slot and target. Faithfulness is defined identically (alarm on the twin's state
+confirmed by the behaviour under the swap). The card carries both families; C4 is
+evaluated per family.
+
+### Item 4: pool `gsm8k_train_original`
+
+openai/grade-school-math `train.jsonl` at the same pinned commit as the test set, 7,473
+rows with calculator annotations, converted exactly as `gsm8k_test`. These are the
+questions GSM8k-Aug augments, so they are in-distribution for all three checkpoints (the
+test set is the held-out pool; this one tightens intervals). Expected: about 4,000
+perturbable rows and well over 1,000 long-chain candidates, so both profiles reach the
+512-pair cap for the first time on natural text.
+
+### Item 5: intervals on masking costs
+
+The masking runner now saves per-row predictions; `scripts/analyze_masking_bootstrap.py`
+resamples rows (2,000 draws, seeded) and gives a 95% interval for every condition's
+accuracy drop on all / short / long chains. The card carries the interval of the
+condition that attains each slot's cost, and the comparison flags carriers whose
+necessity intervals separate across pools.
+
+### Predictions, before any run
+
+- P6 (probe family, scored first on the six existing twin runs, no GPU): the MLP reads
+  every slot at least as well as the ridge probe; carriers' faithfulness changes by less
+  than 0.05 between families; C4 under the MLP agrees with C4 under the ridge probe on
+  every card (holds for GPT-2 and CODI-1B on both pools, fails for SIM-CoT on
+  `gsm8k_test`).
+- P7 (`gsm8k_train_original`): every model reproduces the carrier set it showed on
+  `gsm8k_test` (GPT-2 {3} or {1,3}, CODI-1B {3}, SIM-CoT {1,3}), the stores at the even
+  positions, and the terminal result; the long-transport intervals overlap those of
+  `gsm8k_test`; the regime is `backup_route` for all three (natural questions, as on the
+  test set, with the training-set caveat recorded).
+- P8 (necessity intervals): GPT-2's slot-3 masking cost has non-overlapping intervals
+  between `gsm8k_aug_train` (12.5 points) and `gsm8k_test` (6.5), so the regime flip of
+  §123 addendum 2 is real; CODI-1B's carrier cost has an upper bound below 10 points on
+  every pool.
+
+### Cost
+
+Kaggle, dannyism11: the new pool for three models (≈ 2.1 h) and reruns of `gsm8k_test`
+for three models and `gsm8k_aug_train` for GPT-2 so that masking intervals and the MLP
+family exist for every card (≈ 2.3 h). About 4.5 of the 27 h left.

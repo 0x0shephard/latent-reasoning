@@ -132,6 +132,20 @@ def mask_cost(masking: dict | None, part: str, slot: int) -> float | None:
     return max(values) if values else None
 
 
+def mask_cost_condition(masking: dict | None, part: str, slot: int) -> str | None:
+    """The condition (``mean_s`` or ``mask_s``) that attains the slot's cost."""
+    pairs = [(drop_of(masking, part, name), name) for name in (f"mean_{slot}", f"mask_{slot}")]
+    pairs = [(v, name) for v, name in pairs if v is not None]
+    return max(pairs)[1] if pairs else None
+
+
+def mask_ci(masking_bootstrap: dict | None, part: str, condition: str | None) -> list | None:
+    if not masking_bootstrap or condition is None:
+        return None
+    entry = masking_bootstrap.get("parts", {}).get(part, {}).get(condition)
+    return None if not entry or entry.get("ci95") is None else [float(entry["ci95"][0]), float(entry["ci95"][1])]
+
+
 def monitor_slot(monitor_profile: dict | None, slot: int, target: str = "penultimate") -> dict:
     if not monitor_profile:
         return {}
@@ -202,11 +216,12 @@ def slot_role(slot: int, entry: dict) -> str:
 
 def build_card(*, model: dict, pool: dict, environment: dict, gate: dict | None, twins_standard: dict | None,
                twins_long: dict | None, bootstrap=None, masking: dict | None = None, monitor=None,
-               fingerprints: dict | None = None, stage_seconds: dict | None = None) -> dict:
+               fingerprints: dict | None = None, stage_seconds: dict | None = None, masking_bootstrap: dict | None = None) -> dict:
     boot = by_profile(bootstrap); mon = by_profile(monitor)
     slots = {}
     for s in SLOTS:
         m = monitor_slot(mon.get("long"), s)
+        mlp = (m.get("families") or {}).get("mlp") or {}
         entry = {
             "transport_all": target_of(twins_standard, f"state_{s}"),
             "transport_short": short_target_of(twins_standard, f"state_{s}"),
@@ -217,19 +232,25 @@ def build_card(*, model: dict, pool: dict, environment: dict, gate: dict | None,
             "kv_transport_long": target_of(twins_long, f"kv_{s}"),
             "readability_long": m.get("readability"),
             "faithfulness_long": m.get("faithfulness"),
+            "readability_long_mlp": mlp.get("readability"),
+            "faithfulness_long_mlp": mlp.get("faithfulness"),
             "monitor_rows_long": m.get("rows"),
             "mask_cost_short": mask_cost(masking, "short", s),
             "mask_cost_long": mask_cost(masking, "long", s),
             "mask_cost_all": mask_cost(masking, "all", s),
+            "mask_cost_long_condition": mask_cost_condition(masking, "long", s),
+            "mask_cost_long_ci95": mask_ci(masking_bootstrap, "long", mask_cost_condition(masking, "long", s)),
+            "mask_cost_short_ci95": mask_ci(masking_bootstrap, "short", mask_cost_condition(masking, "short", s)),
         }
         entry["role"] = slot_role(s, entry)
         slots[str(s)] = entry
     registers = {"position_0": {"kv_transport_all": target_of(twins_standard, "kv_0"), "kv_transport_short": short_target_of(twins_standard, "kv_0"),
                                 "kv_transport_long": target_of(twins_long, "kv_0"), "kv_mask_cost_short": drop_of(masking, "short", "mask_0"),
-                                "kv_mask_cost_long": drop_of(masking, "long", "mask_0")}}
+                                "kv_mask_cost_long": drop_of(masking, "long", "mask_0"), "kv_mask_cost_long_ci95": mask_ci(masking_bootstrap, "long", "mask_0")}}
     tails = {"kv_all_transport_all": target_of(twins_standard, "kv_all"), "kv_all_other_all": target_of(twins_standard, "kv_all", "other"),
              "kv_all_transport_long": target_of(twins_long, "kv_all"), "state_all_transport_long": target_of(twins_long, "state_all"),
-             "mask_all_cost_long": drop_of(masking, "long", "mask_all"), "mean_all_cost_long": drop_of(masking, "long", "mean_all"),
+             "mask_all_cost_long": drop_of(masking, "long", "mask_all"), "mask_all_cost_long_ci95": mask_ci(masking_bootstrap, "long", "mask_all"),
+             "mean_all_cost_long": drop_of(masking, "long", "mean_all"),
              "mask_even_cost_long": drop_of(masking, "long", "mask_even"), "mask_odd_cost_long": drop_of(masking, "long", "mask_odd")}
     carriers = carrying_slots(twins_long)
     card = {"schema_version": 1, "contract": CARD_CONTRACT, "model": model, "pool": pool, "environment": environment, "gate": gate,
@@ -263,13 +284,8 @@ def checks_from(card: dict, carriers: list[int]) -> dict:
                       _le(t["faithfulness_long"], TERMINAL_MAX_FAITHFULNESS), _le(t["mask_cost_all"], TERMINAL_MAX_COST)]
     evaluated = [p for p in terminal_parts if p is not None]
     c3 = None if not evaluated else all(evaluated)
-    readability = [slots[str(s)]["readability_long"] for s in SLOTS]
-    faithfulness = [slots[str(s)]["faithfulness_long"] for s in SLOTS]
-    rho = spearman(readability, faithfulness)
-    measured = [(r, s) for r, s in zip(readability, SLOTS) if r is not None]
-    most_readable = max(measured)[1] if measured else None
-    most_readable_faithful = None if most_readable is None else (slots[str(most_readable)]["faithfulness_long"] or 0.0) >= PLACEMENT_MIN_FAITHFULNESS
-    c4 = None if most_readable is None else (not most_readable_faithful) and (rho is None or rho <= 0)
+    c4, most_readable, rho = _c4([slots[str(s)]["readability_long"] for s in SLOTS], [slots[str(s)]["faithfulness_long"] for s in SLOTS])
+    c4_mlp, most_readable_mlp, rho_mlp = _c4([slots[str(s)]["readability_long_mlp"] for s in SLOTS], [slots[str(s)]["faithfulness_long_mlp"] for s in SLOTS])
     costs = {str(s): slots[str(s)]["mask_cost_long"] for s in carriers}
     c5 = None if not carriers or any(v is None for v in costs.values()) else all(v >= NECESSARY_MIN_COST for v in costs.values())
     register_cost = card["registers"]["position_0"]["kv_mask_cost_long"]
@@ -277,8 +293,21 @@ def checks_from(card: dict, carriers: list[int]) -> dict:
             "c2_chain_length_gate": c2, "c2_max_long_transport": None if not long_values else max(long_values),
             "c3_terminal_inert_unfaithful_unnecessary": c3,
             "c4_readability_dissociated_from_faithfulness": c4, "c4_most_readable_slot": most_readable, "c4_spearman": rho,
+            "c4_mlp_readability_dissociated_from_faithfulness": c4_mlp, "c4_mlp_most_readable_slot": most_readable_mlp, "c4_mlp_spearman": rho_mlp,
+            "c4_families_agree": None if c4 is None or c4_mlp is None else c4 == c4_mlp,
             "c5_carriers_necessary": c5, "c5_carrier_costs_long": costs,
             "register_position_0": _ge(register_cost, REGISTER_MIN_COST), "register_cost_long": register_cost}
+
+
+def _c4(readability: list, faithfulness: list) -> tuple:
+    """(dissociated?, most readable slot, spearman) for one probe family."""
+    rho = spearman(readability, faithfulness)
+    measured = [(r, s) for r, s in zip(readability, SLOTS) if r is not None]
+    most_readable = max(measured)[1] if measured else None
+    if most_readable is None:
+        return None, None, rho
+    most_readable_faithful = (faithfulness[SLOTS.index(most_readable)] or 0.0) >= PLACEMENT_MIN_FAITHFULNESS
+    return (not most_readable_faithful) and (rho is None or rho <= 0), most_readable, rho
 
 
 def verdict_from(card: dict, carriers: list[int]) -> dict:
@@ -324,14 +353,17 @@ def card_markdown(card: dict) -> str:
              f"- pool: {p.get('pool')} · n = {p.get('n')} · hash `{str(p.get('hash', ''))[:12]}` · steps {p.get('steps_histogram')}",
              f"- environment: {e.get('device_name') or e.get('device')} · {e.get('dtype')} · batch {e.get('batch_size')} · torch {e.get('torch')} · transformers {e.get('transformers')}",
              f"- gate: accuracy {_f(g.get('accuracy'), 4)} vs published {_f(g.get('published'), 4)} ({g.get('status')})", "",
-             "| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |",
+             "| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability ridge / mlp | faithfulness ridge / mlp | mask cost short (pts) | mask cost long (pts) [95% CI] |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for s in SLOTS:
         v = card["slots"][str(s)]
         ci = v["transport_long_ci95"]
         ci_text = "" if not ci else f" [{ci[0]:.2f}, {ci[1]:.2f}]"
+        mci = v.get("mask_cost_long_ci95")
+        mci_text = "" if not mci else f" [{100 * mci[0]:.1f}, {100 * mci[1]:.1f}]"
         lines.append(f"| {s} | {v['role']} | {_f(v['transport_short'])} | {_f(v['transport_long'])}{ci_text} | {_f(v['kv_transport_short'])} | {_f(v['kv_transport_long'])} | "
-                     f"{_f(v['readability_long'], 2)} | {_f(v['faithfulness_long'], 2)} | {_f(v['mask_cost_short'], pct=True)} | {_f(v['mask_cost_long'], pct=True)} |")
+                     f"{_f(v['readability_long'], 2)} / {_f(v.get('readability_long_mlp'), 2)} | {_f(v['faithfulness_long'], 2)} / {_f(v.get('faithfulness_long_mlp'), 2)} | "
+                     f"{_f(v['mask_cost_short'], pct=True)} | {_f(v['mask_cost_long'], pct=True)}{mci_text} |")
     r0, t = card["registers"]["position_0"], card["tails"]
     lines += ["", f"- position-0 K/V (question register): transport short {_f(r0['kv_transport_short'])}, long {_f(r0['kv_transport_long'])}; "
               f"mask cost long {_f(r0['kv_mask_cost_long'], pct=True)} pts",
@@ -339,10 +371,10 @@ def card_markdown(card: dict) -> str:
               f"mask_all cost long {_f(t['mask_all_cost_long'], pct=True)} pts, mean_all {_f(t['mean_all_cost_long'], pct=True)} pts", "", "## Checks", ""]
     c = card["checks"]
     for key in ("c1_no_single_site_transport_on_short_chains", "c2_chain_length_gate", "c3_terminal_inert_unfaithful_unnecessary",
-                "c4_readability_dissociated_from_faithfulness", "c5_carriers_necessary", "register_position_0"):
-        lines.append(f"- {key}: **{c[key]}**")
+                "c4_readability_dissociated_from_faithfulness", "c4_mlp_readability_dissociated_from_faithfulness", "c5_carriers_necessary", "register_position_0"):
+        lines.append(f"- {key}: **{c.get(key)}**")
     lines.append(f"- details: max short transport {_f(c['c1_max_short_transport'])}, max long transport {_f(c['c2_max_long_transport'])}, "
-                 f"most readable slot {c['c4_most_readable_slot']}, spearman(readability, faithfulness) {_f(c['c4_spearman'], 2)}, "
+                 f"most readable slot ridge {c['c4_most_readable_slot']} / mlp {c.get('c4_mlp_most_readable_slot')}, spearman ridge {_f(c['c4_spearman'], 2)} / mlp {_f(c.get('c4_mlp_spearman'), 2)}, "
                  f"carrier costs {c['c5_carrier_costs_long']}, register cost {_f(c['register_cost_long'], pct=True)} pts")
     v = card["verdict"]
     lines += ["", "## Verdict", "", f"- regime: **{v['regime']}**", f"- carrying slots: {v['carrying_slots']}", f"- placement slots: {v['placement_slots']}",
@@ -362,6 +394,7 @@ def card_row(card: dict) -> dict:
             "transport_long": {str(s): card["slots"][str(s)]["transport_long"] for s in SLOTS},
             "transport_long_ci95": {str(s): card["slots"][str(s)]["transport_long_ci95"] for s in SLOTS},
             "mask_cost_long": {str(s): card["slots"][str(s)]["mask_cost_long"] for s in SLOTS},
+            "mask_cost_long_ci95": {str(s): card["slots"][str(s)].get("mask_cost_long_ci95") for s in SLOTS},
             "register_cost_long": card["registers"]["position_0"]["kv_mask_cost_long"],
             "checks": {k: card["checks"][k] for k in card["checks"] if k.startswith("c") and not any(x in k for x in ("max", "most", "spearman", "costs"))},
             "fingerprints": card.get("fingerprints", {})}
@@ -409,6 +442,13 @@ def compare_cards(cards: list[dict]) -> dict:
                         consequential = max(cis[i][2] or 0.0, cis[j][2] or 0.0) >= INERT_MAX_TRANSPORT
                         if consequential and _overlap(cis[i][1], cis[j][1]) is False:
                             flags.append(f"{model}: slot {s} long transport intervals do not overlap between {cis[i][0]} and {cis[j][0]}")
+            carrier_slots = sorted(set().union(*(set(r["carriers"]) for r in evaluable))) if evaluable else []
+            for s in carrier_slots:
+                cis = [(r["pool"], r["mask_cost_long_ci95"][str(s)]) for r in evaluable if r["mask_cost_long_ci95"].get(str(s))]
+                for i in range(len(cis)):
+                    for j in range(i + 1, len(cis)):
+                        if _overlap(cis[i][1], cis[j][1]) is False:
+                            flags.append(f"{model}: necessity of carrier slot {s} differs between {cis[i][0]} and {cis[j][0]} (masking-cost intervals separate)")
         by_pool: dict[str, list[dict]] = {}
         for r in group:
             by_pool.setdefault(str(r["pool"]), []).append(r)

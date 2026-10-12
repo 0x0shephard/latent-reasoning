@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.collect_kv_subspaces import _atomic_json
+from scripts.collect_kv_subspaces import _atomic_json, _atomic_torch_save
 from scripts.collect_official_codi_endpoint_tsvc import verify_full_reproduction_gate
 from scripts.run_codi_causal_subspace_distillation import DATA_SEED
 from scripts.run_codi_workspace_interchange_gate import QUESTIONS
@@ -152,17 +152,21 @@ def run(args):
     print("baseline", baseline)
 
     report = {"all": {}, "by_length": {"short": {}, "long": {}}, "layers": backbone_layers(model)}
+    preds: dict[str, torch.Tensor] = {}
     for name in condition_names():
         mean_slots, mask_slots = spec(name)
         hidden_donors = {s: mean_state[s].unsqueeze(0).expand(len(rows), -1) for s in mean_slots}
         pred = outcomes_under(model, tokenizer, rows, latent_positions=latent_positions, batch_size=args.batch_size,
                               device=device, hidden_donors=hidden_donors, mask_slots=mask_slots)
+        preds[name] = pred.cpu()
         report["all"][name] = outcome(pred, base_pred, gold)
         report["by_length"]["short"][name] = outcome(pred, base_pred, gold, ~is_long)
         report["by_length"]["long"][name] = outcome(pred, base_pred, gold, is_long)
         print(name, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in report["all"][name].items()},
               "| long drop", None if report["by_length"]["long"][name]["accuracy_drop"] is None else round(report["by_length"]["long"][name]["accuracy_drop"], 3))
 
+    # per-row predictions for the §124 row bootstrap of every accuracy drop
+    _atomic_torch_save({"conditions": preds, "base_pred": base_pred.cpu(), "gold": gold.cpu(), "is_long": is_long, "steps": steps}, out / "predictions.pt")
     checks = checks_from(report, carrying)
     summary = {"schema_version": 1, "contract": contract, "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,

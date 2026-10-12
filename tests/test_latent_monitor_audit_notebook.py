@@ -7,7 +7,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts" / "build_kaggle_latent_monitor_audit_notebook.py"
-CASES = (("gpt2", "gsm8k_test"), ("gpt2", "svamp"), ("gpt2", "gsm8k_aug_train"), ("codi1b", "gsm8k_test"), ("simcot", "gsm8k_test"))
+CASES = (("gpt2", "gsm8k_test"), ("gpt2", "svamp"), ("gpt2", "gsm8k_aug_train"), ("codi1b", "gsm8k_test"), ("simcot", "gsm8k_test"),
+         ("gpt2", "gsm8k_train_original"), ("codi1b", "gsm8k_train_original"), ("simcot", "gsm8k_train_original"))
 
 
 def _notebook(model, pool):
@@ -57,3 +58,5 @@ def test_pinned_commit_has_the_driver_and_pools():
     assert "def build_card" in show("src/mech/monitor_audit.py") and "svamp_chain_row" in show("src/data/chain_pools.py")
     assert "--from-existing" in show("scripts/run_latent_monitor_audit.py") and '"--pool"' in show("scripts/run_codi_directed_counterfactual.py")
     assert 'nargs="*"' in show("scripts/run_codi_masking_audit.py")
+    assert "mlp_fit_predict" in show("scripts/analyze_monitor_faithfulness.py") and "predictions.pt" in show("scripts/run_codi_masking_audit.py")
+    assert "gsm8k_train_original" in show("src/data/chain_pools.py") and "masking_bootstrap" in show("scripts/run_latent_monitor_audit.py")

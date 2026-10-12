@@ -54,9 +54,27 @@ def _masking(long_costs: dict, short_costs: dict | None = None, *, terminal=0.0,
             "report": {"all": allp, "by_length": {"short": part(short_costs), "long": long}}, "seconds": 120.0}
 
 
-def _monitor(readability: dict, faithfulness: dict, run="x/twins_long"):
+def _monitor(readability: dict, faithfulness: dict, run="x/twins_long", mlp_readability: dict | None = None, mlp_faithfulness: dict | None = None):
+    mlp_r = mlp_readability if mlp_readability is not None else readability
+    mlp_f = mlp_faithfulness if mlp_faithfulness is not None else faithfulness
     return {"run": run, "rows": 1024, "slots": {str(s): {"penultimate": {"rows": 900, "readability": readability.get(s, 0.0),
-                                                                        "faithfulness": faithfulness.get(s, 0.0)}} for s in SLOTS}}
+                                                                        "faithfulness": faithfulness.get(s, 0.0),
+                                                                        "families": {"ridge": {"readability": readability.get(s, 0.0), "faithfulness": faithfulness.get(s, 0.0)},
+                                                                                     "mlp": {"readability": mlp_r.get(s, 0.0), "faithfulness": mlp_f.get(s, 0.0)}}}} for s in SLOTS}}
+
+
+def _masking_bootstrap(long_ci: dict, short_ci: dict | None = None):
+    short_ci = short_ci or {}
+    parts = {"all": {}, "short": {}, "long": {}}
+    for s in SLOTS:
+        for kind in ("mean", "mask"):
+            name = f"{kind}_{s}"
+            parts["long"][name] = {"mean": None, "ci95": long_ci.get(name), "n": 256} if long_ci.get(name) else {"mean": None, "ci95": None, "n": 0}
+            parts["short"][name] = {"mean": None, "ci95": short_ci.get(name), "n": 256} if short_ci.get(name) else {"mean": None, "ci95": None, "n": 0}
+            parts["all"][name] = {"mean": None, "ci95": None, "n": 0}
+    for name in ("mean_all", "mask_all", "mask_even", "mask_odd"):
+        parts["long"][name] = {"mean": 0.5, "ci95": [0.4, 0.6], "n": 256}
+    return {"run": "x/masking", "rows": 512, "samples": 2000, "seed": 1, "parts": parts}
 
 
 def _bootstrap(state: dict):
@@ -167,6 +185,34 @@ def test_environment_fingerprint_is_json_and_names_versions():
     env = environment_fingerprint(device="cpu", dtype="float32", batch_size=8)
     assert env["device"] == "cpu" and env["dtype"] == "float32" and env["batch_size"] == 8 and env["python"]
     json.dumps(env)
+
+
+def test_mlp_family_and_masking_intervals_reach_the_card():
+    card = _card(monitor={"long": _monitor({1: 0.33, 3: 0.40, 4: 0.54}, {1: 0.19, 3: 0.40}, mlp_readability={0: 0.6, 1: 0.5, 2: 0.65, 3: 0.55, 4: 0.7, 5: 0.6}, mlp_faithfulness={1: 0.2, 3: 0.4})},
+                 masking_bootstrap=_masking_bootstrap({"mean_3": [0.10, 0.15], "mean_1": [0.17, 0.23], "mask_0": [0.3, 0.45]}))
+    v = card["slots"]["3"]
+    assert v["readability_long_mlp"] == 0.55 and v["faithfulness_long_mlp"] == 0.4
+    assert v["mask_cost_long_condition"] == "mean_3" and v["mask_cost_long_ci95"] == [0.10, 0.15] and v["mask_cost_short_ci95"] is None
+    assert card["registers"]["position_0"]["kv_mask_cost_long_ci95"] == [0.3, 0.45] and card["tails"]["mask_all_cost_long_ci95"] == [0.4, 0.6]
+    c = card["checks"]
+    assert c["c4_readability_dissociated_from_faithfulness"] is True and c["c4_mlp_readability_dissociated_from_faithfulness"] is True
+    assert c["c4_mlp_most_readable_slot"] == 4 and c["c4_families_agree"] is True
+    text = card_markdown(card)
+    assert "0.40 / 0.55" in text and "12.5 [10.0, 15.0]" in text and "c4_mlp_readability_dissociated_from_faithfulness: **True**" in text
+    # families disagree when the MLP's most readable slot is a faithful carrier
+    card = _card(monitor={"long": _monitor({1: 0.33, 3: 0.40, 4: 0.54}, {1: 0.19, 3: 0.40}, mlp_readability={3: 0.9, 4: 0.5}, mlp_faithfulness={3: 0.4})})
+    assert card["checks"]["c4_mlp_readability_dissociated_from_faithfulness"] is False and card["checks"]["c4_families_agree"] is False
+    # cards without the family keep working
+    card = _card(monitor={"long": {"run": "x", "rows": 1, "slots": {str(s): {"penultimate": {"rows": 1, "readability": 0.1, "faithfulness": 0.0}} for s in SLOTS}}})
+    assert card["slots"]["3"]["readability_long_mlp"] is None and card["checks"]["c4_mlp_readability_dissociated_from_faithfulness"] is None
+
+
+def test_compare_flags_necessity_differences_between_pools():
+    a = _card(masking_bootstrap=_masking_bootstrap({"mean_3": [0.10, 0.15], "mean_1": [0.17, 0.23]}))
+    b = _card(pool={"pool": "gsm8k_test", "hash": "t" * 64, "n": 1206}, masking=_masking({1: 0.12, 3: 0.065}),
+              masking_bootstrap=_masking_bootstrap({"mean_3": [0.03, 0.09], "mean_1": [0.12, 0.20]}))
+    cmp = compare_cards([a, b])
+    assert any("necessity of carrier slot 3 differs" in f for f in cmp["flags"]) and not any("slot 1 differs" in f for f in cmp["flags"])
 
 
 def test_compare_flags_disagreements_across_pools_and_environments():

@@ -34,6 +34,11 @@ RIDGE = 1.0
 TOP_K = 5
 SEED = 20_261_012
 LONG_MIN_STEPS = 3
+PROBE_FAMILIES = ("ridge", "mlp")   # ledger §124: the MLP is the second family
+MLP_HIDDEN = 256
+MLP_STEPS = 300
+MLP_LR = 1e-3
+MLP_WEIGHT_DECAY = 1e-2
 
 
 def numeric_vocabulary(tokenizer, embeddings: torch.Tensor, *, limit: int = 1000) -> tuple[torch.Tensor, list[str]]:
@@ -69,10 +74,28 @@ def ridge_predict(x: torch.Tensor, w: torch.Tensor, vocab_embeddings: torch.Tens
     return (pred @ voc.T).argmax(1)   # index into the numeric vocabulary
 
 
+def mlp_fit_predict(x_train: torch.Tensor, y_train: torch.Tensor, x_test: torch.Tensor, n_classes: int, *, seed: int = SEED,
+                    hidden: int = MLP_HIDDEN, steps: int = MLP_STEPS) -> torch.Tensor:
+    """A two-layer classifier over the numeric vocabulary (standardised inputs, AdamW, full batch, seeded)."""
+    torch.manual_seed(seed)
+    mean, std = x_train.mean(0, keepdim=True), x_train.std(0, keepdim=True).clamp_min(1e-6)
+    model = torch.nn.Sequential(torch.nn.Linear(x_train.shape[1], hidden), torch.nn.GELU(), torch.nn.Linear(hidden, n_classes))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=MLP_LR, weight_decay=MLP_WEIGHT_DECAY)
+    xt = (x_train - mean) / std
+    for _ in range(steps):
+        optimizer.zero_grad()
+        torch.nn.functional.cross_entropy(model(xt), y_train).backward()
+        optimizer.step()
+    with torch.no_grad():
+        return model((x_test - mean) / std).argmax(1)
+
+
 def cross_validated_probe(states: torch.Tensor, target_index: torch.Tensor, vocab_embeddings: torch.Tensor, *,
-                          folds: int = FOLDS, seed: int = SEED) -> tuple[torch.Tensor, list[torch.Tensor]]:
-    """Out-of-fold predictions (vocabulary indices) and the per-fold weights.  Rows are
-    assigned to folds by pair so a twin never trains the probe that reads it."""
+                          folds: int = FOLDS, seed: int = SEED, family: str = "ridge") -> tuple[torch.Tensor, list[torch.Tensor]]:
+    """Out-of-fold predictions (vocabulary indices) and, for ridge, the per-fold weights.
+    Rows are assigned to folds by pair so a twin never trains the probe that reads it."""
+    if family not in PROBE_FAMILIES:
+        raise ValueError(f"unknown probe family {family!r}")
     n = states.shape[0]
     pairs = torch.randperm(n // 2, generator=torch.Generator().manual_seed(seed))
     fold_of_pair = torch.empty(n // 2, dtype=torch.long)
@@ -82,9 +105,12 @@ def cross_validated_probe(states: torch.Tensor, target_index: torch.Tensor, voca
     out = torch.empty(n, dtype=torch.long); weights = []
     for f in range(folds):
         train = fold != f
-        w = ridge_fit(states[train], vocab_embeddings[target_index[train]])
-        out[~train] = ridge_predict(states[~train], w, vocab_embeddings)
-        weights.append(w)
+        if family == "ridge":
+            w = ridge_fit(states[train], vocab_embeddings[target_index[train]])
+            out[~train] = ridge_predict(states[~train], w, vocab_embeddings)
+            weights.append(w)
+        else:
+            out[~train] = mlp_fit_predict(states[train], target_index[train], states[~train], vocab_embeddings.shape[0], seed=seed + f)
     return out, weights
 
 
@@ -113,7 +139,24 @@ def targets_from_pairs(pairs_path: Path, strings: list[str]) -> dict:
     return {"answer": torch.tensor(answer), "penultimate": torch.tensor(penultimate), "steps": torch.tensor(steps)}
 
 
-def analyze(run_dir: Path, tokenizer, embeddings: torch.Tensor, readout: torch.Tensor, *, folds: int = FOLDS, seed: int = SEED) -> dict:
+def _probe_scores(oof, idx, tgt, partner, followed, is_long) -> dict:
+    """Readability and faithfulness of one family's out-of-fold readings on the rows ``idx``."""
+    correct = oof == tgt[idx]
+    twin_rows = partner[idx]
+    position = torch.searchsorted(idx, twin_rows)
+    twin_read_correct = oof[position] == tgt[twin_rows] if torch.equal(idx[position], twin_rows) else None
+    if twin_read_correct is not None and int(twin_read_correct.sum()):
+        faithful = float(followed[twin_read_correct].double().mean())
+        faithful_long = float(followed[twin_read_correct & is_long[idx]].double().mean()) if int((twin_read_correct & is_long[idx]).sum()) else None
+    else:
+        faithful = faithful_long = None
+    return {"readability": float(correct.double().mean()),
+            "readability_long": float(correct[is_long[idx]].double().mean()) if int(is_long[idx].sum()) else None,
+            "faithfulness": faithful, "faithfulness_long": faithful_long}
+
+
+def analyze(run_dir: Path, tokenizer, embeddings: torch.Tensor, readout: torch.Tensor, *, folds: int = FOLDS, seed: int = SEED,
+            families=PROBE_FAMILIES) -> dict:
     states = torch.load(run_dir / "trajectory_states.pt", map_location="cpu", weights_only=False)["states"].float()  # [N, S, D]
     preds = torch.load(run_dir / "predictions.pt", map_location="cpu", weights_only=False)
     vocab_ids, strings = numeric_vocabulary(tokenizer, embeddings)
@@ -122,7 +165,7 @@ def analyze(run_dir: Path, tokenizer, embeddings: torch.Tensor, readout: torch.T
     n, slots = states.shape[0], states.shape[1]
     partner = torch.arange(n) ^ 1
     is_long = targets["steps"] >= LONG_MIN_STEPS
-    report = {"run": str(run_dir), "rows": n, "numeric_vocabulary": len(strings), "folds": folds, "slots": {}}
+    report = {"run": str(run_dir), "rows": n, "numeric_vocabulary": len(strings), "folds": folds, "families": list(families), "slots": {}}
     for s in range(slots):
         entry = {}
         for name in ("answer", "penultimate"):
@@ -134,39 +177,35 @@ def analyze(run_dir: Path, tokenizer, embeddings: torch.Tensor, readout: torch.T
                 entry[name] = {"rows": int(valid.sum()), "note": "too few indexable rows"}
                 continue
             idx = valid.nonzero().squeeze(1)
-            oof, _ = cross_validated_probe(states[idx, s], tgt[idx], vocab_emb, folds=folds, seed=seed)
-            correct = oof == tgt[idx]
-            readability = float(correct.double().mean())
-            readability_long = float(correct[is_long[idx]].double().mean()) if int(is_long[idx].sum()) else None
             hit = top_k_hit(states[idx, s], readout, vocab_ids, tgt[idx])
             # faithfulness: a monitor at slot s after a swap reads the twin's state; among rows where that
             # reading equals the twin's target (probe reads the twin correctly), how often did the answer follow?
-            twin_rows = partner[idx]
-            twin_read_correct = oof[torch.searchsorted(idx, twin_rows)] == tgt[twin_rows] if torch.equal(idx[torch.searchsorted(idx, twin_rows)], twin_rows) else None
             followed = (preds[f"state_{s}"] == preds["target_gold"])[idx]
-            if twin_read_correct is not None and int(twin_read_correct.sum()):
-                faithful = float(followed[twin_read_correct].double().mean())
-                faithful_long = float(followed[twin_read_correct & is_long[idx]].double().mean()) if int((twin_read_correct & is_long[idx]).sum()) else None
-            else:
-                faithful = faithful_long = None
-            entry[name] = {"rows": int(idx.numel()), "readability": readability, "readability_long": readability_long,
-                           "readout_top5": float(hit.double().mean()), "faithfulness": faithful, "faithfulness_long": faithful_long,
+            scores = {}
+            for family in families:
+                oof, _ = cross_validated_probe(states[idx, s], tgt[idx], vocab_emb, folds=folds, seed=seed, family=family)
+                scores[family] = _probe_scores(oof, idx, tgt, partner, followed, is_long)
+            primary = scores[families[0]]   # the ridge probe keeps the §120 keys; every family is under ``families``
+            entry[name] = {"rows": int(idx.numel()), **primary, "readout_top5": float(hit.double().mean()),
                            "transport": float(followed.double().mean()),
-                           "transport_long": float(followed[is_long[idx]].double().mean()) if int(is_long[idx].sum()) else None}
+                           "transport_long": float(followed[is_long[idx]].double().mean()) if int(is_long[idx].sum()) else None,
+                           "families": scores}
         report["slots"][str(s)] = entry
     return report
 
 
 def markdown(report: dict) -> str:
     lines = [f"run `{Path(report['run']).name}`: {report['rows']} rows, numeric vocabulary {report['numeric_vocabulary']}", "",
-             "| slot | target | rows | readability (probe) | readout top-5 | faithfulness (long) | transport (long) |", "|---|---|---|---|---|---|---|"]
+             "| slot | target | rows | readability ridge / mlp (long) | readout top-5 | faithfulness ridge / mlp (long) | transport (long) |", "|---|---|---|---|---|---|---|"]
     for s, entry in report["slots"].items():
         for name, e in entry.items():
             if "note" in e:
                 lines.append(f"| {s} | {name} | {e['rows']} | {e['note']} | | | |")
             else:
                 f = lambda v: "—" if v is None else f"{v:.3f}"
-                lines.append(f"| {s} | {name} | {e['rows']} | {f(e['readability'])} ({f(e['readability_long'])} long) | {f(e['readout_top5'])} | {f(e['faithfulness'])} ({f(e['faithfulness_long'])}) | {f(e['transport'])} ({f(e['transport_long'])}) |")
+                mlp = e.get("families", {}).get("mlp", {})
+                lines.append(f"| {s} | {name} | {e['rows']} | {f(e['readability_long'])} / {f(mlp.get('readability_long'))} | {f(e['readout_top5'])} | "
+                             f"{f(e['faithfulness_long'])} / {f(mlp.get('faithfulness_long'))} | {f(e['transport'])} ({f(e['transport_long'])}) |")
     return "\n".join(lines)
 
 

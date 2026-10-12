@@ -18,6 +18,10 @@ from scripts.run_latent_monitor_audit import (  # noqa: E402
 from tests.test_monitor_audit import _masking, _monitor, _twins  # noqa: E402
 
 
+def test_stages_include_the_masking_bootstrap():
+    assert STAGES.index("masking_bootstrap") == STAGES.index("masking") + 1 and plan("gsm8k_train_original") == list(STAGES)
+
+
 def test_plan_drops_the_long_profile_for_one_step_pools():
     assert plan("gsm8k_aug_train") == list(STAGES) and plan("gsm8k_test") == list(STAGES)
     assert "twins_long" not in plan("svamp") and plan("svamp", "on") == list(STAGES) and "twins_long" not in plan("gsm8k_test", "off")

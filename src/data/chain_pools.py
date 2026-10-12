@@ -23,6 +23,12 @@ POOLS = {
     "gsm8k_test": {"source": "openai/grade-school-math test.jsonl; calculator annotations joined as the chain", "eval_name": "gsm8k",
                    "long_profile": True},
     "svamp": {"source": "ChilleD/SVAMP test.json; Equation as a one-step chain", "eval_name": "svamp", "long_profile": False},
+    "gsm8k_train_original": {
+        "source": "openai/grade-school-math train.jsonl (the questions GSM8k-Aug augments, in-distribution); calculator annotations as the chain",
+        "eval_name": None, "adapter": "gsm8k", "long_profile": True,
+        "spec": {"hf_id": "json", "split": "train", "kind": "gsm8k_main",
+                 "data_file": "https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/train.jsonl",
+                 "source_repo": "openai/grade-school-math", "source_revision": "3101c7d5072418e28b9008a6636bde82a006892c"}},
 }
 _ANNOTATION = re.compile(r"<<[^<>]*>>")
 _WHOLE_FLOAT = re.compile(r"(\d+)\.0+(?!\d)")
@@ -106,7 +112,7 @@ def load_raw_eval_rows(spec: dict) -> list[dict]:
 
 
 def chain_rows(name: str, raw_rows: list[dict]) -> list[dict]:
-    adapter = CHAIN_ADAPTERS[POOLS[name]["eval_name"]]
+    adapter = CHAIN_ADAPTERS[POOLS[name].get("adapter") or POOLS[name]["eval_name"]]
     out = []
     for raw in raw_rows:
         row = adapter(raw)
@@ -160,6 +166,6 @@ def pool_rows(name: str, *, data_cfg, tokenizer, bot_token_id: int, extra_rows: 
                 "extra_hash": sampling["hashes"].get("extra"), "sampling": sampling, "steps_histogram": steps_histogram(rows),
                 "max_steps": max((len(parse_chain(str(r["cot"]))) for r in rows), default=0), "long_profile": True}
         return rows, meta
-    spec = getattr(data_cfg.eval, POOLS[name]["eval_name"])
+    spec = POOLS[name].get("spec") or dict(getattr(data_cfg.eval, POOLS[name]["eval_name"]))
     raw = load_raw_eval_rows(dict(spec))
     return eval_pool(name, raw, prepare=lambda r: prepare_row(tokenizer, r, bot_token_id=bot_token_id), seed=seed)

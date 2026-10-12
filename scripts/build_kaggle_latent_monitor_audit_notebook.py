@@ -26,7 +26,7 @@ MODELS = {
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_directed_counterfactual_runner.py",
          "tests/test_masking_audit_runner.py", "tests/test_monitor_faithfulness.py", "tests/test_directed_counterfactual_bootstrap.py",
-         "tests/test_chain_pools.py", "tests/test_monitor_audit.py", "tests/test_latent_monitor_audit_runner.py"]
+         "tests/test_chain_pools.py", "tests/test_monitor_audit.py", "tests/test_latent_monitor_audit_runner.py", "tests/test_masking_bootstrap.py"]
 
 
 def title(model: str, pool: str) -> str:
