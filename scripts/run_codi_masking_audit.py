@@ -25,17 +25,10 @@ if str(ROOT) not in sys.path:
 
 from scripts.collect_kv_subspaces import _atomic_json
 from scripts.collect_official_codi_endpoint_tsvc import verify_full_reproduction_gate
-from scripts.run_codi_causal_subspace_distillation import (
-    DATA_SEED,
-    FIT_EXAMPLES,
-    SELECT_EXAMPLES,
-    VALIDATE_EXAMPLES,
-    _normalized_question,
-    sample_splits,
-)
+from scripts.run_codi_causal_subspace_distillation import DATA_SEED
 from scripts.run_codi_workspace_interchange_gate import QUESTIONS
+from src.data.chain_pools import DEFAULT_POOL, POOLS, pool_rows
 from src.data.counterfactual_chain import parse_chain
-from src.data.datasets import load_eval_set, load_train_set
 from src.eval.official_codi import select_device
 from src.mech.cache_carrier import backbone_layers, outcomes_under, record_trajectory
 from src.mech.workspace_interchange import change_rate
@@ -139,12 +132,10 @@ def run(args):
     latent_positions = int(cfg.eval.latent_iterations)
 
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
-    test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
-    sizes = {"fit": FIT_EXAMPLES, "select": SELECT_EXAMPLES, "validate": VALIDATE_EXAMPLES}
-    dataset = load_train_set(data_cfg, "eq_only")
-    splits, sampling = sample_splits(dataset, tokenizer, test_questions={_normalized_question(r["question"]) for r in test},
-                                     sizes=sizes, seed=DATA_SEED, bot_token_id=model.bot_id)
-    rows = splits["fit"][:n_questions]
+    pool_name = str(getattr(args, "pool", DEFAULT_POOL) or DEFAULT_POOL)
+    pool, pool_meta = pool_rows(pool_name, data_cfg=data_cfg, tokenizer=tokenizer, bot_token_id=model.bot_id, seed=DATA_SEED)
+    rows = pool[:n_questions]   # the default pool's first rows are the §110 fit split, as before
+    print(f"pool {pool_name}: {len(rows)} of {pool_meta['n']} rows, hash {pool_meta['hash'][:12]}")
     steps = torch.tensor([chain_steps(r) for r in rows])
     is_long = steps >= LONG_MIN_STEPS
 
@@ -175,7 +166,8 @@ def run(args):
     checks = checks_from(report, carrying)
     summary = {"schema_version": 1, "contract": contract, "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
-               "preregistration": {"questions": len(rows), "data_seed": DATA_SEED, "sampling_hash_fit": sampling["hashes"]["fit"],
+               "pool": {k: v for k, v in pool_meta.items() if k != "sampling"},
+               "preregistration": {"questions": len(rows), "data_seed": DATA_SEED, "sampling_hash_fit": pool_meta["hash"], "pool": pool_name,
                                    "carrying_slots": list(carrying), "long_min_steps": LONG_MIN_STEPS, "k1_max_short_drop": K1_MAX_SHORT_DROP,
                                    "k2_min_carrying_drop": K2_MIN_CARRYING_DROP, "k3_max_terminal_drop": K3_MAX_TERMINAL_DROP,
                                    "base_model": str(cfg.model.base_model)},
@@ -195,7 +187,9 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--checkpoint-path", type=Path)
     parser.add_argument("--questions", type=int, default=QUESTIONS)
-    parser.add_argument("--carrying-slots", nargs="+", default=["3"], help="slots the swap audits found to carry values on long chains")
+    parser.add_argument("--carrying-slots", nargs="*", default=["3"], help="slots the swap audits found to carry values on long chains (may be empty)")
+    parser.add_argument("--pool", choices=sorted(POOLS), default=DEFAULT_POOL,
+                        help="row pool (ledger §123); the default reproduces the §120 sampling exactly")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--precision", default="float32")
     parser.add_argument("--device", default="cuda")

@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "contract": "latent_monitor_audit_card_v1",
+  "model": {
+    "name": "simcot",
+    "config": "configs/official_simcot_codi_llama1b.yaml",
+    "checkpoint_repo": "internlm/SIM_COT-LLaMA3-CODI-1B",
+    "checkpoint_revision": "6e16fe4215025a9c48bc90d214c57349f247b017",
+    "checkpoint_sha256": "fc7f2d9285e4134a0c5bfdbfc19985c322e6fa27024b5fdd41edff6bf8c183aa",
+    "base_model": "unsloth/Llama-3.2-1B-Instruct",
+    "layers": 16,
+    "latent_iterations": 6
+  },
+  "pool": {
+    "pool": "gsm8k_aug_train",
+    "hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
+    "n": null,
+    "steps_histogram": null,
+    "source": "zen-E/GSM8k-Aug train, deterministic fit split (+extra) of ledger \u00a7110"
+  },
+  "environment": {
+    "python": "3.12.14",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "executable": "/Users/muhammadjonraza/.cache/codi-kava-testenv/bin/python",
+    "dtype": "float16",
+    "batch_size": 32,
+    "device": "cuda",
+    "device_name": "kaggle-gpu (\u00a7120 run)",
+    "cuda_capability": null,
+    "torch": "2.4.1",
+    "transformers": "4.52.4",
+    "peft": "0.15.2",
+    "cuda": null,
+    "from_existing": true
+  },
+  "gate": null,
+  "thresholds": {
+    "carrier_min_transport": 0.15,
+    "short_max_transport": 0.1,
+    "inert_max_transport": 0.05,
+    "readable_min": 0.3,
+    "placement_min_faithfulness": 0.1,
+    "necessary_min_cost": 0.1,
+    "register_min_cost": 0.1,
+    "terminal_max_transport": 0.05,
+    "terminal_max_faithfulness": 0.02,
+    "terminal_max_cost": 0.02,
+    "short_max_steps": 2
+  },
+  "runs": {
+    "twins_standard": {
+      "contract": "official_codi_directed_counterfactual_v1",
+      "pairs": 512,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 1024
+      },
+      "strata_counts": {
+        "n1_k1": 216,
+        "n2_k1": 328,
+        "n2_k2": 112,
+        "n3_k1": 222,
+        "n3_k2": 42,
+        "n3_k3": 30,
+        "n4_k1": 48,
+        "n4_k2": 10,
+        "n4_k4": 6,
+        "n5_k1": 6,
+        "n5_k3": 2,
+        "n6_k1": 2
+      }
+    },
+    "twins_long": {
+      "contract": "official_codi_directed_counterfactual_long_v1",
+      "pairs": 512,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 1024
+      },
+      "strata_counts": {
+        "n3_k1": 108,
+        "n3_k2": 488,
+        "n3_k3": 192,
+        "n4_k1": 20,
+        "n4_k2": 34,
+        "n4_k3": 78,
+        "n4_k4": 64,
+        "n5_k2": 10,
+        "n5_k3": 10,
+        "n5_k4": 10,
+        "n5_k5": 4,
+        "n6_k4": 2,
+        "n6_k5": 4
+      }
+    },
+    "masking": {
+      "contract": "official_codi_masking_audit_v1",
+      "baseline": {
+        "first_token_accuracy": 0.94921875,
+        "long_rows": 263,
+        "mask_carrying_path_forced_for_this_model": false,
+        "rows": 512,
+        "short_rows": 249
+      },
+      "checks": {
+        "k1_short_chains_survive_any_single_mask": true,
+        "k2_carrying_slot_needed_on_long_chains": false,
+        "k2_per_slot": {
+          "1": true,
+          "3": false
+        },
+        "k3_terminal_slot_never_needed": true,
+        "position_0_mask_drop_short": 0.04417670682730923
+      }
+    }
+  },
+  "slots": {
+    "0": {
+      "transport_all": 0.0078125,
+      "transport_short": 0.0,
+      "transport_long": 0.0380859375,
+      "transport_long_ci95": [
+        0.0224609375,
+        0.0546875
+      ],
+      "kv_transport_all": 0.537109375,
+      "kv_transport_long": 0.1298828125,
+      "readability_long": 0.25255623721881393,
+      "faithfulness_long": 0.016194331983805668,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.04417670682730923,
+      "mask_cost_long": 0.5855513307984791,
+      "mask_cost_all": 0.322265625,
+      "role": "weak"
+    },
+    "1": {
+      "transport_all": 0.0703125,
+      "transport_short": 0.02286585365853659,
+      "transport_long": 0.19140625,
+      "transport_long_ci95": [
+        0.1640625,
+        0.220703125
+      ],
+      "kv_transport_all": 0.0078125,
+      "kv_transport_long": 0.0390625,
+      "readability_long": 0.6165644171779141,
+      "faithfulness_long": 0.20563847429519072,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.004016064257028162,
+      "mask_cost_long": 0.10646387832699622,
+      "mask_cost_all": 0.056640625,
+      "role": "carrier"
+    },
+    "2": {
+      "transport_all": 0.0205078125,
+      "transport_short": 0.0,
+      "transport_long": 0.0419921875,
+      "transport_long_ci95": [
+        0.02734375,
+        0.0576171875
+      ],
+      "kv_transport_all": 0.0693359375,
+      "kv_transport_long": 0.1845703125,
+      "readability_long": 0.6912065439672802,
+      "faithfulness_long": 0.01775147928994083,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.008032128514056214,
+      "mask_cost_long": 0.11406844106463876,
+      "mask_cost_all": 0.0625,
+      "role": "store"
+    },
+    "3": {
+      "transport_all": 0.0341796875,
+      "transport_short": 0.007621951219512195,
+      "transport_long": 0.2470703125,
+      "transport_long_ci95": [
+        0.2187255859375,
+        0.27541503906249987
+      ],
+      "kv_transport_all": 0.0205078125,
+      "kv_transport_long": 0.041015625,
+      "readability_long": 0.7229038854805726,
+      "faithfulness_long": 0.28005657708628007,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.0,
+      "mask_cost_long": 0.09125475285171103,
+      "mask_cost_all": 0.046875,
+      "role": "carrier"
+    },
+    "4": {
+      "transport_all": 0.0048828125,
+      "transport_short": 0.0,
+      "transport_long": 0.0439453125,
+      "transport_long_ci95": [
+        0.029296875,
+        0.0595703125
+      ],
+      "kv_transport_all": 0.0322265625,
+      "kv_transport_long": 0.228515625,
+      "readability_long": 0.7351738241308794,
+      "faithfulness_long": 0.02642559109874826,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.004016064257028162,
+      "mask_cost_long": 0.08365019011406849,
+      "mask_cost_all": 0.044921875,
+      "role": "store"
+    },
+    "5": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.00390625,
+      "kv_transport_long": 0.0439453125,
+      "readability_long": 0.565439672801636,
+      "faithfulness_long": 0.0,
+      "monitor_rows_long": 978,
+      "mask_cost_short": 0.0,
+      "mask_cost_long": 0.03041825095057038,
+      "mask_cost_all": 0.015625,
+      "role": "terminal_inert"
+    }
+  },
+  "registers": {
+    "position_0": {
+      "kv_transport_all": 0.537109375,
+      "kv_transport_short": 0.44359756097560976,
+      "kv_transport_long": 0.1298828125,
+      "kv_mask_cost_short": 0.04417670682730923,
+      "kv_mask_cost_long": 0.5855513307984791
+    }
+  },
+  "tails": {
+    "kv_all_transport_all": 0.6240234375,
+    "kv_all_other_all": 0.0078125,
+    "kv_all_transport_long": 0.728515625,
+    "state_all_transport_long": 0.6259765625,
+    "mask_all_cost_long": 0.7604562737642586,
+    "mean_all_cost_long": 0.5931558935361216,
+    "mask_even_cost_long": 0.6349809885931559,
+    "mask_odd_cost_long": 0.15209125475285168
+  },
+  "fingerprints": {
+    "twins_standard": {
+      "predictions": "0edbfffc6f537100d44747f8357ec1044132a7c9d48f0d79607e08200605856b",
+      "pairs": "f9713fa6e464574e5b6565076e9b948256046fc992cb61c44a0ec1e0f0e38958"
+    },
+    "twins_long": {
+      "predictions": "df6f845bc4d45008731dcc4bebefecafc1fc648d0c203b8d0dc8b374c5482938",
+      "pairs": "786438afd87b945fe084cd1eb61228ddda428c036414032864da4ec8154bb84a"
+    }
+  },
+  "stage_seconds": {
+    "twins_standard": 1029.2,
+    "twins_long": 1153.3,
+    "masking": 288.9
+  },
+  "checks": {
+    "c1_no_single_site_transport_on_short_chains": true,
+    "c1_max_short_transport": 0.0693359375,
+    "c2_chain_length_gate": true,
+    "c2_max_long_transport": 0.2470703125,
+    "c3_terminal_inert_unfaithful_unnecessary": true,
+    "c4_readability_dissociated_from_faithfulness": false,
+    "c4_most_readable_slot": 4,
+    "c4_spearman": 0.6571428571428571,
+    "c5_carriers_necessary": false,
+    "c5_carrier_costs_long": {
+      "1": 0.10646387832699622,
+      "3": 0.09125475285171103
+    },
+    "register_position_0": true,
+    "register_cost_long": 0.5855513307984791
+  },
+  "verdict": {
+    "carrying_slots": [
+      1,
+      3
+    ],
+    "placement_slots": [
+      1,
+      3
+    ],
+    "store_slots": [
+      2,
+      4
+    ],
+    "inert_slots": [
+      5
+    ],
+    "readable_inert_slots": [],
+    "regime": "backup_route",
+    "register_position_0": true,
+    "summary": "Carrying thought(s) [1, 3]; place a monitor only at [1, 3]; the carriers are sufficient but not necessary (backup route); inert slots [5]."
+  },
+  "created_at_utc": "2026-10-12T17:49:28.947725+00:00",
+  "smoke": false
+}

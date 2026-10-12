@@ -24,17 +24,9 @@ if str(ROOT) not in sys.path:
 
 from scripts.collect_kv_subspaces import _atomic_json, _atomic_torch_save
 from scripts.collect_official_codi_endpoint_tsvc import verify_full_reproduction_gate
-from scripts.run_codi_causal_subspace_distillation import (
-    DATA_SEED,
-    FIT_EXAMPLES,
-    SELECT_EXAMPLES,
-    VALIDATE_EXAMPLES,
-    _normalized_question,
-    prepare_row,
-    sample_splits,
-)
+from scripts.run_codi_causal_subspace_distillation import DATA_SEED, prepare_row
+from src.data.chain_pools import DEFAULT_POOL, POOLS, pool_rows
 from src.data.counterfactual_chain import perturb_row
-from src.data.datasets import load_eval_set, load_train_set
 from src.data.official_codi_training import collate_official_codi_kv_rows
 from src.eval.official_codi import select_device
 from src.eval.official_codi_gate import extract_official_answer_number
@@ -265,14 +257,11 @@ def run(args):
     print("backbone layers", n_layers, "value groups", layer_groups(n_layers))
 
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))
-    test = load_eval_set("gsm8k", data_cfg.eval.gsm8k)
-    sizes = {"fit": FIT_EXAMPLES, "select": SELECT_EXAMPLES, "validate": VALIDATE_EXAMPLES}
-    if profile["extra_rows"]:
-        sizes["extra"] = int(profile["extra_rows"])   # drawn after the three splits, which stay identical
-    dataset = load_train_set(data_cfg, "eq_only")
-    splits, sampling = sample_splits(dataset, tokenizer, test_questions={_normalized_question(r["question"]) for r in test},
-                                     sizes=sizes, seed=DATA_SEED, bot_token_id=model.bot_id)
-    pool = list(splits["fit"]) + list(splits.get("extra", []))
+    pool_name = str(getattr(args, "pool", DEFAULT_POOL) or DEFAULT_POOL)
+    # the default pool is the §110 fit split (+ the §112 extra rows after the three splits, which stay identical)
+    pool, pool_meta = pool_rows(pool_name, data_cfg=data_cfg, tokenizer=tokenizer, bot_token_id=model.bot_id,
+                                extra_rows=int(profile["extra_rows"]) if pool_name == DEFAULT_POOL else 0, seed=DATA_SEED)
+    print(f"pool {pool_name}: {pool_meta['n']} rows, hash {pool_meta['hash'][:12]}, steps {pool_meta['steps_histogram']}")
     candidates = build_candidates(pool, tokenizer, bot_token_id=model.bot_id, limit=candidate_limit,
                                   min_steps=profile["min_steps"], prefer_latest_step=profile["prefer_latest_step"])
     print(f"candidates: {len(candidates)} twins from {len(pool)} pool rows (min steps {profile['min_steps']})")
@@ -391,7 +380,7 @@ def run(args):
     summary = {"schema_version": 1, "contract": contract, "profile": args.profile, "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "checkpoint_sha256": load_report.checkpoint_sha256, "reproduction_gate": reproduction,
                "preregistration": {"candidate_limit": candidate_limit, "max_pairs": max_pairs, "data_seed": DATA_SEED,
-                                   "sampling_hash_fit": sampling["hashes"]["fit"], "single_conditions": list(SINGLE_CONDITIONS),
+                                   "sampling_hash_fit": pool_meta["hash"], "pool": pool_name, "single_conditions": list(SINGLE_CONDITIONS),
                                    "tail_conditions": list(TAIL_CONDITIONS), "native_conditions": list(NATIVE_CONDITIONS),
                                    "d1_min_tail": D1_MIN_TAIL, "d2_min_even": D2_MIN_EVEN, "d2_ratio": D2_RATIO, "d2_min_single": D2_MIN_SINGLE,
                                    "d3_min_site": D3_MIN_SITE, "d3_ratio": D3_RATIO, "d3_min_located": D3_MIN_LOCATED, "d4_ratio": D4_RATIO,
@@ -400,6 +389,7 @@ def run(args):
                                    "profile": dict(profile), "e1_min_tail_kv": E1_MIN_TAIL_KV, "e2_min_state": E2_MIN_STATE,
                                    "e3_min_site": E3_MIN_SITE, "e3_ratio": E3_RATIO, "e3_min_unique": E3_MIN_UNIQUE},
                "gate": gate, "baseline": baseline, "strata_counts": {k: int(m.sum()) for k, m in strata_t.items()},
+               "pool": {k: v for k, v in pool_meta.items() if k != "sampling"},
                "report": report, "checks": checks, "decision": {"claim": claim},
                "seconds": time.perf_counter() - started,
                "warnings": ["Official checkpoint only; no training. Twins share a batch so their position ids match.",
@@ -422,6 +412,8 @@ def main():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--profile", choices=sorted(PROFILES), default="standard")
+    parser.add_argument("--pool", choices=sorted(POOLS), default=DEFAULT_POOL,
+                        help="row pool (ledger §123); the default reproduces the §110/§112 sampling exactly")
     args = parser.parse_args()
     run(args)
     return 0
