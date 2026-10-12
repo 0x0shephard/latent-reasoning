@@ -62,11 +62,10 @@ accuracy_gate:
   reference: SIM-CoT paper (arXiv 2509.20317), CODI + SIM-CoT on LLaMA-3.2-1B, GSM8K
   primary_dataset: gsm8k
   absolute_tolerance: 0.03
-  # Lower bound, not two-sided (ledger §114 addendum): the released evaluation drops the
-  # attention mask after the question, which corrupts left-padded LLaMA batches, so the
-  # paper's 51.9% under-measures the checkpoint.  The pad-aware path, verified to equal
-  # unpadded decoding, scored 55.50% (732/1319) in float16 and float32 alike on Kaggle.
-  # An adapter error would show as a deficit; exceeding the paper is not one.
+  # Lower bound (ledger §118): the SIM-CoT paper reports 56.1% without an interval and
+  # the released checkpoint scores 55.72% (735/1319) on the pad-aware path; an adapter
+  # error would show as a deficit.  The 51.9% that SIM-CoT quotes for its CODI baseline
+  # is CODI's Table A4 ablation row, not CODI's main result (55.6%, Figure 3); see §122.
   direction: at_least
   published_accuracy:
     gsm8k: 0.561

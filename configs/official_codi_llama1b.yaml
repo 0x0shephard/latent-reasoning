@@ -57,17 +57,18 @@ eval:
     gsm8k: 1319
 
 accuracy_gate:
-  reference: CODI paper LLaMA-3.2-1B-Instruct result (Table 1)
+  reference: CODI paper (arXiv 2502.21074 / EMNLP 2025), Figure 3, LLaMA-3.2-1B-Instruct, GSM8K
   primary_dataset: gsm8k
   absolute_tolerance: 0.03
-  # Lower bound, not two-sided (ledger §114 addendum): the released evaluation drops the
-  # attention mask after the question, which corrupts left-padded LLaMA batches, so the
-  # paper's 51.9% under-measures the checkpoint.  The pad-aware path, verified to equal
-  # unpadded decoding, scored 55.50% (732/1319) in float16 and float32 alike on Kaggle.
-  # An adapter error would show as a deficit; exceeding the paper is not one.
-  direction: at_least
+  # Two-sided again (ledger §122 erratum). The 51.9% this gate first carried is Table A4
+  # of the paper (the beta ablation, beta=20 row), not the main result; the main result in
+  # Figure 3 is 55.6%, which the released checkpoint reproduces at 55.50% (pad-aware path,
+  # float16 and float32) and 55.34% (released path, mask dropped, batch 128).  The
+  # pad-aware path is kept for the mechanistic runs; it is verified to equal unpadded
+  # decoding, which the released path is not for left-padded LLaMA batches.
+  direction: two_sided
   published_accuracy:
-    gsm8k: 0.519
+    gsm8k: 0.556
 
 endpoint_retention:
   data_config: configs/data.yaml

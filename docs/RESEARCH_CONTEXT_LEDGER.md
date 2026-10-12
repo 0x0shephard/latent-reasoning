@@ -5820,3 +5820,138 @@ the swap and the mask give separately. 7. The CODI-1B benchmark figure is 55.3�
 The experimental program is complete. No further GPU runs are planned for the paper. The
 outputs of all three kernels are in `outputs/kaggle_runs/` (not versioned) and in the
 Kaggle kernels' output tabs; publishing them as datasets is the one bookkeeping step left.
+
+## 122. Academic audit of §108–§121: an erratum on the CODI-1B figure, novelty against the 2025–2026 literature, and what the findings are for
+
+Written 2026-10-12 after the program closed in §121. Literature checked on the same day
+(arXiv listings, HTML full texts where available, the CODI EMNLP PDF). No new runs.
+
+### Erratum: the CODI-1B benchmark figure was never discrepant
+
+From §114 onward the ledger, both LLaMA configs and three notebooks carried 51.9% as the
+CODI paper's LLaMA-3.2-1B-Instruct GSM8K result, and §119 point 6 and §121 point 7
+recorded our 55.3–55.5% as an unexplained excess. **51.9% is Table A4 of the paper, the
+β ablation (β = 20 row), not the main result.** The main result, Figure 3 (GSM8K, bottom
+row), is **55.6%** (CoT-SFT 61.6%, Coconut 45.3%, iCoT 19.0%, No-CoT-SFT 30.9%). The
+released checkpoint therefore reproduces the paper:
+
+| path | accuracy | vs Figure 3 (55.6%) |
+|---|---|---|
+| pad-aware, float16 and float32 (§114 addendum 2) | 55.50% (732/1319) | −0.1 |
+| released path, mask dropped, batch 128 (§119 step 0) | 55.34% (730/1319) | −0.3 |
+
+The SIM-CoT paper's "CODI 51.9%" baseline (ICLR 2026, arXiv 2509.20317) and LOTUS's
+"CODI 52.7" (arXiv 2606.31779) both sit below the main figure; the former is the
+Table A4 number. Our adapter is clean; the §114 addendum 2 amendment to a lower-bound gate
+was a correction to a wrong reference, not to a wrong measurement. The config
+`configs/official_codi_llama1b.yaml` is restored to a two-sided gate against 0.556 (both
+measured paths fall inside ±3 points; a new test pins this). The SIM-CoT config keeps its
+lower bound (its paper reports 56.1% without an interval; measured 55.72%). The three
+notebook builders that print "paper 0.519" are not re-pinned: the constant was a label on
+a prediction, the gates they ran were lower bounds that pass under either reference, and
+re-pinning would invalidate nothing and verify nothing. §114 addendum 2, §119 point 6 and
+§121 point 7 are superseded by this section.
+
+### Novelty audit, claim by claim
+
+Closest prior work found, and what remains ours. "Prior" means reported before our run
+on a comparable object; "ours" means not found anywhere.
+
+1. **Influence is not transport.** Prior: Cywiński, Bussmann, Conmy, Engels, Nanda,
+   Rajamanoharan (Alignment Forum, 22 Dec 2025) patched single latent vectors of a
+   self-trained CODI on LLaMA-3.2-1B with averages from prompts with different
+   intermediate values and found the 3rd and 5th vectors (our slots 1 and 3, counting
+   from the BOT vector) store the two step values and steer the answer at a "modest" flip
+   rate, on 20 synthetic templates with exactly two intermediate steps, and left more
+   steps as an open question. SCIT (Ding, Huang & Yang, EMNLP 2026) reported near-perfect
+   target wins on same-template pairs at layers 8–9 values. Li et al. (ICML 2026,
+   2602.08783) report flip rates of 0.1–0.2 under zero-overwrite at single steps on the
+   official checkpoints, no counterfactual pairs. Aswal, Palmeira Ferraz, Zhou & Peyrard
+   (2606.12689) report graded utilisation under causal tracing on self-trained GPT-2.
+   Ours: the same pairs scored two ways (random donor: 0.3–0.6 of answers change;
+   directed twin: ≤ 0.10 follow the number on ordinary chains), on official checkpoints
+   and natural GSM8K, with a target/retain/other outcome and bootstrap intervals. The
+   **chain-length gate** (transport ≤ 0.10 for n < 3, 0.33/0.34/0.25+0.19 for n ≥ 3) is
+   not in any of the four; Cywiński et al. name it as the open question.
+2. **Two routes of a thought, and the ladder.** Prior: SCIT swapped values only; Li et al.
+   overwrite the state and recompute everything downstream; "The Residual Stream Is All
+   You Need" (2603.19664) shows K/V are deterministic in the residual when recomputed.
+   Ours: the decomposition of one position into what it feeds forward and what it leaves
+   in the cache when the cache is *not* recomputed, the identity `kv_all ≡
+   hidden_kv_all`, the parity alternation at GPT-2 (odd computes, even stores at layers
+   8–9), and the observation that the **pairing is trained**: (1,3) at GPT-2, 3 at
+   CODI-1B, (1,3) again under step supervision. Not found elsewhere.
+3. **The terminal thought is inert.** Prior, in part: Cywiński et al. found random
+   patches on the last two vectors harmless and accuracy peaking at five iterations;
+   the CODI paper's Figure 5 peaks at six. Ours: on three official checkpoints, through
+   both routes, with the monitor consequence (readable at 0.42–0.81, faithful at 0.000,
+   masking cost ≤ 3 points). The finding is partly prior; the three-model, two-route,
+   monitor-facing form is ours.
+4. **Readability does not predict faithfulness; the most readable slot is inert.** Prior
+   in principle: decodability ≠ causality is established outside latent reasoning
+   (Open Problems in MI 2501.16496; "Decodability is Not Causality" 2609.18080;
+   "Single-Position Intervention Fails" 2605.04061, 100% probe / 0% transfer; the
+   counting-ViT study 2510.09794, where the dissociation runs both ways). Aswal et al.
+   show logit-lens patterns appear in controls without recurrence. Ramjee et al. (ICLR
+   2026) deploy probes on continuous thoughts with no causal test. Ours: the first
+   **per-slot measurement of a monitor's alarm-confirmation rate on latent-CoT models**,
+   on three checkpoints, showing the dissociation at the slot level and the sign of the
+   rank correlation. Novel in setting and in the quantity measured, not in principle;
+   the paper must say so.
+5. **Sufficiency without necessity, and necessity depends on training.** Prior: Jin,
+   Yang & Wang (2607.06648) report accuracy retained when latent computation is removed
+   and counterfactual responsiveness falling along training; Aswal et al. report
+   CODI GPT-2 arithmetic falling 41.8 → 25.6 when thoughts are removed; Li et al. report
+   that stronger backbones flip less. Ours: swap and mask on the *same* pairs and models,
+   showing that the two measures agree at GPT-2 and SIM-CoT and diverge at CODI-1B
+   (transport 0.34, masking cost 2.7 points), plus the **question register at position 0**
+   (K/V mask costs 59 points at SIM-CoT, 38 at GPT-2, 3 at CODI-1B; transport 0.54 on
+   short chains at SIM-CoT). The register and the training-dependence of necessity are not
+   found elsewhere.
+6. **Step supervision moves the carrier.** No prior mechanistic comparison of SIM-CoT
+   against its CODI base on the same backbone exists; Duraipandian et al. (2607.09698)
+   compare dynamics only. Ours, with a prediction made before the run (§118) and scored.
+7. **CODI-1B accuracy.** Withdrawn as a finding (erratum above). It is a replication.
+
+### What a referee will raise
+
+- One domain (GSM8K) and one method family (CODI and a CODI variant); no Coconut, no 8B.
+- Long-chain pools are small (E3 thin in §113; unique location 3.9% / 60% / 6%); the
+  intervals are honest but wide at the two carriers of SIM-CoT.
+- One probe family (ridge to the tied embedding); a referee will ask for a tuned-lens or
+  MLP probe before accepting "readable but unfaithful".
+- Outcome is the first answer token; full-answer agreement should be reported too.
+- Masking and mean-ablation move the input off-distribution; the K/V mask is the cleaner
+  of the two and should lead.
+- Cywiński et al. must be cited as the closest prior and our twins framed as the
+  natural-data, three-model, chain-length-resolved extension of their result.
+
+### What the findings are for
+
+1. **The paper.** Core claims 2, 4, 5 and 6, with 1 and 3 as the setup: "readable is not
+   used, used is not needed" on three official checkpoints, inference-only, preregistered.
+2. **A placement protocol for latent monitors.** The audit costs about one GPU-hour per
+   model, needs no training, and returns per slot: transport, alarm confirmation, and
+   masking cost. A monitor should be placed only where the first two are non-zero. That is
+   the direct answer to Ramjee et al.'s deployment question and to D3 of the paper review.
+3. **A training lever for monitorability.** Step supervision (SIM-CoT) moves the thoughts
+   and the question register into the critical path (K2 nearly holds, position 0 costs
+   59 points). If one wants thoughts a monitor can rely on, that is the training change to
+   test, with Jin et al.'s trajectory analysis as the companion.
+4. **A transport benchmark for latent-CoT methods.** Twin pairs with a competence gate,
+   the n ≥ 3 split and the target/retain/other outcome are method-agnostic; any new
+   latent-reasoning method can be scored on them from its released checkpoint.
+5. **Follow-ups in order of value:** Coconut on the same pairs (does transport exist at all
+   without CODI's distillation?); SVAMP and GSM-Hard twins for out-of-domain transport;
+   a second probe family; an 8B CODI checkpoint if one is released.
+
+### Sources checked for this section
+
+Cywiński et al., Alignment Forum, 2025-12-22 (post YGAimivLxycZcqRFR); Li et al.,
+"Dynamics Within Latent Chain-of-Thought", ICML 2026, arXiv 2602.08783; Aswal et al.,
+"Observable Patterns Are Not Explanations", arXiv 2606.12689; "The Residual Stream Is All
+You Need", arXiv 2603.19664; "Decodability is Not Causality", arXiv 2609.18080;
+"Single-Position Intervention Fails", arXiv 2605.04061; Jin et al., arXiv 2607.06648;
+Duraipandian et al., arXiv 2607.09698; CODI, EMNLP 2025 (Figure 3, Table A4); SIM-CoT,
+ICLR 2026, arXiv 2509.20317; LOTUS, arXiv 2606.31779; PLaT, arXiv 2601.21358; and the
+papers already cited in `docs/PAPER_REVIEW_ULTERIOR_MOTIVES_AND_DIRECTIONS.md`.

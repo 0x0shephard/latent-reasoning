@@ -162,3 +162,15 @@ def test_simcot_config_mirrors_the_codi_1b_adapter():
     assert sim["model"] == base["model"]
     assert sim["checkpoint"]["repo_id"] == "internlm/SIM_COT-LLaMA3-CODI-1B" and sim["checkpoint"]["filename"] == "model.safetensors"
     assert sim["accuracy_gate"]["direction"] == "at_least" and sim["accuracy_gate"]["published_accuracy"]["gsm8k"] == 0.561
+
+
+def test_codi_1b_gate_is_two_sided_against_the_main_result():
+    """Ledger §122: the paper's main LLaMA-1B figure is 55.6% (Figure 3); 51.9% is Table A4."""
+    import yaml
+
+    base = yaml.safe_load(open(ROOT_CONFIGS / "official_codi_llama1b.yaml"))
+    gate = base["accuracy_gate"]
+    assert gate["direction"] == "two_sided"
+    assert gate["published_accuracy"]["gsm8k"] == 0.556
+    assert abs(0.5550 - gate["published_accuracy"]["gsm8k"]) <= gate["absolute_tolerance"]
+    assert abs(0.5534 - gate["published_accuracy"]["gsm8k"]) <= gate["absolute_tolerance"]
