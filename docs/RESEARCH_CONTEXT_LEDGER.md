@@ -6267,3 +6267,38 @@ card's placement carries no information for this use and the paper says so.
 
 Build 1: CPU, minutes. Build 2: three kernels of ≈ 10 min on dannyism11 after the §124
 queue drains.
+
+### §125 addendum: Build 1 scored, prompt-leakage probes on twelve twin runs (2026-10-13)
+
+Table: `docs/latent_monitor_audit/prompt_leakage.md` (standard profile, balanced accuracy,
+ridge / MLP, pair-aligned folds). Balanced baselines 0.25 (operator) and 0.50 (long chain).
+
+| model | pool | operator: worst slot → best slot (which) | long chain: worst → best (which) | carriers | computed value read best at |
+|---|---|---|---|---|---|
+| GPT-2 | aug_train | 0.66 → 0.76 (slot 4) | 0.84 → 0.92 (slot 2) | {1,3} | 4 (store) |
+| GPT-2 | test | 0.50 → 0.72 (slot 0) | 0.76 → 0.86 (slot 0) | {3} | 4 |
+| CODI-1B | aug_train | 0.72 → 0.87 (slot 1) | 0.91 → 0.94 (slot 2) | {3} | 4 |
+| CODI-1B | test | 0.56 → 0.77 (slot 1) | 0.86 → 0.89 (slot 2) | {3} | 4 |
+| SIM-CoT | aug_train | 0.71 → 0.84 (slot 0) | 0.93 → 0.95 (slot 0) | {1,3} | 4 |
+| SIM-CoT | test | 0.54 → 0.77 (slot 0) | 0.87 → 0.89 (slot 0) | {1,3} | 3 |
+
+**P9 holds in full.** (a) Both question attributes are decoded above baseline at every
+slot of every model and pool, including position 0 and the terminal slot (chain length
+at 0.76–0.95 everywhere; the terminal slot reads it at 0.76–0.93). (b) The best slot for
+the operator is never a carrier: position 0 (the register) for SIM-CoT and GPT-2 on the
+test pool, slot 1 (not a carrier at 1B) for CODI-1B, the store 4 for GPT-2 on the
+training pool. (c) The computed value is read best at the store 4 or the carrier 3, as
+on the cards.
+
+Reading. A probe placed on any thought, including ones the model never uses, reports
+prompt-borne properties of the question with high accuracy. A monitor evaluated on a
+property that the prompt already fixes (a trigger word, a task type, a difficulty) can
+therefore score well while reading nothing the model computed. Only the computed value
+separates the slots. For a trigger-in-the-prompt backdoor evaluation (Ramjee et al.)
+this is the confound D1 of the paper review named; it is now measured on three models
+and can be stated as a requirement: a latent monitor's evaluation must include a
+prompt-only control at the same slot, and the paper will propose exactly that.
+
+Not a prediction, noted: on long chains alone the operator is decoded worse (0.28–0.81)
+and still best at positions 0–1, consistent with the register holding the question and
+later thoughts holding values.
