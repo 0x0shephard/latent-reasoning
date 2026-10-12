@@ -5731,3 +5731,92 @@ on long chains the carrying thoughts are necessary as states (9–13 points each
 even positions plus the register are necessary as memory, the register increasingly so
 with step supervision (GPT-2 38, SIM-CoT 59 points); the terminal slot is never needed.
 CODI-1B's run is pending.
+
+### §120 addendum 4: CODI-1B through the Kaggle API (2026-10-12)
+
+Kernel `jonraza15/codi-llama-1b-monitors-and-masks`, code `f35f0ef`, failed at the known
+last cell; twins, bootstrap and masking pulled; monitor analysis run locally with the fixed
+analyzer. Twins reproduce §117 exactly (long: `state_3` 0.339 [0.304, 0.375], `kv_4` 0.260
+[0.229, 0.291], `state_1` 0.011, `kv_all` 0.671 [0.633, 0.710]; uniquely located 60.2%;
+located-at-3 state site − other **+0.529 [+0.488, +0.570]**, store +0.393 [+0.356, +0.433],
+582 rows).
+
+**Masking (baseline 0.945).** K1 pass, K3 pass, **K2 fails outright**: on long chains
+mean-ablating slot 3 costs 2.7 points and hiding its K/V 0.0; position 4's K/V 4.6; all
+six states 16.7; all K/V 38.8 (even 16.3, odd 3.4). Short chains: nothing above 0.8.
+
+**Monitor faithfulness, long chains (968 rows, penultimate intermediate).**
+
+| slot | readability (probe) | readout top-5 | faithfulness | transport |
+|---|---|---|---|---|
+| 0 | 0.273 | 0.142 | 0.019 | 0.041 |
+| 1 | 0.146 | 0.033 | 0.007 | 0.011 |
+| 2 | 0.360 | 0.059 | 0.020 | 0.009 |
+| 3 | 0.791 | **0.921** | **0.362** | 0.336 |
+| 4 | **0.838** | 0.809 | 0.048 | 0.044 |
+| 5 | 0.806 | 0.043 | **0.000** | 0.000 |
+
+## 121. Completed §120 on three models: monitors are readable where they are not faithful; thoughts are sufficient where they are not necessary; the terminal slot is neither
+
+Three kernels run through the Kaggle API on 2026-10-12 (3.5 GPU-hours), all twin runs
+reproducing their earlier numbers to three decimals, now with paired-bootstrap intervals.
+
+### Monitor faithfulness, long chains, penultimate intermediate (readability of a trained probe / faithfulness of its alarm)
+
+| slot | GPT-2 | CODI-1B | SIM-CoT |
+|---|---|---|---|
+| 0 | 0.09 / 0.00 | 0.27 / 0.02 | 0.25 / 0.02 |
+| 1 | 0.33 / **0.19** | 0.15 / 0.01 | 0.62 / **0.21** |
+| 2 | 0.46 / 0.00 | 0.36 / 0.02 | 0.69 / 0.02 |
+| 3 | 0.40 / **0.40** | 0.79 / **0.36** | 0.72 / **0.28** |
+| 4 | 0.54 / 0.00 | 0.84 / 0.05 | 0.74 / 0.03 |
+| 5 | 0.42 / **0.00** | 0.81 / **0.00** | 0.57 / **0.00** |
+
+In every model the most probe-readable slot is one whose monitor is never or almost never
+confirmed by behaviour (GPT-2 slot 4, CODI-1B slot 4, SIM-CoT slot 4), and the terminal
+slot is readable at 0.42–0.81 with faithfulness exactly 0.000 in all three. Faithfulness
+is confined to the carrying thoughts and to long chains; on all-chain pools it is ≤ 0.10
+at every slot in every model. Rank correlation between readability and faithfulness
+across the six slots is negative or near zero in each model. The model's own output head
+is a better locator than a trained probe where it localises at all (CODI-1B slot 3 at
+0.92), and it fails to decode the even slots that a probe reads easily in GPT-2 and
+SIM-CoT. Prediction A of §120 holds in full on three models.
+
+### Masking: accuracy cost on long chains, points (state mean-ablation / K/V mask)
+
+| | GPT-2 | CODI-1B | SIM-CoT |
+|---|---|---|---|
+| carrying thought(s), state | 12.2, 12.5 | 2.7 | 10.6, 9.1 |
+| position 0 K/V (question register) | 37.6 | 3.4 | 58.6 |
+| all even K/V / all odd K/V | 59.7 / 26.2 | 16.3 / 3.4 | 63.5 / 15.2 |
+| everything | 52.9 | 38.8 | 76.0 |
+| terminal slot, either mask | ≤ 1.9 | ≤ 0.8 | ≤ 3.0 |
+| largest single cost on short chains | 3.6 | 0.8 | 4.4 |
+
+K1 and K3 hold in all three. K2 holds at GPT-2, fails narrowly at SIM-CoT's second carrier
+(9.1 vs 10) and fails outright at CODI-1B. The reading: on short chains no single thought
+is necessary anywhere; on long chains the thoughts are necessary in the small model and
+in the step-supervised model, and almost dispensable in the plain 1B model even though
+one of them transports the value a third of the time with total specificity. Sufficiency
+without necessity is the signature of a backup route: the stronger model recomputes from
+the question when a thought is removed. Step supervision pulls the thoughts, and
+especially the question register, back into the critical path (position 0's K/V costs
+59 points at SIM-CoT, 38 at GPT-2, 3 at CODI-1B).
+
+### What the paper can now say, with intervals
+
+1. Influence is not transport (three models). 2. Transport is gated by chain length and
+stable across scale (0.33 [0.29, 0.36], 0.34 [0.30, 0.38], 0.25 + 0.19 at the two
+carriers). 3. The carrying pairing is trained, not fixed, and one training change moves it
+as predicted. 4. The terminal thought is readable, unfaithful and unnecessary in every
+model. 5. A linear monitor's readability does not predict its faithfulness; the most
+readable slot is routinely an inert one. 6. Necessity varies with model strength and
+training in a way sufficiency does not, so "which thought matters" has two answers that
+the swap and the mask give separately. 7. The CODI-1B benchmark figure is 55.3–55.5%, not
+51.9%, under either decoding path, cause unknown.
+
+### Decision
+
+The experimental program is complete. No further GPU runs are planned for the paper. The
+outputs of all three kernels are in `outputs/kaggle_runs/` (not versioned) and in the
+Kaggle kernels' output tabs; publishing them as datasets is the one bookkeeping step left.
