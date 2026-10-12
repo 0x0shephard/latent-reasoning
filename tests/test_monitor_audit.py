@@ -188,7 +188,7 @@ def test_environment_fingerprint_is_json_and_names_versions():
 
 
 def test_mlp_family_and_masking_intervals_reach_the_card():
-    card = _card(monitor={"long": _monitor({1: 0.33, 3: 0.40, 4: 0.54}, {1: 0.19, 3: 0.40}, mlp_readability={0: 0.6, 1: 0.5, 2: 0.65, 3: 0.55, 4: 0.7, 5: 0.6}, mlp_faithfulness={1: 0.2, 3: 0.4})},
+    card = _card(monitor={"long": _monitor({1: 0.33, 2: 0.46, 3: 0.40, 4: 0.54, 5: 0.42}, {1: 0.19, 3: 0.40}, mlp_readability={0: 0.6, 1: 0.5, 2: 0.65, 3: 0.55, 4: 0.7, 5: 0.6}, mlp_faithfulness={1: 0.2, 3: 0.4})},
                  masking_bootstrap=_masking_bootstrap({"mean_3": [0.10, 0.15], "mean_1": [0.17, 0.23], "mask_0": [0.3, 0.45]}))
     v = card["slots"]["3"]
     assert v["readability_long_mlp"] == 0.55 and v["faithfulness_long_mlp"] == 0.4
@@ -200,7 +200,7 @@ def test_mlp_family_and_masking_intervals_reach_the_card():
     text = card_markdown(card)
     assert "0.40 / 0.55" in text and "12.5 [10.0, 15.0]" in text and "c4_mlp_readability_dissociated_from_faithfulness: **True**" in text
     # families disagree when the MLP's most readable slot is a faithful carrier
-    card = _card(monitor={"long": _monitor({1: 0.33, 3: 0.40, 4: 0.54}, {1: 0.19, 3: 0.40}, mlp_readability={3: 0.9, 4: 0.5}, mlp_faithfulness={3: 0.4})})
+    card = _card(monitor={"long": _monitor({1: 0.33, 2: 0.46, 3: 0.40, 4: 0.54, 5: 0.42}, {1: 0.19, 3: 0.40}, mlp_readability={3: 0.9, 4: 0.5}, mlp_faithfulness={3: 0.4})})
     assert card["checks"]["c4_mlp_readability_dissociated_from_faithfulness"] is False and card["checks"]["c4_families_agree"] is False
     # cards without the family keep working
     card = _card(monitor={"long": {"run": "x", "rows": 1, "slots": {str(s): {"penultimate": {"rows": 1, "readability": 0.1, "faithfulness": 0.0}} for s in SLOTS}}})
