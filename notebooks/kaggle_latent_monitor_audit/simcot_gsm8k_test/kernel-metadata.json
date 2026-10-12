@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/lma-simcot-gsm8k-test",
+  "title": "LMA SIM-CoT CODI-1B on gsm8k_test",
+  "code_file": "kaggle_lma_simcot_gsm8k_test.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
