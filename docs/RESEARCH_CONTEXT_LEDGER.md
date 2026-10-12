@@ -5698,3 +5698,36 @@ is never confirmed by behaviour. The even slots are the most probe-readable (0.4
 invisible to the model's head (0.000), and transport nothing. Readability and faithfulness
 are uncorrelated across slots in both models measured so far. On all chains (740 rows)
 every slot is readable (0.22–0.67) and faithfulness is ≤ 0.10 everywhere.
+
+### §120 addendum 3: SIM-CoT CODI-1B, full pipeline through the Kaggle API (2026-10-12)
+
+Kernel `jonraza15/sim-cot-codi-1b-monitors-and-masks`, code `9ad543d`, completed end to
+end. Twins reproduce §119 to three decimals (long: `state_1` 0.191, `state_3` 0.247,
+`kv_2` 0.185, `kv_4` 0.229, `kv_all` 0.729; short: `kv_0` 0.537, `kv_all` 0.624), and the
+in-notebook monitor table equals the local one in the first addendum. Deterministic on the
+second model as well.
+
+**Masking (512 questions, 249 short / 263 long, pad-aware path native to this model;
+baseline 0.949).** K1 pass, K3 pass, **K2 fails at slot 3 by 0.9 of a point.**
+
+| accuracy drop (points) | slot 0 | 1 | 2 | 3 | 4 | 5 | all | even | odd |
+|---|---|---|---|---|---|---|---|---|---|
+| short, mean-ablate state | 0.0 | 0.4 | 0.8 | 0.0 | 0.0 | 0.0 | 2.8 | | |
+| short, mask K/V | 4.4 | 0.0 | 0.4 | 0.0 | 0.4 | 0.0 | 42.2 | 40.6 | 0.0 |
+| long, mean-ablate state | 5.7 | **10.6** | **11.4** | **9.1** | 2.7 | 0.0 | 59.3 | | |
+| long, mask K/V | **58.6** | 9.5 | 11.4 | 4.6 | 8.4 | 3.0 | 76.0 | 63.5 | 15.2 |
+
+Reading. The register dominates: hiding position 0's K/V costs 59 points on long chains
+(GPT-2: 38), while hiding all three odd positions' K/V costs 15. The two carrying thoughts
+are each necessary as states at about 10 points (slot 3 at 9.1, under the 10-point floor:
+with two carriers, ablating one is partly compensated, the case the §120 reading rule
+named), and so is slot 2's state (11.4), which feeds slot 3. On short chains nothing
+single is necessary (≤ 4.4 points) even though position 0's K/V *transports* 54% of
+answers there: the register is read when present and recomputed from the question when
+absent, which is what a copy of the question should do. The terminal slot costs ≤ 3.0.
+
+The three-model masking picture: short chains survive any single mask in every model;
+on long chains the carrying thoughts are necessary as states (9–13 points each) and the
+even positions plus the register are necessary as memory, the register increasingly so
+with step supervision (GPT-2 38, SIM-CoT 59 points); the terminal slot is never needed.
+CODI-1B's run is pending.
