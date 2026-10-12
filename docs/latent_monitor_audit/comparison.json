@@ -1,6 +1,6 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 4,
+  "cards": 5,
   "rows": [
     {
       "model": "codi1b",
@@ -230,6 +230,81 @@
       }
     },
     {
+      "model": "gpt2",
+      "pool": "gsm8k_test",
+      "pool_hash": "cd309bf1a3820e6fb1cb5ec7a5f9e79a102757c7ed3fb6b56f3c77271f1f2868",
+      "device": "Tesla T4",
+      "dtype": "float32",
+      "gate_accuracy": 0.4359363153904473,
+      "carriers": [
+        3
+      ],
+      "placement": [
+        3
+      ],
+      "regime": "backup_route",
+      "transport_long": {
+        "0": 0.0,
+        "1": 0.1262135922330097,
+        "2": 0.0,
+        "3": 0.3592233009708738,
+        "4": 0.0,
+        "5": 0.0
+      },
+      "transport_long_ci95": {
+        "0": [
+          0.0,
+          0.0
+        ],
+        "1": [
+          0.07766990291262135,
+          0.1796116504854369
+        ],
+        "2": [
+          0.0,
+          0.0
+        ],
+        "3": [
+          0.2815533980582524,
+          0.4368932038834951
+        ],
+        "4": [
+          0.0,
+          0.0
+        ],
+        "5": [
+          0.0,
+          0.0
+        ]
+      },
+      "mask_cost_long": {
+        "0": 0.1869918699186992,
+        "1": 0.12195121951219515,
+        "2": 0.0921409214092141,
+        "3": 0.06504065040650409,
+        "4": 0.09756097560975613,
+        "5": 0.008130081300812997
+      },
+      "register_cost_long": 0.1869918699186992,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": true,
+        "c2_chain_length_gate": true,
+        "c3_terminal_inert_unfaithful_unnecessary": true,
+        "c4_readability_dissociated_from_faithfulness": true,
+        "c5_carriers_necessary": false
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "66ea4c33b65525be819b2d2bac8c4f2828e7a9704b50c144cf9ad46df09499a1",
+          "pairs": "63831716e6c8c953eb4b469de9130de9ef734f9b3ec1724f73daae521403924a"
+        },
+        "twins_long": {
+          "predictions": "15a854eb6d44218b92589ec8ee398766b225de87710a2692ba407af9eca0c7c6",
+          "pairs": "f496e50b1e2736cbf4eb284f1b66e1c2848e2261e0dbf86a4baceb0bd40ec36e"
+        }
+      }
+    },
+    {
       "model": "simcot",
       "pool": "gsm8k_aug_train",
       "pool_hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
@@ -308,7 +383,10 @@
     }
   ],
   "flags": [
-    "codi1b: slot 2 long transport intervals do not overlap between gsm8k_aug_train and gsm8k_test"
+    "gpt2: regime differs across pools: gsm8k_aug_train=critical_path, gsm8k_test=backup_route"
+  ],
+  "notes": [
+    "gpt2: carrier set differs across pools: gsm8k_aug_train=[1, 3], gsm8k_test=[3] (threshold edge: intervals overlap at slot(s) [1])"
   ],
   "consistent": false
 }

@@ -192,7 +192,7 @@ def slot_role(slot: int, entry: dict) -> str:
     if entry.get("transport_long") is not None and entry["transport_long"] >= CARRIER_MIN_TRANSPORT:
         return "carrier"
     if entry.get("kv_transport_long") is not None and entry["kv_transport_long"] >= CARRIER_MIN_TRANSPORT:
-        return "store"
+        return "register" if slot == 0 else "store"   # position 0's K/V hold the question (§111), not a thought's result
     if peak is not None and peak <= INERT_MAX_TRANSPORT:
         if slot == TERMINAL:
             return "terminal_inert"
@@ -374,6 +374,7 @@ def _overlap(a, b) -> bool | None:
 def compare_cards(cards: list[dict]) -> dict:
     rows = [card_row(c) for c in cards]
     flags: list[str] = []
+    notes: list[str] = []
     by_model: dict[str, list[dict]] = {}
     for r in rows:
         by_model.setdefault(str(r["model"]), []).append(r)
@@ -383,15 +384,28 @@ def compare_cards(cards: list[dict]) -> dict:
             evaluable = [r for r in group if r["regime"] != "not_evaluable" and r["regime"] != "no_transport"]
             carrier_sets = {tuple(r["carriers"]) for r in evaluable}
             if len(carrier_sets) > 1:
-                flags.append(f"{model}: carrier set differs across pools: " + ", ".join(f"{r['pool']}={r['carriers']}" for r in evaluable))
+                # a slot that crosses the carrier threshold in one pool only is a flag when its intervals separate,
+                # otherwise a note (threshold edge)
+                differing = set().union(*carrier_sets) - set.intersection(*(set(c) for c in carrier_sets))
+                separated = []
+                for s in sorted(differing):
+                    cis = [r["transport_long_ci95"][str(s)] for r in evaluable if r["transport_long_ci95"][str(s)]]
+                    if any(_overlap(cis[i], cis[j]) is False for i in range(len(cis)) for j in range(i + 1, len(cis))):
+                        separated.append(s)
+                text = f"{model}: carrier set differs across pools: " + ", ".join(f"{r['pool']}={r['carriers']}" for r in evaluable)
+                if separated:
+                    flags.append(text + f" (intervals separate at slot(s) {separated})")
+                else:
+                    notes.append(text + f" (threshold edge: intervals overlap at slot(s) {sorted(differing)})")
             regimes = {r["regime"] for r in evaluable}
             if len(regimes) > 1:
                 flags.append(f"{model}: regime differs across pools: " + ", ".join(f"{r['pool']}={r['regime']}" for r in evaluable))
             for s in SLOTS:
-                cis = [(r["pool"], r["transport_long_ci95"][str(s)]) for r in evaluable if r["transport_long_ci95"][str(s)]]
+                cis = [(r["pool"], r["transport_long_ci95"][str(s)], r["transport_long"][str(s)]) for r in evaluable if r["transport_long_ci95"][str(s)]]
                 for i in range(len(cis)):
                     for j in range(i + 1, len(cis)):
-                        if _overlap(cis[i][1], cis[j][1]) is False:
+                        consequential = max(cis[i][2] or 0.0, cis[j][2] or 0.0) >= INERT_MAX_TRANSPORT
+                        if consequential and _overlap(cis[i][1], cis[j][1]) is False:
                             flags.append(f"{model}: slot {s} long transport intervals do not overlap between {cis[i][0]} and {cis[j][0]}")
         by_pool: dict[str, list[dict]] = {}
         for r in group:
@@ -405,7 +419,7 @@ def compare_cards(cards: list[dict]) -> dict:
                 hashes = {r["pool_hash"] for r in same}
                 if len(hashes) > 1:
                     flags.append(f"{model} on {pool}: pool hash differs across runs (sampling is not reproducible)")
-    return {"contract": CARD_CONTRACT, "cards": len(cards), "rows": rows, "flags": flags, "consistent": not flags}
+    return {"contract": CARD_CONTRACT, "cards": len(cards), "rows": rows, "flags": flags, "notes": notes, "consistent": not flags}
 
 
 def comparison_markdown(comparison: dict) -> str:
@@ -416,4 +430,5 @@ def comparison_markdown(comparison: dict) -> str:
         c = " ".join(_f(r["mask_cost_long"][str(s)], pct=True) for s in SLOTS)
         lines.append(f"| {r['model']} | {r['pool']} | {r['device']} | {r['dtype']} | {_f(r['gate_accuracy'], 3)} | {r['carriers']} | {r['placement']} | {r['regime']} | {t} | {c} | {_f(r['register_cost_long'], pct=True)} |")
     lines += ["", "## Flags", ""] + ([f"- {f}" for f in comparison["flags"]] or ["- none"])
+    lines += ["", "## Notes", ""] + ([f"- {f}" for f in comparison.get("notes", [])] or ["- none"])
     return "\n".join(lines) + "\n"

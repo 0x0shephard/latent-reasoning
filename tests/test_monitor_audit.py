@@ -154,6 +154,7 @@ def test_spearman_and_roles():
     assert spearman([1, 1, 1], [1, 2, 3]) is None and spearman([1, None], [1, 2]) is None
     assert slot_role(2, {"transport_all": 0.0, "transport_long": 0.0, "readability_long": 0.5}) == "readable_inert"
     assert slot_role(4, {"transport_all": 0.0, "transport_long": 0.0, "kv_transport_long": 0.3, "readability_long": 0.5}) == "store"
+    assert slot_role(0, {"transport_all": 0.0, "transport_long": 0.0, "kv_transport_long": 0.21, "readability_long": 0.05}) == "register"
     assert slot_role(2, {"transport_all": 0.08, "transport_long": 0.12, "readability_long": 0.5}) == "weak"
     assert slot_role(2, {"transport_all": None, "transport_long": None, "readability_long": None}) == "unmeasured"
 
@@ -166,10 +167,17 @@ def test_environment_fingerprint_is_json_and_names_versions():
 
 def test_compare_flags_disagreements_across_pools_and_environments():
     a = _card()
-    b = _card(pool={"pool": "gsm8k_test", "hash": "t" * 64, "n": 1206}, twins_long=_twins({3: 0.34}, {4: 0.3}), masking=_masking({3: 0.03}))
+    b = _card(pool={"pool": "gsm8k_test", "hash": "t" * 64, "n": 1206}, twins_long=_twins({3: 0.34}, {4: 0.3}), masking=_masking({3: 0.03}),
+              bootstrap={"long": _bootstrap({3: 0.34})})
     cmp = compare_cards([a, b])
     assert not cmp["consistent"]
-    assert any("carrier set differs" in f for f in cmp["flags"]) and any("regime differs" in f for f in cmp["flags"])
+    assert any("carrier set differs" in f and "intervals separate" in f for f in cmp["flags"]) and any("regime differs" in f for f in cmp["flags"])
+    # slot 1 just under the threshold with overlapping intervals is a note, not a flag; zero-vs-near-zero intervals never flag
+    edge = _card(pool={"pool": "gsm8k_test", "hash": "t" * 64, "n": 1206}, twins_long=_twins({1: 0.126, 3: 0.359, 2: 0.01}, {4: 0.3}),
+                 bootstrap={"long": _bootstrap({1: 0.126, 3: 0.359, 2: 0.01})})
+    cmp = compare_cards([a, edge])
+    assert not any("carrier set differs" in f for f in cmp["flags"]) and any("threshold edge" in n for n in cmp["notes"])
+    assert not any("slot 2" in f for f in cmp["flags"])
     c = _card(environment={"device_name": "Tesla P100", "dtype": "float32", "batch_size": 32}, fingerprints={"twins_standard": {"predictions": "DIFFERENT", "pairs": "q1"}})
     cmp = compare_cards([a, c])
     assert any("predictions differ across environments" in f for f in cmp["flags"])
