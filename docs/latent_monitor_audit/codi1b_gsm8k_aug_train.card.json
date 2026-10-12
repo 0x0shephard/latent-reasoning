@@ -126,6 +126,7 @@
         0.056640625
       ],
       "kv_transport_all": 0.072265625,
+      "kv_transport_short": 0.07207207207207207,
       "kv_transport_long": 0.044921875,
       "readability_long": 0.2727272727272727,
       "faithfulness_long": 0.01893939393939394,
@@ -144,6 +145,7 @@
         0.01953125
       ],
       "kv_transport_all": 0.0966796875,
+      "kv_transport_short": 0.03003003003003003,
       "kv_transport_long": 0.03515625,
       "readability_long": 0.14566115702479338,
       "faithfulness_long": 0.0070921985815602835,
@@ -162,6 +164,7 @@
         0.0166015625
       ],
       "kv_transport_all": 0.03125,
+      "kv_transport_short": 0.0,
       "kv_transport_long": 0.0107421875,
       "readability_long": 0.359504132231405,
       "faithfulness_long": 0.020114942528735632,
@@ -180,6 +183,7 @@
         0.375
       ],
       "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
       "kv_transport_long": 0.00390625,
       "readability_long": 0.7913223140495868,
       "faithfulness_long": 0.36161879895561355,
@@ -198,6 +202,7 @@
         0.0576171875
       ],
       "kv_transport_all": 0.060546875,
+      "kv_transport_short": 0.018018018018018018,
       "kv_transport_long": 0.259765625,
       "readability_long": 0.8378099173553719,
       "faithfulness_long": 0.04808877928483354,
@@ -216,6 +221,7 @@
         0.0
       ],
       "kv_transport_all": 0.0078125,
+      "kv_transport_short": 0.003003003003003003,
       "kv_transport_long": 0.0498046875,
       "readability_long": 0.8057851239669421,
       "faithfulness_long": 0.0,
@@ -262,7 +268,7 @@
   },
   "checks": {
     "c1_no_single_site_transport_on_short_chains": true,
-    "c1_max_short_transport": 0.0966796875,
+    "c1_max_short_transport": 0.03453453453453453,
     "c2_chain_length_gate": true,
     "c2_max_long_transport": 0.3388671875,
     "c3_terminal_inert_unfaithful_unnecessary": true,
@@ -298,6 +304,6 @@
     "register_position_0": false,
     "summary": "Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [1, 2, 5]."
   },
-  "created_at_utc": "2026-10-12T17:49:19.962455+00:00",
+  "created_at_utc": "2026-10-12T19:22:34.914898+00:00",
   "smoke": false
 }

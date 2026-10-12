@@ -213,6 +213,7 @@ def build_card(*, model: dict, pool: dict, environment: dict, gate: dict | None,
             "transport_long": target_of(twins_long, f"state_{s}"),
             "transport_long_ci95": ci_of(boot.get("long"), f"state_{s}"),
             "kv_transport_all": target_of(twins_standard, f"kv_{s}"),
+            "kv_transport_short": short_target_of(twins_standard, f"kv_{s}"),
             "kv_transport_long": target_of(twins_long, f"kv_{s}"),
             "readability_long": m.get("readability"),
             "faithfulness_long": m.get("faithfulness"),
@@ -251,8 +252,9 @@ def build_card(*, model: dict, pool: dict, environment: dict, gate: dict | None,
 
 def checks_from(card: dict, carriers: list[int]) -> dict:
     slots = card["slots"]
-    # position 0's K/V is the question register (reported under ``registers``), not a thought's computation; C1 excludes it
-    short_values = [v for s in SLOTS for v in (slots[str(s)]["transport_short"], None if s == 0 else slots[str(s)]["kv_transport_all"]) if v is not None]
+    # position 0's K/V is the question register (reported under ``registers``), not a thought's computation; C1 excludes it.
+    # Short-chain rates come from the strata, never from the all-chain pool (a test set can be mostly long chains).
+    short_values = [v for s in SLOTS for v in (slots[str(s)]["transport_short"], None if s == 0 else slots[str(s)]["kv_transport_short"]) if v is not None]
     long_values = [slots[str(s)]["transport_long"] for s in SLOTS if slots[str(s)]["transport_long"] is not None]
     c1 = None if not short_values else max(short_values) <= SHORT_MAX_TRANSPORT
     c2 = None if not long_values else (max(long_values) >= CARRIER_MIN_TRANSPORT and (c1 is not False))
@@ -320,13 +322,13 @@ def card_markdown(card: dict) -> str:
              f"- pool: {p.get('pool')} · n = {p.get('n')} · hash `{str(p.get('hash', ''))[:12]}` · steps {p.get('steps_histogram')}",
              f"- environment: {e.get('device_name') or e.get('device')} · {e.get('dtype')} · batch {e.get('batch_size')} · torch {e.get('torch')} · transformers {e.get('transformers')}",
              f"- gate: accuracy {_f(g.get('accuracy'), 4)} vs published {_f(g.get('published'), 4)} ({g.get('status')})", "",
-             "| slot | role | transport short | transport long [95% CI] | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |",
-             "|---|---|---|---|---|---|---|---|---|"]
+             "| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for s in SLOTS:
         v = card["slots"][str(s)]
         ci = v["transport_long_ci95"]
         ci_text = "" if not ci else f" [{ci[0]:.2f}, {ci[1]:.2f}]"
-        lines.append(f"| {s} | {v['role']} | {_f(v['transport_short'])} | {_f(v['transport_long'])}{ci_text} | {_f(v['kv_transport_long'])} | "
+        lines.append(f"| {s} | {v['role']} | {_f(v['transport_short'])} | {_f(v['transport_long'])}{ci_text} | {_f(v['kv_transport_short'])} | {_f(v['kv_transport_long'])} | "
                      f"{_f(v['readability_long'], 2)} | {_f(v['faithfulness_long'], 2)} | {_f(v['mask_cost_short'], pct=True)} | {_f(v['mask_cost_long'], pct=True)} |")
     r0, t = card["registers"]["position_0"], card["tails"]
     lines += ["", f"- position-0 K/V (question register): transport short {_f(r0['kv_transport_short'])}, long {_f(r0['kv_transport_long'])}; "

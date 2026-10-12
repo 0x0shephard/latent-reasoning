@@ -126,6 +126,7 @@
         0.0
       ],
       "kv_transport_all": 0.232421875,
+      "kv_transport_short": 0.05187319884726225,
       "kv_transport_long": 0.1201171875,
       "readability_long": 0.09368635437881874,
       "faithfulness_long": 0.0,
@@ -144,6 +145,7 @@
         0.1767578125
       ],
       "kv_transport_all": 0.0009765625,
+      "kv_transport_short": 0.0,
       "kv_transport_long": 0.0009765625,
       "readability_long": 0.3329938900203666,
       "faithfulness_long": 0.1926605504587156,
@@ -162,6 +164,7 @@
         0.0
       ],
       "kv_transport_all": 0.044921875,
+      "kv_transport_short": 0.025936599423631124,
       "kv_transport_long": 0.158203125,
       "readability_long": 0.45621181262729127,
       "faithfulness_long": 0.0,
@@ -180,6 +183,7 @@
         0.3583984375
       ],
       "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
       "kv_transport_long": 0.0,
       "readability_long": 0.40224032586558045,
       "faithfulness_long": 0.40253164556962023,
@@ -198,6 +202,7 @@
         0.0
       ],
       "kv_transport_all": 0.0947265625,
+      "kv_transport_short": 0.04755043227665706,
       "kv_transport_long": 0.302734375,
       "readability_long": 0.5356415478615071,
       "faithfulness_long": 0.0,
@@ -216,6 +221,7 @@
         0.0
       ],
       "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
       "kv_transport_long": 0.0,
       "readability_long": 0.4154786150712831,
       "faithfulness_long": 0.0,
@@ -262,7 +268,7 @@
   },
   "checks": {
     "c1_no_single_site_transport_on_short_chains": true,
-    "c1_max_short_transport": 0.0947265625,
+    "c1_max_short_transport": 0.06051873198847262,
     "c2_chain_length_gate": true,
     "c2_max_long_transport": 0.3251953125,
     "c3_terminal_inert_unfaithful_unnecessary": true,
@@ -298,6 +304,6 @@
     "register_position_0": true,
     "summary": "Carrying thought(s) [1, 3]; place a monitor only at [1, 3]; the carriers are necessary (critical path); inert slots [5]."
   },
-  "created_at_utc": "2026-10-12T17:49:11.726895+00:00",
+  "created_at_utc": "2026-10-12T19:22:31.449546+00:00",
   "smoke": false
 }

@@ -1,6 +1,6 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 3,
+  "cards": 4,
   "rows": [
     {
       "model": "codi1b",
@@ -74,6 +74,81 @@
         "twins_long": {
           "predictions": "09cc117853f691d31889c384a4e90063b4d52d0acdd5e5c4d414700030f088e1",
           "pairs": "b6bbcb18f6b4a6a010c411d105704daa028fa79c3f7a4b36af409a8bb9647cbe"
+        }
+      }
+    },
+    {
+      "model": "codi1b",
+      "pool": "gsm8k_test",
+      "pool_hash": "cd309bf1a3820e6fb1cb5ec7a5f9e79a102757c7ed3fb6b56f3c77271f1f2868",
+      "device": "Tesla T4",
+      "dtype": "float16",
+      "gate_accuracy": 0.5549658832448825,
+      "carriers": [
+        3
+      ],
+      "placement": [
+        3
+      ],
+      "regime": "backup_route",
+      "transport_long": {
+        "0": 0.0625,
+        "1": 0.013157894736842105,
+        "2": 0.0,
+        "3": 0.29605263157894735,
+        "4": 0.02631578947368421,
+        "5": 0.0
+      },
+      "transport_long_ci95": {
+        "0": [
+          0.03289473684210526,
+          0.09539473684210527
+        ],
+        "1": [
+          0.003289473684210526,
+          0.02631578947368421
+        ],
+        "2": [
+          0.0,
+          0.0
+        ],
+        "3": [
+          0.23026315789473684,
+          0.3684210526315789
+        ],
+        "4": [
+          0.009868421052631578,
+          0.046052631578947366
+        ],
+        "5": [
+          0.0,
+          0.0
+        ]
+      },
+      "mask_cost_long": {
+        "0": 0.05691056910569103,
+        "1": 0.04065040650406504,
+        "2": 0.01897018970189701,
+        "3": 0.03794037940379402,
+        "4": 0.043360433604336,
+        "5": 0.010840108401084014
+      },
+      "register_cost_long": 0.043360433604336,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": true,
+        "c2_chain_length_gate": true,
+        "c3_terminal_inert_unfaithful_unnecessary": true,
+        "c4_readability_dissociated_from_faithfulness": true,
+        "c5_carriers_necessary": false
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "f5b3b5bee0ffa0498cbbc692c73558ccada091023a726eda58001ce445b5c6db",
+          "pairs": "62aabde8f3e53683378794792b5e16fdadc0e441d87a685e847545ad1c94d1ec"
+        },
+        "twins_long": {
+          "predictions": "6239309da0b74dfe34d6cd8370a46c3dc9376b596edf77d98942fbe42af64991",
+          "pairs": "b8e9d45fa23c83b218a62ee7c441e1dc4b52880986fb3c69e616ad4abc6e3244"
         }
       }
     },
@@ -232,6 +307,8 @@
       }
     }
   ],
-  "flags": [],
-  "consistent": true
+  "flags": [
+    "codi1b: slot 2 long transport intervals do not overlap between gsm8k_aug_train and gsm8k_test"
+  ],
+  "consistent": false
 }

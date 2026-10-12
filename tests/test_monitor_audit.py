@@ -127,6 +127,11 @@ def test_no_transport_and_not_evaluable_regimes():
 def test_c1_fails_when_a_single_site_transports_on_short_chains():
     card = _card(twins_standard=_twins({3: 0.3}, {0: 0.23}))
     assert card["checks"]["c1_no_single_site_transport_on_short_chains"] is False and card["checks"]["c2_chain_length_gate"] is False
+    # K/V transport that lives only in the long strata of a mostly-long pool must not fail C1
+    strata = {"n1_k1": {"target": 0.0, "n": 50}, "n2_k1": {"target": 0.05, "n": 50}, "n3_k2": {"target": 0.3, "n": 900}}
+    card = _card(twins_standard=_twins({}, {4: 0.28}, strata=strata))
+    assert card["slots"]["4"]["kv_transport_all"] == 0.28 and card["slots"]["4"]["kv_transport_short"] == pytest.approx(0.025)
+    assert card["checks"]["c1_no_single_site_transport_on_short_chains"] is True
 
 
 def test_terminal_check_fails_when_the_last_slot_is_needed_or_faithful():

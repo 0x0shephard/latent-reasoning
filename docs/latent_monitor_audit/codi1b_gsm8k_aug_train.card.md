@@ -5,14 +5,14 @@
 - environment: kaggle-gpu (§120 run) · float16 · batch 32 · torch 2.4.1 · transformers 4.52.4
 - gate: accuracy — vs published — (None)
 
-| slot | role | transport short | transport long [95% CI] | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |
-|---|---|---|---|---|---|---|---|---|
-| 0 | weak | 0.035 | 0.041 [0.03, 0.06] | 0.045 | 0.27 | 0.02 | 0.8 | 4.2 |
-| 1 | inert | 0.000 | 0.011 [0.00, 0.02] | 0.035 | 0.15 | 0.01 | 0.4 | 2.7 |
-| 2 | readable_inert | 0.000 | 0.009 [0.00, 0.02] | 0.011 | 0.36 | 0.02 | 0.4 | 1.5 |
-| 3 | carrier | 0.026 | 0.339 [0.30, 0.38] | 0.004 | 0.79 | 0.36 | 0.8 | 2.7 |
-| 4 | store | 0.006 | 0.045 [0.03, 0.06] | 0.260 | 0.84 | 0.05 | 0.4 | 4.6 |
-| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.050 | 0.81 | 0.00 | 0.8 | 0.8 |
+| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | weak | 0.035 | 0.041 [0.03, 0.06] | 0.072 | 0.045 | 0.27 | 0.02 | 0.8 | 4.2 |
+| 1 | inert | 0.000 | 0.011 [0.00, 0.02] | 0.030 | 0.035 | 0.15 | 0.01 | 0.4 | 2.7 |
+| 2 | readable_inert | 0.000 | 0.009 [0.00, 0.02] | 0.000 | 0.011 | 0.36 | 0.02 | 0.4 | 1.5 |
+| 3 | carrier | 0.026 | 0.339 [0.30, 0.38] | 0.000 | 0.004 | 0.79 | 0.36 | 0.8 | 2.7 |
+| 4 | store | 0.006 | 0.045 [0.03, 0.06] | 0.018 | 0.260 | 0.84 | 0.05 | 0.4 | 4.6 |
+| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.003 | 0.050 | 0.81 | 0.00 | 0.8 | 0.8 |
 
 - position-0 K/V (question register): transport short 0.072, long 0.045; mask cost long 3.4 pts
 - tails: kv_all transport all 0.550 (other 0.012), long 0.671; mask_all cost long 38.8 pts, mean_all 16.7 pts
@@ -25,7 +25,7 @@
 - c4_readability_dissociated_from_faithfulness: **False**
 - c5_carriers_necessary: **False**
 - register_position_0: **False**
-- details: max short transport 0.097, max long transport 0.339, most readable slot 4, spearman(readability, faithfulness) 0.31, carrier costs {'3': 0.026615969581749055}, register cost 3.4 pts
+- details: max short transport 0.035, max long transport 0.339, most readable slot 4, spearman(readability, faithfulness) 0.31, carrier costs {'3': 0.026615969581749055}, register cost 3.4 pts
 
 ## Verdict
 

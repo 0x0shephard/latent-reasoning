@@ -164,8 +164,12 @@ def assemble(args, lay: dict, *, stage_seconds: dict, cfg) -> dict:
     environment["from_existing"] = bool(getattr(args, "from_existing", None))
     if getattr(args, "device_name", None):
         environment["device_name"] = args.device_name   # the GPU the runs were made on, when assembling off-line
+    gate = gate_from(getattr(args, "reproduction_summary", None), cfg)
+    if gate is None and getattr(args, "from_existing", None):
+        # the kernel's own card carries the gate it ran under; keep it when the eval summary was not downloaded
+        gate = (_load(Path(args.from_existing) / "card.json") or {}).get("gate")
     card = build_card(model=model_block(cfg, args.config, twins_std or twins_long, getattr(args, "model_name", None)), pool=pool_meta,
-                      environment=environment, gate=gate_from(getattr(args, "reproduction_summary", None), cfg),
+                      environment=environment, gate=gate,
                       twins_standard=twins_std, twins_long=twins_long, bootstrap=bootstrap, masking=masking, monitor=monitor,
                       fingerprints=fingerprints, stage_seconds=stage_seconds)
     card["created_at_utc"] = datetime.now(timezone.utc).isoformat()
