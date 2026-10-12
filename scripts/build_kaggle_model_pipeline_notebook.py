@@ -18,11 +18,11 @@ RUN_COMMIT = "f35f0ef1561fc5071e9d2c326ed01a78d84acdd7"
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "gate": "dataset",
-             "carrying": "1 3", "datasets": ["dannyism11/tsv-ccc"], "slug": "codi-gpt2-monitors-and-masks"},
+             "carrying": "1 3", "datasets": ["dannyism11/tsv-ccc"], "slug": "codi-gpt-2-monitors-and-masks"},
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "auto", "gate": "eval",
-               "carrying": "3", "datasets": [], "slug": "codi-1b-monitors-and-masks"},
+               "carrying": "3", "datasets": [], "slug": "codi-llama-1b-monitors-and-masks"},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "auto", "gate": "eval",
-               "carrying": "1 3", "datasets": [], "slug": "simcot-1b-monitors-and-masks"},
+               "carrying": "1 3", "datasets": [], "slug": "sim-cot-codi-1b-monitors-and-masks"},
 }
 
 
