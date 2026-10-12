@@ -1,6 +1,6 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 10,
+  "cards": 11,
   "rows": [
     {
       "model": "codi1b",
@@ -554,6 +554,112 @@
     },
     {
       "model": "gpt2",
+      "pool": "gsm8k_train_original",
+      "pool_hash": "f18007a80784c8023839ceb0f99c50ebf59f308581531303e789748df8892900",
+      "device": "Tesla T4",
+      "dtype": "float32",
+      "gate_accuracy": 0.4359363153904473,
+      "carriers": [
+        3
+      ],
+      "placement": [
+        3
+      ],
+      "regime": "critical_path",
+      "transport_long": {
+        "0": 0.0009765625,
+        "1": 0.13671875,
+        "2": 0.0009765625,
+        "3": 0.2958984375,
+        "4": 0.0009765625,
+        "5": 0.0009765625
+      },
+      "transport_long_ci95": {
+        "0": [
+          0.0,
+          0.0029296875
+        ],
+        "1": [
+          0.11328125,
+          0.16015625
+        ],
+        "2": [
+          0.0,
+          0.0029296875
+        ],
+        "3": [
+          0.2636474609375,
+          0.3271484375
+        ],
+        "4": [
+          0.0,
+          0.0029296875
+        ],
+        "5": [
+          0.0,
+          0.0029296875
+        ]
+      },
+      "mask_cost_long": {
+        "0": 0.2951289398280802,
+        "1": 0.18338108882521487,
+        "2": 0.09455587392550141,
+        "3": 0.11747851002865328,
+        "4": 0.1289398280802292,
+        "5": 0.011461318051575908
+      },
+      "mask_cost_long_ci95": {
+        "0": [
+          0.2349570200573066,
+          0.3524355300859599
+        ],
+        "1": [
+          0.13753581661891118,
+          0.23209169054441262
+        ],
+        "2": [
+          0.05730659025787966,
+          0.1346704871060172
+        ],
+        "3": [
+          0.07736389684813753,
+          0.16045845272206305
+        ],
+        "4": [
+          0.08882521489971347,
+          0.17191977077363896
+        ],
+        "5": [
+          -0.0028653295128939827,
+          0.025787965616045846
+        ]
+      },
+      "register_cost_long": 0.2951289398280802,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": false,
+        "c2_chain_length_gate": false,
+        "c3_terminal_inert_unfaithful_unnecessary": true,
+        "c4_readability_dissociated_from_faithfulness": true,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": false,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
+        "c5_carriers_necessary": true
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "99188d993e43e95f8fa2a2f8caeff4d8954966ea3da1f5aa8859b0b41725d039",
+          "pairs": "0a5b90f8ad44adcabd7982a614b0bc36439b3dac3103155d4c583ef0edf2f357"
+        },
+        "twins_long": {
+          "predictions": "f587dcc9a26290b1c1c62dda70b97f80b3920e3d29ff4c21aeff8a9a12df39e1",
+          "pairs": "48b73d8b1f6bdae0efe1dd7fbe13f43a3a7fc610f597ebfdf4307ed5fd030f2f"
+        }
+      }
+    },
+    {
+      "model": "gpt2",
       "pool": "svamp",
       "pool_hash": "323e815c4a9bd0a6ea0fb806e92f4aecc4dd6eddb8ec3259e9b6add21ae65f92",
       "device": "Tesla T4",
@@ -904,10 +1010,10 @@
     }
   ],
   "flags": [
-    "gpt2: regime differs across pools: gsm8k_aug_train=critical_path, gsm8k_aug_train=critical_path, gsm8k_test=backup_route"
+    "gpt2: regime differs across pools: gsm8k_aug_train=critical_path, gsm8k_aug_train=critical_path, gsm8k_test=backup_route, gsm8k_train_original=critical_path"
   ],
   "notes": [
-    "gpt2: carrier set differs across pools: gsm8k_aug_train=[1, 3], gsm8k_aug_train=[1, 3], gsm8k_test=[3] (threshold edge: intervals overlap at slot(s) [1])"
+    "gpt2: carrier set differs across pools: gsm8k_aug_train=[1, 3], gsm8k_aug_train=[1, 3], gsm8k_test=[3], gsm8k_train_original=[3] (threshold edge: intervals overlap at slot(s) [1])"
   ],
   "consistent": false
 }
