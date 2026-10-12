@@ -5,14 +5,14 @@
 - environment: Tesla T4 · float32 · batch 32 · torch 2.11.0+cu128 · transformers 4.52.4
 - gate: accuracy 0.4359 vs published 0.4370 (passed)
 
-| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |
+| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability ridge / mlp | faithfulness ridge / mlp | mask cost short (pts) | mask cost long (pts) [95% CI] |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | inert | 0.005 | — | 0.015 | — | — | — | 0.3 | — |
-| 1 | inert | 0.040 | — | 0.005 | — | — | — | 0.0 | — |
-| 2 | inert | 0.005 | — | 0.040 | — | — | — | 1.3 | — |
-| 3 | inert | 0.045 | — | 0.005 | — | — | — | 0.0 | — |
-| 4 | inert | 0.005 | — | 0.035 | — | — | — | 0.0 | — |
-| 5 | terminal_inert | 0.005 | — | 0.005 | — | — | — | 0.0 | — |
+| 0 | inert | 0.005 | — | 0.015 | — | — / — | — / — | 0.3 | — |
+| 1 | inert | 0.040 | — | 0.005 | — | — / — | — / — | 0.0 | — |
+| 2 | inert | 0.005 | — | 0.040 | — | — / — | — / — | 1.3 | — |
+| 3 | inert | 0.045 | — | 0.005 | — | — / — | — / — | 0.0 | — |
+| 4 | inert | 0.005 | — | 0.035 | — | — / — | — / — | 0.0 | — |
+| 5 | terminal_inert | 0.005 | — | 0.005 | — | — / — | — / — | 0.0 | — |
 
 - position-0 K/V (question register): transport short 0.015, long —; mask cost long — pts
 - tails: kv_all transport all 0.230 (other 0.030), long —; mask_all cost long — pts, mean_all — pts
@@ -23,9 +23,13 @@
 - c2_chain_length_gate: **None**
 - c3_terminal_inert_unfaithful_unnecessary: **True**
 - c4_readability_dissociated_from_faithfulness: **None**
+- c4_mlp_readability_dissociated_from_faithfulness: **None**
+- c4b_readable_unfaithful_slot_exists: **None**
+- c4b_mlp_readable_unfaithful_slot_exists: **None**
+- c4b_both_families: **None** (slots None)
 - c5_carriers_necessary: **None**
 - register_position_0: **None**
-- details: max short transport 0.045, max long transport —, most readable slot None, spearman(readability, faithfulness) —, carrier costs {}, register cost — pts
+- details: max short transport 0.045, max long transport —, most readable slot ridge None / mlp None, spearman ridge — / mlp —, carrier costs {}, register cost — pts
 
 ## Verdict
 

@@ -6175,3 +6175,51 @@ necessity intervals separate across pools.
 Kaggle, dannyism11: the new pool for three models (≈ 2.1 h) and reruns of `gsm8k_test`
 for three models and `gsm8k_aug_train` for GPT-2 so that masking intervals and the MLP
 family exist for every card (≈ 2.3 h). About 4.5 of the 27 h left.
+
+### §124 addendum: P6 scored on the eight existing twin-run sets; an erratum on C4 (2026-10-13)
+
+**Erratum first.** §123 addendum 1 said "C1–C4 hold on all three" and the table of
+§123 addendum 2 marked C4 ✓ for CODI-1B and SIM-CoT on `gsm8k_aug_train`. The
+committed cards (b4a4b58) say otherwise: C4 was **False** on both, because the rank
+correlation between readability and faithfulness is +0.31 (CODI-1B) and +0.66 (SIM-CoT)
+on that pool, not "negative or near zero" as §121 put it. The most readable slot is
+inert on both (slot 4, faithfulness 0.05 and 0.03), which is the half of C4 that holds;
+the correlation half fails. I reported the check without reading it. The corrected
+tally for C4 as defined (most-readable slot unfaithful *and* ρ ≤ 0): GPT-2 holds on
+both pools; CODI-1B holds on `gsm8k_test` only; SIM-CoT holds on neither.
+
+**P6 scored** (MLP classifier beside the ridge probe, same folds, eight run sets; the
+cards are rebuilt and the §120 ridge numbers are unchanged to the last digit).
+
+| card | readability ridge → mlp at slots 0–5 (long) | carrier faithfulness ridge / mlp | C4 ridge / mlp | C4b both |
+|---|---|---|---|---|
+| GPT-2 aug_train | .09→.10 .33→.49 .46→.48 .40→.58 .54→.56 .42→.57 | 1: .19/.17, 3: .40/.36 | ✓ / ✗ | {2,4,5} |
+| GPT-2 test | .05→.03 .32→.36 .41→.23 .40→.42 .51→.27 .36→.40 | 3: .29/.31 | ✓ / ✗ | {5} |
+| CODI-1B aug_train | .27→.17 .15→.06 .36→.24 .79→.75 .84→.79 .81→.73 | 3: .36/.36 | ✗ / ✗ | {4,5} |
+| CODI-1B test | .19→.15 .06→.06 .16→.08 .59→.52 .69→.62 .68→.48 | 3: .34/.35 | ✓ / ✗ | {4,5} |
+| SIM-CoT aug_train | .25→.29 .62→.61 .69→.56 .72→.67 .74→.62 .57→.44 | 1: .21/.20, 3: .28/.29 | ✗ / ✗ | {2,4,5} |
+| SIM-CoT test | .10→.12 .44→.38 .50→.28 .56→.44 .54→.32 .32→.19 | 1: .26/.30, 3: .26/.28 | ✗ / ✗ | {4} |
+
+- "MLP reads every slot at least as well": **wrong** for the 1B models (the closed-form
+  ridge beats a 300-step MLP at 2,048 dimensions on ~1,000 rows) and for GPT-2's even
+  slots on the test pool. The MLP gains only on GPT-2's training pool.
+- "Carrier faithfulness within 0.05 across families": **holds** everywhere (largest
+  change 0.04). Faithfulness is a property of the slot, not of the probe.
+- "C4 agrees across families": **wrong**. Under the MLP the most readable slot is the
+  carrier 3 on every GPT-2 card and on both SIM-CoT cards, so "the most readable slot is
+  inert" is a ridge-probe statement, not a model statement. The paper cannot make it.
+
+**What survives both families, on every card with a long profile: a readable-but-
+unfaithful slot exists.** Added as **C4b** (post hoc, labelled as such here and in the
+code): a slot read at ≥ 0.30 whose alarm is confirmed ≤ 0.05 of the time, per family and
+"both" when the same slot qualifies under both. C4b-both holds on all six long-profile
+cards; the terminal slot qualifies under both families on five of six (GPT-2 at 0.57 /
+0.40 readability with faithfulness 0.000; CODI-1B at 0.73 / 0.48) and slot 4 on five of
+six. The claim the paper makes is therefore: *in every model and pool, at least one
+thought that a probe reads well, under either probe family, is one whose reading the
+behaviour never confirms; the last thought is that slot in every model.* The stronger
+"most readable is inert" is withdrawn.
+
+C4 stays on the card as defined; C4b sits beside it. Cards and comparison rebuilt
+(`docs/latent_monitor_audit/`); the comparison's single flag is unchanged (GPT-2's regime
+across pools).

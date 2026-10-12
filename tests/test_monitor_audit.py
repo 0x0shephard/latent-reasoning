@@ -197,6 +197,7 @@ def test_mlp_family_and_masking_intervals_reach_the_card():
     c = card["checks"]
     assert c["c4_readability_dissociated_from_faithfulness"] is True and c["c4_mlp_readability_dissociated_from_faithfulness"] is True
     assert c["c4_mlp_most_readable_slot"] == 4 and c["c4_families_agree"] is True
+    assert c["c4b_slots"] == [2, 4, 5] and c["c4b_mlp_slots"] == [0, 2, 4, 5] and c["c4b_both_slots"] == [2, 4, 5] and c["c4b_both_families"] is True
     text = card_markdown(card)
     assert "0.40 / 0.55" in text and "12.5 [10.0, 15.0]" in text and "c4_mlp_readability_dissociated_from_faithfulness: **True**" in text
     # families disagree when the MLP's most readable slot is a faithful carrier
@@ -205,6 +206,8 @@ def test_mlp_family_and_masking_intervals_reach_the_card():
     # cards without the family keep working
     card = _card(monitor={"long": {"run": "x", "rows": 1, "slots": {str(s): {"penultimate": {"rows": 1, "readability": 0.1, "faithfulness": 0.0}} for s in SLOTS}}})
     assert card["slots"]["3"]["readability_long_mlp"] is None and card["checks"]["c4_mlp_readability_dissociated_from_faithfulness"] is None
+    assert card["checks"]["c4b_mlp_readable_unfaithful_slot_exists"] is None and card["checks"]["c4b_both_families"] is None
+    assert card["checks"]["c4b_readable_unfaithful_slot_exists"] is False and card["checks"]["c4b_slots"] == []
 
 
 def test_compare_flags_necessity_differences_between_pools():

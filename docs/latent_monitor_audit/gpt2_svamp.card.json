@@ -107,10 +107,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.0033333333333332993,
       "mask_cost_long": null,
       "mask_cost_all": 0.0033333333333332993,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "inert"
     },
     "1": {
@@ -123,10 +128,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.0,
       "mask_cost_long": null,
       "mask_cost_all": 0.0,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "inert"
     },
     "2": {
@@ -139,10 +149,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.013333333333333308,
       "mask_cost_long": null,
       "mask_cost_all": 0.013333333333333308,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "inert"
     },
     "3": {
@@ -155,10 +170,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.0,
       "mask_cost_long": null,
       "mask_cost_all": 0.0,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "inert"
     },
     "4": {
@@ -171,10 +191,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.0,
       "mask_cost_long": null,
       "mask_cost_all": 0.0,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "inert"
     },
     "5": {
@@ -187,10 +212,15 @@
       "kv_transport_long": null,
       "readability_long": null,
       "faithfulness_long": null,
+      "readability_long_mlp": null,
+      "faithfulness_long_mlp": null,
       "monitor_rows_long": null,
       "mask_cost_short": 0.0,
       "mask_cost_long": null,
       "mask_cost_all": 0.0,
+      "mask_cost_long_condition": null,
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "terminal_inert"
     }
   },
@@ -200,7 +230,8 @@
       "kv_transport_short": 0.015,
       "kv_transport_long": null,
       "kv_mask_cost_short": -0.010000000000000009,
-      "kv_mask_cost_long": null
+      "kv_mask_cost_long": null,
+      "kv_mask_cost_long_ci95": null
     }
   },
   "tails": {
@@ -209,6 +240,7 @@
     "kv_all_transport_long": null,
     "state_all_transport_long": null,
     "mask_all_cost_long": null,
+    "mask_all_cost_long_ci95": null,
     "mean_all_cost_long": null,
     "mask_even_cost_long": null,
     "mask_odd_cost_long": null
@@ -232,6 +264,16 @@
     "c4_readability_dissociated_from_faithfulness": null,
     "c4_most_readable_slot": null,
     "c4_spearman": null,
+    "c4_mlp_readability_dissociated_from_faithfulness": null,
+    "c4_mlp_most_readable_slot": null,
+    "c4_mlp_spearman": null,
+    "c4_families_agree": null,
+    "c4b_readable_unfaithful_slot_exists": null,
+    "c4b_slots": null,
+    "c4b_mlp_readable_unfaithful_slot_exists": null,
+    "c4b_mlp_slots": null,
+    "c4b_both_families": null,
+    "c4b_both_slots": null,
     "c5_carriers_necessary": null,
     "c5_carrier_costs_long": {},
     "register_position_0": null,
@@ -254,6 +296,6 @@
     "register_position_0": null,
     "summary": "No thought carries a value on this pool; nothing here is monitorable through the thoughts (one-step chains; no long profile)."
   },
-  "created_at_utc": "2026-10-12T20:03:01.290982+00:00",
+  "created_at_utc": "2026-10-12T21:08:53.249651+00:00",
   "smoke": false
 }

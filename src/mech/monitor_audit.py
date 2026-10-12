@@ -286,6 +286,10 @@ def checks_from(card: dict, carriers: list[int]) -> dict:
     c3 = None if not evaluated else all(evaluated)
     c4, most_readable, rho = _c4([slots[str(s)]["readability_long"] for s in SLOTS], [slots[str(s)]["faithfulness_long"] for s in SLOTS])
     c4_mlp, most_readable_mlp, rho_mlp = _c4([slots[str(s)]["readability_long_mlp"] for s in SLOTS], [slots[str(s)]["faithfulness_long_mlp"] for s in SLOTS])
+    # C4b (ledger §124 addendum): a readable-but-unfaithful slot exists; "both" requires the same slot under both families
+    ru_ridge = _readable_unfaithful([slots[str(s)]["readability_long"] for s in SLOTS], [slots[str(s)]["faithfulness_long"] for s in SLOTS])
+    ru_mlp = _readable_unfaithful([slots[str(s)]["readability_long_mlp"] for s in SLOTS], [slots[str(s)]["faithfulness_long_mlp"] for s in SLOTS])
+    ru_both = None if ru_ridge is None or ru_mlp is None else sorted(set(ru_ridge) & set(ru_mlp))
     costs = {str(s): slots[str(s)]["mask_cost_long"] for s in carriers}
     c5 = None if not carriers or any(v is None for v in costs.values()) else all(v >= NECESSARY_MIN_COST for v in costs.values())
     register_cost = card["registers"]["position_0"]["kv_mask_cost_long"]
@@ -295,8 +299,18 @@ def checks_from(card: dict, carriers: list[int]) -> dict:
             "c4_readability_dissociated_from_faithfulness": c4, "c4_most_readable_slot": most_readable, "c4_spearman": rho,
             "c4_mlp_readability_dissociated_from_faithfulness": c4_mlp, "c4_mlp_most_readable_slot": most_readable_mlp, "c4_mlp_spearman": rho_mlp,
             "c4_families_agree": None if c4 is None or c4_mlp is None else c4 == c4_mlp,
+            "c4b_readable_unfaithful_slot_exists": None if ru_ridge is None else bool(ru_ridge), "c4b_slots": ru_ridge,
+            "c4b_mlp_readable_unfaithful_slot_exists": None if ru_mlp is None else bool(ru_mlp), "c4b_mlp_slots": ru_mlp,
+            "c4b_both_families": None if ru_both is None else bool(ru_both), "c4b_both_slots": ru_both,
             "c5_carriers_necessary": c5, "c5_carrier_costs_long": costs,
             "register_position_0": _ge(register_cost, REGISTER_MIN_COST), "register_cost_long": register_cost}
+
+
+def _readable_unfaithful(readability: list, faithfulness: list) -> list | None:
+    """Slots a probe reads at ≥ READABLE_MIN whose alarm is confirmed at most INERT_MAX_TRANSPORT of the time."""
+    if all(r is None for r in readability):
+        return None
+    return [s for s, r, f in zip(SLOTS, readability, faithfulness) if r is not None and r >= READABLE_MIN and (f or 0.0) <= INERT_MAX_TRANSPORT]
 
 
 def _c4(readability: list, faithfulness: list) -> tuple:
@@ -371,8 +385,9 @@ def card_markdown(card: dict) -> str:
               f"mask_all cost long {_f(t['mask_all_cost_long'], pct=True)} pts, mean_all {_f(t['mean_all_cost_long'], pct=True)} pts", "", "## Checks", ""]
     c = card["checks"]
     for key in ("c1_no_single_site_transport_on_short_chains", "c2_chain_length_gate", "c3_terminal_inert_unfaithful_unnecessary",
-                "c4_readability_dissociated_from_faithfulness", "c4_mlp_readability_dissociated_from_faithfulness", "c5_carriers_necessary", "register_position_0"):
-        lines.append(f"- {key}: **{c.get(key)}**")
+                "c4_readability_dissociated_from_faithfulness", "c4_mlp_readability_dissociated_from_faithfulness",
+                "c4b_readable_unfaithful_slot_exists", "c4b_mlp_readable_unfaithful_slot_exists", "c4b_both_families", "c5_carriers_necessary", "register_position_0"):
+        lines.append(f"- {key}: **{c.get(key)}**" + (f" (slots {c.get('c4b_both_slots')})" if key == "c4b_both_families" else ""))
     lines.append(f"- details: max short transport {_f(c['c1_max_short_transport'])}, max long transport {_f(c['c2_max_long_transport'])}, "
                  f"most readable slot ridge {c['c4_most_readable_slot']} / mlp {c.get('c4_mlp_most_readable_slot')}, spearman ridge {_f(c['c4_spearman'], 2)} / mlp {_f(c.get('c4_mlp_spearman'), 2)}, "
                  f"carrier costs {c['c5_carrier_costs_long']}, register cost {_f(c['register_cost_long'], pct=True)} pts")
@@ -396,7 +411,7 @@ def card_row(card: dict) -> dict:
             "mask_cost_long": {str(s): card["slots"][str(s)]["mask_cost_long"] for s in SLOTS},
             "mask_cost_long_ci95": {str(s): card["slots"][str(s)].get("mask_cost_long_ci95") for s in SLOTS},
             "register_cost_long": card["registers"]["position_0"]["kv_mask_cost_long"],
-            "checks": {k: card["checks"][k] for k in card["checks"] if k.startswith("c") and not any(x in k for x in ("max", "most", "spearman", "costs"))},
+            "checks": {k: card["checks"][k] for k in card["checks"] if k.startswith("c") and not any(x in k for x in ("max", "most", "spearman", "costs", "slots"))},
             "fingerprints": card.get("fingerprints", {})}
 
 

@@ -5,14 +5,14 @@
 - environment: Kaggle GPU (§120 run) · float16 · batch 32 · torch None · transformers None
 - gate: accuracy — vs published — (None)
 
-| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability | faithfulness | mask cost short (pts) | mask cost long (pts) |
+| slot | role | transport short | transport long [95% CI] | K/V short | K/V long | readability ridge / mlp | faithfulness ridge / mlp | mask cost short (pts) | mask cost long (pts) [95% CI] |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | weak | 0.000 | 0.038 [0.02, 0.05] | 0.444 | 0.130 | 0.25 | 0.02 | 4.4 | 58.6 |
-| 1 | carrier | 0.023 | 0.191 [0.16, 0.22] | 0.000 | 0.039 | 0.62 | 0.21 | 0.4 | 10.6 |
-| 2 | store | 0.000 | 0.042 [0.03, 0.06] | 0.021 | 0.185 | 0.69 | 0.02 | 0.8 | 11.4 |
-| 3 | carrier | 0.008 | 0.247 [0.22, 0.28] | 0.000 | 0.041 | 0.72 | 0.28 | 0.0 | 9.1 |
-| 4 | store | 0.000 | 0.044 [0.03, 0.06] | 0.006 | 0.229 | 0.74 | 0.03 | 0.4 | 8.4 |
-| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.000 | 0.044 | 0.57 | 0.00 | 0.0 | 3.0 |
+| 0 | weak | 0.000 | 0.038 [0.02, 0.05] | 0.444 | 0.130 | 0.25 / 0.29 | 0.02 / 0.02 | 4.4 | 58.6 |
+| 1 | carrier | 0.023 | 0.191 [0.16, 0.22] | 0.000 | 0.039 | 0.62 / 0.61 | 0.21 / 0.20 | 0.4 | 10.6 |
+| 2 | store | 0.000 | 0.042 [0.03, 0.06] | 0.021 | 0.185 | 0.69 / 0.56 | 0.02 / 0.01 | 0.8 | 11.4 |
+| 3 | carrier | 0.008 | 0.247 [0.22, 0.28] | 0.000 | 0.041 | 0.72 / 0.67 | 0.28 / 0.29 | 0.0 | 9.1 |
+| 4 | store | 0.000 | 0.044 [0.03, 0.06] | 0.006 | 0.229 | 0.74 / 0.62 | 0.03 / 0.03 | 0.4 | 8.4 |
+| 5 | terminal_inert | 0.000 | 0.000 [0.00, 0.00] | 0.000 | 0.044 | 0.57 / 0.44 | 0.00 / 0.00 | 0.0 | 3.0 |
 
 - position-0 K/V (question register): transport short 0.444, long 0.130; mask cost long 58.6 pts
 - tails: kv_all transport all 0.624 (other 0.008), long 0.729; mask_all cost long 76.0 pts, mean_all 59.3 pts
@@ -23,9 +23,13 @@
 - c2_chain_length_gate: **True**
 - c3_terminal_inert_unfaithful_unnecessary: **True**
 - c4_readability_dissociated_from_faithfulness: **False**
+- c4_mlp_readability_dissociated_from_faithfulness: **False**
+- c4b_readable_unfaithful_slot_exists: **True**
+- c4b_mlp_readable_unfaithful_slot_exists: **True**
+- c4b_both_families: **True** (slots [2, 4, 5])
 - c5_carriers_necessary: **False**
 - register_position_0: **True**
-- details: max short transport 0.023, max long transport 0.247, most readable slot 4, spearman(readability, faithfulness) 0.66, carrier costs {'1': 0.10646387832699622, '3': 0.09125475285171103}, register cost 58.6 pts
+- details: max short transport 0.023, max long transport 0.247, most readable slot ridge 4 / mlp 3, spearman ridge 0.66 / mlp 0.77, carrier costs {'1': 0.10646387832699622, '3': 0.09125475285171103}, register cost 58.6 pts
 
 ## Verdict
 

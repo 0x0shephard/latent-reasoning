@@ -147,10 +147,15 @@
       "kv_transport_long": 0.21359223300970873,
       "readability_long": 0.05392156862745098,
       "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.03431372549019608,
+      "faithfulness_long_mlp": 0.0,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.04895104895104896,
       "mask_cost_long": 0.1869918699186992,
       "mask_cost_all": 0.1484375,
+      "mask_cost_long_condition": "mask_0",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "register"
     },
     "1": {
@@ -166,10 +171,15 @@
       "kv_transport_long": 0.0048543689320388345,
       "readability_long": 0.3235294117647059,
       "faithfulness_long": 0.09090909090909091,
+      "readability_long_mlp": 0.3627450980392157,
+      "faithfulness_long_mlp": 0.08108108108108109,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.06293706293706292,
       "mask_cost_long": 0.12195121951219515,
       "mask_cost_all": 0.10546875,
+      "mask_cost_long_condition": "mask_1",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "weak"
     },
     "2": {
@@ -185,10 +195,15 @@
       "kv_transport_long": 0.13106796116504854,
       "readability_long": 0.4117647058823529,
       "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.22549019607843138,
+      "faithfulness_long_mlp": 0.0,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.04895104895104896,
       "mask_cost_long": 0.0921409214092141,
       "mask_cost_all": 0.064453125,
+      "mask_cost_long_condition": "mask_2",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "weak"
     },
     "3": {
@@ -204,10 +219,15 @@
       "kv_transport_long": 0.0,
       "readability_long": 0.4019607843137255,
       "faithfulness_long": 0.2926829268292683,
+      "readability_long_mlp": 0.4166666666666667,
+      "faithfulness_long_mlp": 0.3058823529411765,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.006993006993006978,
       "mask_cost_long": 0.06504065040650409,
       "mask_cost_all": 0.046875,
+      "mask_cost_long_condition": "mean_3",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "carrier"
     },
     "4": {
@@ -223,10 +243,15 @@
       "kv_transport_long": 0.32524271844660196,
       "readability_long": 0.5147058823529411,
       "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.27450980392156865,
+      "faithfulness_long_mlp": 0.0,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.0,
       "mask_cost_long": 0.09756097560975613,
       "mask_cost_all": 0.0703125,
+      "mask_cost_long_condition": "mask_4",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "store"
     },
     "5": {
@@ -242,10 +267,15 @@
       "kv_transport_long": 0.0,
       "readability_long": 0.3627450980392157,
       "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.4019607843137255,
+      "faithfulness_long_mlp": 0.0,
       "monitor_rows_long": 204,
       "mask_cost_short": 0.0,
       "mask_cost_long": 0.008130081300812997,
       "mask_cost_all": 0.005859375,
+      "mask_cost_long_condition": "mask_5",
+      "mask_cost_long_ci95": null,
+      "mask_cost_short_ci95": null,
       "role": "terminal_inert"
     }
   },
@@ -255,7 +285,8 @@
       "kv_transport_short": 0.05078125,
       "kv_transport_long": 0.21359223300970873,
       "kv_mask_cost_short": 0.04895104895104896,
-      "kv_mask_cost_long": 0.1869918699186992
+      "kv_mask_cost_long": 0.1869918699186992,
+      "kv_mask_cost_long_ci95": null
     }
   },
   "tails": {
@@ -264,6 +295,7 @@
     "kv_all_transport_long": 0.6747572815533981,
     "state_all_transport_long": 0.5436893203883495,
     "mask_all_cost_long": 0.2710027100271003,
+    "mask_all_cost_long_ci95": null,
     "mean_all_cost_long": 0.23306233062330625,
     "mask_even_cost_long": 0.2872628726287263,
     "mask_odd_cost_long": 0.15989159891598917
@@ -292,6 +324,24 @@
     "c4_readability_dissociated_from_faithfulness": true,
     "c4_most_readable_slot": 4,
     "c4_spearman": -0.13522468075656266,
+    "c4_mlp_readability_dissociated_from_faithfulness": false,
+    "c4_mlp_most_readable_slot": 3,
+    "c4_mlp_spearman": 0.6761234037828133,
+    "c4_families_agree": false,
+    "c4b_readable_unfaithful_slot_exists": true,
+    "c4b_slots": [
+      2,
+      4,
+      5
+    ],
+    "c4b_mlp_readable_unfaithful_slot_exists": true,
+    "c4b_mlp_slots": [
+      5
+    ],
+    "c4b_both_families": true,
+    "c4b_both_slots": [
+      5
+    ],
     "c5_carriers_necessary": false,
     "c5_carrier_costs_long": {
       "3": 0.06504065040650409
@@ -317,6 +367,6 @@
     "register_position_0": true,
     "summary": "Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [5]."
   },
-  "created_at_utc": "2026-10-12T20:03:00.000015+00:00",
+  "created_at_utc": "2026-10-12T21:08:30.476749+00:00",
   "smoke": false
 }

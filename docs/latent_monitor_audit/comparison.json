@@ -58,12 +58,25 @@
         "4": 0.04562737642585546,
         "5": 0.0076045627376425395
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.034220532319391594,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": false,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": true,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": false
       },
       "fingerprints": {
@@ -133,12 +146,25 @@
         "4": 0.043360433604336,
         "5": 0.010840108401084014
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.043360433604336,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": true,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": false,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": false
       },
       "fingerprints": {
@@ -210,12 +236,25 @@
         "4": 0.1368821292775665,
         "5": 0.019011406844106404
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.376425855513308,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": true,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": false,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": true
       },
       "fingerprints": {
@@ -287,12 +326,25 @@
         "4": 0.1368821292775665,
         "5": 0.019011406844106404
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.376425855513308,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": true,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": false,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": true
       },
       "fingerprints": {
@@ -362,12 +414,25 @@
         "4": 0.09756097560975613,
         "5": 0.008130081300812997
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.1869918699186992,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": true,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": false,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": false
       },
       "fingerprints": {
@@ -415,12 +480,25 @@
         "4": null,
         "5": null
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": null,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": null,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": null,
+        "c4_mlp_readability_dissociated_from_faithfulness": null,
+        "c4_families_agree": null,
+        "c4b_readable_unfaithful_slot_exists": null,
+        "c4b_mlp_readable_unfaithful_slot_exists": null,
+        "c4b_both_families": null,
         "c5_carriers_necessary": null
       },
       "fingerprints": {
@@ -488,12 +566,25 @@
         "4": 0.08365019011406849,
         "5": 0.03041825095057038
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.5855513307984791,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": false,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": true,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": false
       },
       "fingerprints": {
@@ -565,12 +656,25 @@
         "4": 0.05691056910569103,
         "5": 0.01897018970189701
       },
+      "mask_cost_long_ci95": {
+        "0": null,
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null
+      },
       "register_cost_long": 0.3252032520325203,
       "checks": {
         "c1_no_single_site_transport_on_short_chains": true,
         "c2_chain_length_gate": true,
         "c3_terminal_inert_unfaithful_unnecessary": true,
         "c4_readability_dissociated_from_faithfulness": false,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": true,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
         "c5_carriers_necessary": false
       },
       "fingerprints": {
