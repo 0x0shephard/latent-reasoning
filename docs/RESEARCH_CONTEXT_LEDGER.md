@@ -6035,3 +6035,23 @@ holds), `backup_route` (carriers exist, C5 fails), `no_transport` (no carrier),
 GPT-2 ≈ 20 min per pool (twins 7 + 8 min, masking 2 min, gate from the attached
 dataset); 1B ≈ 45 min per pool plus the gate. Planned: GPT-2 × {gsm8k_test, svamp,
 P100 default}, CODI-1B and SIM-CoT × gsm8k_test ≈ 3.5 h of the 6.0 h left this week.
+
+### §123 addendum: backfill of the three §120 runs, and the kernels launched (2026-10-12)
+
+The driver assembled cards from the §120 outputs without a GPU
+(`--from-existing`; `docs/latent_monitor_audit/*.card.{json,md}`, `comparison.md`).
+The fixed thresholds reproduce every hand-made call of §121:
+
+| model | carriers (state ≥ 0.15, long) | stores (K/V ≥ 0.15, long) | placement | regime | register cost (pts) |
+|---|---|---|---|---|---|
+| GPT-2 | {1, 3} | {2, 4} | {1, 3} | critical_path | 37.6 |
+| CODI-1B | {3} | {4} | {3} | backup_route | 3.4 |
+| SIM-CoT | {1, 3} | {2, 4} | {1, 3} | backup_route (slot 3 costs 9.1 < 10) | 58.6 |
+
+C1–C4 hold on all three; C5 holds at GPT-2 only. The store positions are §109's and
+§115's pairings, now derived rather than read off. The comparison is consistent (no
+flags) across the three models, as it should be: the flags compare pools and
+environments of one model. Code at b4a4b58; notebooks pinned to it. Kaggle kernels
+pushed: `lma-codi-gpt-2-on-gsm8k-test` and `lma-codi-gpt-2-on-svamp` (the two-session
+limit); CODI-1B and SIM-CoT on `gsm8k_test`, and GPT-2 on the default pool for the GPU
+invariance check, follow as slots free. Predictions P1–P5 stand as written.

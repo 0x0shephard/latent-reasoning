@@ -29,8 +29,14 @@ TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "t
          "tests/test_chain_pools.py", "tests/test_monitor_audit.py", "tests/test_latent_monitor_audit_runner.py"]
 
 
+def title(model: str, pool: str) -> str:
+    return f"LMA {MODELS[model]['title']} on {pool}"
+
+
 def slug(model: str, pool: str) -> str:
-    return f"lma-{model}-{pool}".replace("_", "-")
+    """Kaggle derives the kernel slug from the title; the id must match it or pushes warn and status lookups fail."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", title(model, pool).lower()).strip("-")
 
 
 def build(model: str, pool: str) -> Path:
@@ -162,7 +168,7 @@ print("Reminder: publish this notebook's output as a dataset (Output tab -> New 
     name = f"kaggle_lma_{model}_{pool}.ipynb"
     nbf.write(nb, out_dir / name)
     (out_dir / "kernel-metadata.json").write_text(json.dumps({
-        "id": f"{KAGGLE_USER}/{slug(model, pool)}", "title": f"LMA {spec['title']} on {pool}", "code_file": name,
+        "id": f"{KAGGLE_USER}/{slug(model, pool)}", "title": title(model, pool), "code_file": name,
         "language": "python", "kernel_type": "notebook", "is_private": True, "enable_gpu": True, "enable_internet": True,
         "dataset_sources": spec["datasets"], "competition_sources": [], "kernel_sources": [], "model_sources": []}, indent=2) + "\n")
     return out_dir

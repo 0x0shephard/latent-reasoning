@@ -1,5 +1,5 @@
 {
-  "id": "jonraza15/lma-simcot-gsm8k-test",
+  "id": "jonraza15/lma-sim-cot-codi-1b-on-gsm8k-test",
   "title": "LMA SIM-CoT CODI-1B on gsm8k_test",
   "code_file": "kaggle_lma_simcot_gsm8k_test.ipynb",
   "language": "python",

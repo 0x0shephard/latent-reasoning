@@ -45,7 +45,9 @@ def test_notebook_pinned_and_complete(model, pool):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"{model}-{pool}-cell-{i}")
     meta = json.loads((path.parent / "kernel-metadata.json").read_text())
-    assert meta["id"] == f"jonraza15/lma-{model}-{pool}".replace("_", "-") and meta["code_file"] == path.name
+    import re
+    assert meta["id"] == "jonraza15/" + re.sub(r"[^a-z0-9]+", "-", meta["title"].lower()).strip("-") and meta["code_file"] == path.name
+    assert meta["id"] == {"gpt2": "jonraza15/lma-codi-gpt-2-on-", "codi1b": "jonraza15/lma-codi-llama-1b-on-", "simcot": "jonraza15/lma-sim-cot-codi-1b-on-"}[model] + pool.replace("_", "-")
     assert meta["enable_gpu"] and meta["enable_internet"] and (meta["dataset_sources"] == ["dannyism11/tsv-ccc"]) == (model == "gpt2")
 
 

@@ -1,5 +1,5 @@
 {
-  "id": "jonraza15/lma-gpt2-gsm8k-aug-train",
+  "id": "jonraza15/lma-codi-gpt-2-on-gsm8k-aug-train",
   "title": "LMA CODI GPT-2 on gsm8k_aug_train",
   "code_file": "kaggle_lma_gpt2_gsm8k_aug_train.ipynb",
   "language": "python",
