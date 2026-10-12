@@ -91,11 +91,15 @@ def analyze(run_dir: Path, *, families=("ridge", "mlp"), folds: int = FOLDS, see
         entry = {"rows": int(idx.numel()), "classes": classes, "class_counts": {str(k): v for k, v in sorted(counts.items())}, "majority_baseline": majority, "slots": {}}
         if len(counts) < 2:
             entry["note"] = "one class only"; report["attributes"][name] = entry; continue
+        present = sorted(counts)
+        entry["balanced_baseline"] = 1.0 / len(present)
         for s in range(slots):
             entry["slots"][str(s)] = {}
             for family in families:
                 pred = classify(states[idx, s], y, classes, family=family, folds=folds, seed=seed)
                 entry["slots"][str(s)][family] = float((pred == y).double().mean())
+                # balanced accuracy (mean per-class recall) is the honest number under class imbalance
+                entry["slots"][str(s)][f"{family}_balanced"] = float(sum(float((pred[y == c] == c).double().mean()) for c in present) / len(present))
         report["attributes"][name] = entry
     return report
 
@@ -105,8 +109,8 @@ def markdown(report: dict, monitor_long: dict | None = None) -> str:
     for name, e in report["attributes"].items():
         if "note" in e:
             lines.append(f"- {name}: {e['note']} ({e['rows']} rows)"); continue
-        lines += [f"**{name}** (majority baseline {e['majority_baseline']:.2f}, classes {e['class_counts']})", "",
-                  "| slot | ridge | mlp |" + (" penultimate readability ridge / mlp |" if monitor_long else ""), "|---|---|---|" + ("---|" if monitor_long else "")]
+        lines += [f"**{name}** (majority baseline {e['majority_baseline']:.2f}, balanced baseline {e.get('balanced_baseline', 0):.2f}, classes {e['class_counts']})", "",
+                  "| slot | ridge acc / balanced | mlp acc / balanced |" + (" penultimate readability ridge / mlp |" if monitor_long else ""), "|---|---|---|" + ("---|" if monitor_long else "")]
         for s, fam in e["slots"].items():
             extra = ""
             if monitor_long:
@@ -114,7 +118,8 @@ def markdown(report: dict, monitor_long: dict | None = None) -> str:
                 mlp = (m.get("families") or {}).get("mlp", {})
                 f = lambda v: "—" if v is None else f"{v:.2f}"
                 extra = f" {f(m.get('readability_long'))} / {f(mlp.get('readability_long'))} |"
-            lines.append(f"| {s} | {fam.get('ridge', float('nan')):.2f} | {fam.get('mlp', float('nan')):.2f} |" + extra)
+            g = lambda k: f"{fam[k]:.2f}" if k in fam else "—"
+            lines.append(f"| {s} | {g('ridge')} / {g('ridge_balanced')} | {g('mlp')} / {g('mlp_balanced')} |" + extra)
         lines.append("")
     return "\n".join(lines)
 

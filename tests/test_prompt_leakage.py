@@ -45,6 +45,7 @@ def test_analyze_separates_prompt_attributes_by_slot(tmp_path):
     r = analyze(tmp_path, families=("ridge",), folds=5)
     op, long = r["attributes"]["first_operator"], r["attributes"]["long_chain"]
     assert op["classes"] == 4 and op["slots"]["0"]["ridge"] > 0.9 and op["slots"]["2"]["ridge"] < 0.6
+    assert op["slots"]["0"]["ridge_balanced"] > 0.9 and op["balanced_baseline"] == 0.25
     assert long["slots"]["1"]["ridge"] > 0.9 and long["slots"]["2"]["ridge"] < max(0.75, long["majority_baseline"] + 0.15)
     text = markdown(r)
     assert "**first_operator**" in text and "| 0 |" in text
