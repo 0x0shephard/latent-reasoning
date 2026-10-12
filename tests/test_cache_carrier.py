@@ -113,3 +113,30 @@ def test_native_path_recording_and_self_donor_identity():
     swapped = generate_under(model, tokenizer, questions, latent_iterations=6, batch_size=2, device=CPU, max_new_tokens=4,
                              cache_edits=[CacheEdit(s, (0, 1), True, True) for s in range(6)], donor=donor_view(traj, [1, 2, 0]))
     assert len(swapped) == 3
+
+
+def test_kv_mask_hides_a_slot_and_mean_ablation_uses_hidden_donors():
+    from src.models.official_codi import _PadAwareStepper
+    from tests.test_official_codi_family import _tiny_llama
+
+    model, tokenizer = _tiny_llama(True), CharTokenizer()
+    batch = collate_official_codi_kv_rows(tokenizer, ROWS, bot_token_id=model.bot_id)
+    with torch.no_grad():
+        base, _, rec = latent_path(model, batch, latent_positions=6, record=True)
+        masked3, _, _ = latent_path(model, batch, latent_positions=6, mask_slots=[3])
+        masked5, _, _ = latent_path(model, batch, latent_positions=6, mask_slots=[5])
+        mean = rec.states.mean(0)   # [S, D]
+        ablated1, _, _ = latent_path(model, batch, latent_positions=6, hidden_donors={1: mean[1].unsqueeze(0).expand(len(ROWS), -1)})
+    assert not torch.allclose(base, masked3, atol=1e-6)      # hiding a feeding slot's K/V changes the readout
+    assert not torch.allclose(base, masked5, atol=1e-6)      # the terminal slot's K/V are read by the answer tokens
+    assert not torch.allclose(base, ablated1, atol=1e-6)
+    # the GPT-2 wrapper (not pad-aware) can still mask: the path is forced on
+    gpt2 = _tiny_model().eval()
+    batch2 = collate_official_codi_kv_rows(tokenizer, ROWS, bot_token_id=gpt2.bot_id)
+    with torch.no_grad():
+        b2, _, _ = latent_path(gpt2, batch2, latent_positions=6)
+        m2, _, _ = latent_path(gpt2, batch2, latent_positions=6, mask_slots=[1])
+    assert not torch.allclose(b2, m2, atol=1e-6)
+    stepper = _PadAwareStepper(gpt2, batch2.student_question_mask)
+    with pytest.raises(RuntimeError):
+        stepper.block_last()

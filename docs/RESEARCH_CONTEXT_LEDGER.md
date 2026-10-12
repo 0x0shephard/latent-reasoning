@@ -5561,3 +5561,47 @@ The GPT-2 code path is unchanged since those runs (pad-aware off, 12-layer group
 rerun should reproduce the recorded figures up to GPU nondeterminism in rare argmax ties;
 any difference beyond a few thousandths is to be recorded. The notebook's intervals, not
 the earlier point estimates, go into the paper's table.
+
+## 120. Preregistered: monitors and masks. Readability versus faithfulness of linear monitors on the thoughts, and the necessity of each thought under masking, on all three models
+
+Designed 2026-10-12 after §119. No training. Two instruments, one notebook per model
+(GPT-2 with the official reproduction dataset attached; CODI-1B and SIM-CoT with their
+gates produced in place), run through the Kaggle API from this machine.
+
+### Instrument A: monitor faithfulness (`scripts/analyze_monitor_faithfulness.py`)
+
+On the long-chain and all-chain twin runs of each model (their saved thought states and
+first-token predictions), for every slot: a ridge probe from the slot's state to the tied
+embedding of a target number token, decoded by nearest numeric token, five folds assigned
+by pair. Targets: the answer's first token and the penultimate intermediate result. The
+model's own top-5 readout hit is reported beside it. **Readability** is the probe's
+out-of-fold accuracy. **Faithfulness** is the share of rows where, after a swap at that
+slot, the probe reads the twin's value correctly *and* the answer became the twin's: what
+a monitor's alarm would be worth. **Transport** is the swap result alone.
+
+Predictions, per model: readability is high at several slots and roughly flat across the
+odd ones; faithfulness is near zero at the terminal slot in every model and peaks where
+transport peaks (GPT-2 slots 1 and 3, CODI-1B slot 3, SIM-CoT slots 1 and 3); on short
+chains faithfulness is low everywhere while readability is not. The dissociation
+"readable, unfaithful" at the terminal slot is predicted in all three.
+
+### Instrument B: masking (`scripts/run_codi_masking_audit.py`, contract `official_codi_masking_audit_v1`)
+
+Same 512-question pool as §108. Per slot, two masks: `mean` replaces the slot's output
+state by the pool mean; `mask` hides the slot's K/V from every later position through the
+attention mask (on the mask-carrying path; forced on for GPT-2 and recorded as such, the
+baseline measured on the same path). Tails: all slots, even, odd. Outcomes: first-token
+accuracy drop against the unmasked baseline and change rate, split by chain length at
+three steps. Checks: **K1** on short chains no single mask costs more than 5 points;
+**K2** on long chains masking the carrying slot(s) costs at least 10 points (GPT-2: slots
+1 and 3; CODI-1B: slot 3; SIM-CoT: slots 1 and 3); **K3** the terminal slot costs at most
+2 points anywhere. Reported, not gated: the position-0 mask on short chains, predicted to
+cost SIM-CoT ≥ 10 points (its question register) and the others little.
+
+### Reading rules
+
+A passes with K1–K3 passing establishes necessity and sufficiency together: the thoughts
+that carry values are the ones the answer needs, only on problems that need them, and the
+terminal thought is neither. A readable-unfaithful terminal slot in all three models is
+the figure the monitoring claim rests on. K2 failing means the model has redundant
+carriers (masking one is compensated), which the swap results would then have overstated.

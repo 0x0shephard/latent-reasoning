@@ -193,13 +193,24 @@ class _PadAwareStepper:
     """Carries the attention mask and explicit position ids across incremental
     forwards (``None`` inputs when the model is not pad-aware, i.e. the released path)."""
 
-    def __init__(self, model, attention_mask: torch.Tensor | None):
-        self.active = bool(getattr(model, "pad_aware_generation", False)) and attention_mask is not None
+    def __init__(self, model, attention_mask: torch.Tensor | None, *, force_active: bool = False):
+        self.active = (bool(getattr(model, "pad_aware_generation", False)) or force_active) and attention_mask is not None
+        self.blocked: list[int] = []
         if self.active:
             self.mask = attention_mask.to(torch.long)
             positions = (self.mask.cumsum(-1) - 1).clamp_min(0)
             self.prompt_positions = positions
             self.next_position = positions[:, -1:] + 1
+
+    def block_last(self) -> int:
+        """Hide the newest cache position from every later step (a K/V mask); returns
+        its column.  Requires the mask-carrying path."""
+        if not self.active:
+            raise RuntimeError("masking a cache position needs the mask-carrying path (pad_aware_generation or force_active)")
+        column = int(self.mask.shape[1] - 1)
+        self.mask[:, column] = 0
+        self.blocked.append(column)
+        return column
 
     def prompt_kwargs(self) -> dict:
         return {"position_ids": self.prompt_positions} if self.active else {}

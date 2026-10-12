@@ -73,15 +73,16 @@ def apply_edits(cache: Any, slot: int, edits: Sequence[CacheEdit], donor: Trajec
 
 def latent_path(model, batch, *, latent_positions: int, hidden_donors: dict[int, torch.Tensor] | None = None,
                 cache_edits: Sequence[CacheEdit] = (), donor: Trajectory | None = None, rows: slice = slice(None),
-                record: bool = False):
+                record: bool = False, mask_slots: Sequence[int] = ()):
     """Teacher-forced latent path to the answer cue with optional route swaps.
 
     ``hidden_donors[slot]`` is ``[N, D]`` (indexed by ``rows``) and replaces the state
     fed to the projector at that slot.  ``cache_edits`` replace K/V of the position
-    that slot wrote.  Returns ``(first-token logits [B, V], gold first token [B],
-    recorded Trajectory or None)``.
+    that slot wrote.  ``mask_slots`` hide those slots' K/V from every later position
+    through the attention mask (a necessity test; forces the mask-carrying path).
+    Returns ``(first-token logits [B, V], gold first token [B], recorded Trajectory or None)``.
     """
-    stepper = _PadAwareStepper(model, batch.student_question_mask)
+    stepper = _PadAwareStepper(model, batch.student_question_mask, force_active=bool(mask_slots))
     encoded = model.codi(input_ids=batch.student_question_ids, attention_mask=batch.student_question_mask,
                          use_cache=True, output_hidden_states=True, return_dict=True, **stepper.prompt_kwargs(),
                          **prompt_logits_kwargs(model))
@@ -92,6 +93,8 @@ def latent_path(model, batch, *, latent_positions: int, hidden_donors: dict[int,
         out = model.codi(inputs_embeds=latent, past_key_values=cache, use_cache=True,
                          output_hidden_states=True, return_dict=True, **stepper.step_kwargs(1))
         cache = apply_edits(out.past_key_values, position, cache_edits, donor, rows)
+        if position in mask_slots:
+            stepper.block_last()
         state = out.hidden_states[-1][:, -1, :]
         if record:
             k, v = _last_position_kv(cache)
@@ -130,14 +133,15 @@ def record_trajectory(model, tokenizer, rows: Sequence[dict], *, latent_position
 @torch.no_grad()
 def outcomes_under(model, tokenizer, rows: Sequence[dict], *, latent_positions: int, batch_size: int, device,
                    hidden_donors: dict[int, torch.Tensor] | None = None, cache_edits: Sequence[CacheEdit] = (),
-                   donor: Trajectory | None = None) -> torch.Tensor:
-    """Predicted first answer token for every row under the given route swaps."""
+                   donor: Trajectory | None = None, mask_slots: Sequence[int] = ()) -> torch.Tensor:
+    """Predicted first answer token for every row under the given route swaps or masks."""
     model.eval(); preds = []
     for start in range(0, len(rows), batch_size):
         batch = collate_official_codi_kv_rows(tokenizer, rows[start:start + batch_size], bot_token_id=model.bot_id,
                                               enforce_answer_eligibility=False).to(device)
         logits, _, _ = latent_path(model, batch, latent_positions=latent_positions, hidden_donors=hidden_donors,
-                                   cache_edits=cache_edits, donor=donor, rows=slice(start, start + batch_size))
+                                   cache_edits=cache_edits, donor=donor, rows=slice(start, start + batch_size),
+                                   mask_slots=mask_slots)
         preds.append(logits.argmax(-1).cpu())
     return torch.cat(preds)
 
