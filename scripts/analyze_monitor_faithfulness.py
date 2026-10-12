@@ -43,7 +43,7 @@ def numeric_vocabulary(tokenizer, embeddings: torch.Tensor, *, limit: int = 1000
     for token in range(embeddings.shape[0]):
         text = tokenizer.decode([token])
         stripped = text.strip()
-        if stripped.isdigit() and int(stripped) < limit and (stripped not in best or text.startswith(" ")):
+        if stripped.isascii() and stripped.isdigit() and int(stripped) < limit and (stripped not in best or text.startswith(" ")):
             best[stripped] = token
     strings = sorted(best, key=int)
     return torch.tensor([best[s] for s in strings]), strings

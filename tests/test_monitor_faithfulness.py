@@ -15,10 +15,11 @@ from scripts.analyze_monitor_faithfulness import (  # noqa: E402
 
 
 class NumTok:
-    """Tokens 0..19 decode to the integers 0..19; 20.. decode to letters."""
+    """Tokens 0..19 decode to the integers 0..19; 20 decodes to a superscript digit
+    (``str.isdigit`` is true for it, ``int`` fails); 21.. decode to letters."""
     def decode(self, ids):
         i = int(ids[0])
-        return str(i) if i < 20 else chr(97 + i - 20)
+        return str(i) if i < 20 else ("\u00b2" if i == 20 else chr(97 + i - 21))
 
 
 def test_numeric_vocabulary_and_ridge_roundtrip():
