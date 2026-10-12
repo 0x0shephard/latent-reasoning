@@ -45,8 +45,8 @@
     "transformers": "4.52.4",
     "peft": "0.15.2",
     "cuda": "12.8",
-    "from_existing": true,
-    "environment_source": "kernel card"
+    "environment_source": "kernel card",
+    "from_existing": true
   },
   "gate": {
     "accuracy": 0.4359363153904473,
@@ -154,8 +154,14 @@
       "mask_cost_long": 0.1869918699186992,
       "mask_cost_all": 0.1484375,
       "mask_cost_long_condition": "mask_0",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.14363143631436315,
+        0.23577235772357724
+      ],
+      "mask_cost_short_ci95": [
+        0.006993006993006993,
+        0.09090909090909091
+      ],
       "role": "register"
     },
     "1": {
@@ -178,8 +184,14 @@
       "mask_cost_long": 0.12195121951219515,
       "mask_cost_all": 0.10546875,
       "mask_cost_long_condition": "mask_1",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.07859078590785908,
+        0.16802168021680217
+      ],
+      "mask_cost_short_ci95": [
+        0.013986013986013986,
+        0.11188811188811189
+      ],
       "role": "weak"
     },
     "2": {
@@ -202,8 +214,14 @@
       "mask_cost_long": 0.0921409214092141,
       "mask_cost_all": 0.064453125,
       "mask_cost_long_condition": "mask_2",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.05962059620596206,
+        0.12737127371273713
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.1048951048951049
+      ],
       "role": "weak"
     },
     "3": {
@@ -226,8 +244,14 @@
       "mask_cost_long": 0.06504065040650409,
       "mask_cost_all": 0.046875,
       "mask_cost_long_condition": "mean_3",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.024390243902439025,
+        0.10569105691056911
+      ],
+      "mask_cost_short_ci95": [
+        -0.013986013986013986,
+        0.03496503496503497
+      ],
       "role": "carrier"
     },
     "4": {
@@ -250,8 +274,14 @@
       "mask_cost_long": 0.09756097560975613,
       "mask_cost_all": 0.0703125,
       "mask_cost_long_condition": "mask_4",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        0.05962059620596206,
+        0.13279132791327913
+      ],
+      "mask_cost_short_ci95": [
+        -0.027972027972027972,
+        0.027972027972027972
+      ],
       "role": "store"
     },
     "5": {
@@ -274,8 +304,14 @@
       "mask_cost_long": 0.008130081300812997,
       "mask_cost_all": 0.005859375,
       "mask_cost_long_condition": "mask_5",
-      "mask_cost_long_ci95": null,
-      "mask_cost_short_ci95": null,
+      "mask_cost_long_ci95": [
+        -0.008130081300813009,
+        0.024390243902439025
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
       "role": "terminal_inert"
     }
   },
@@ -286,7 +322,10 @@
       "kv_transport_long": 0.21359223300970873,
       "kv_mask_cost_short": 0.04895104895104896,
       "kv_mask_cost_long": 0.1869918699186992,
-      "kv_mask_cost_long_ci95": null
+      "kv_mask_cost_long_ci95": [
+        0.14363143631436315,
+        0.23577235772357724
+      ]
     }
   },
   "tails": {
@@ -295,7 +334,10 @@
     "kv_all_transport_long": 0.6747572815533981,
     "state_all_transport_long": 0.5436893203883495,
     "mask_all_cost_long": 0.2710027100271003,
-    "mask_all_cost_long_ci95": null,
+    "mask_all_cost_long_ci95": [
+      0.2222222222222222,
+      0.3252032520325203
+    ],
     "mean_all_cost_long": 0.23306233062330625,
     "mask_even_cost_long": 0.2872628726287263,
     "mask_odd_cost_long": 0.15989159891598917
@@ -311,9 +353,9 @@
     }
   },
   "stage_seconds": {
-    "twins_standard": 267.2,
-    "twins_long": 139.2,
-    "masking": 155.6
+    "twins_standard": 262.1,
+    "twins_long": 136.8,
+    "masking": 152.5
   },
   "checks": {
     "c1_no_single_site_transport_on_short_chains": true,
@@ -367,6 +409,6 @@
     "register_position_0": true,
     "summary": "Carrying thought(s) [3]; place a monitor only at [3]; the carriers are sufficient but not necessary (backup route); inert slots [5]."
   },
-  "created_at_utc": "2026-10-12T21:08:30.476749+00:00",
+  "created_at_utc": "2026-10-12T22:42:26.967494+00:00",
   "smoke": false
 }
