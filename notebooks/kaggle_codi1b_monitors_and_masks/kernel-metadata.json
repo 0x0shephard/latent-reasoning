@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/codi-1b-monitors-and-masks",
+  "title": "CODI LLaMA-1B monitors and masks",
+  "code_file": "kaggle_codi1b_monitors_and_masks.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

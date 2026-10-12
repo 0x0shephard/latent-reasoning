@@ -1,0 +1,16 @@
+{
+  "id": "jonraza15/codi-gpt2-monitors-and-masks",
+  "title": "CODI GPT-2 monitors and masks",
+  "code_file": "kaggle_gpt2_monitors_and_masks.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "dannyism11/tsv-ccc"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
