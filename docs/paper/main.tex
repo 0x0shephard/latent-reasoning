@@ -1,0 +1,365 @@
+\documentclass{article}
+\usepackage[final]{neurips_2023}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{array}
+
+\title{Readable Is Not Used, Used Is Not Needed:\\An Inference-Only Audit of Continuous-Thought Reasoners}
+
+\author{%
+  Jon Raza\\
+  \texttt{jon@titannetwork.com}\\
+  \And
+  (with Claude Fable 5.1 as research assistant)\\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Some language models reason in a handful of hidden continuous vectors (``thoughts'') instead of written steps. People want to monitor those thoughts for safety, but nobody has checked, on released checkpoints, which thoughts the model actually uses, which it cannot do without, and whether reading a thought tells you anything the model acted on. We built a one-command audit that answers these questions without any training, and ran it on four released checkpoints (CODI on GPT-2, CODI on LLaMA-3.2-1B, SIM-CoT on LLaMA-3.2-1B, and a Coconut GPT-2 retrain), four datasets, and 28 preregistered Kaggle runs. For the CODI family we find: (i) disturbing a thought and using a thought are different things, and a thought carries a value into the answer only on problems with three or more steps; (ii) exactly one or two thoughts do the carrying, they hand the value to the next position's memory, and the last thought never matters; (iii) the larger model uses its carrier thought but barely needs it, while the model's memory of the question is the single most necessary site; (iv) a probe on any thought, including the unused last one, reads the question well, so a monitor can look accurate while reading nothing the model computed; (v) the thoughts predict wrong answers no better than the model's own confidence; and (vi) the carrier thought can be written to from outside: transplanting a natural thought that holds the right intermediate value repairs 15--23\% of failed multi-step problems against a 3\% control, with 5--7\% collateral damage at 1B. Coconut is the opposite case: its thoughts carry values on one-step problems, every pair is necessary (45--49 points), its last position is in use, and it cannot be written to. All results reproduce byte for byte across sessions. The audit costs about one GPU-hour per model and tells you, before you trust a monitor, which kind of model you have.
+\end{abstract}
+
+\section{Introduction}
+
+A model that reasons in text can be watched: the steps are tokens, and a monitor can read them. Several recent methods instead train models to reason in a short run of continuous vectors that nobody can read directly, among them Coconut \citep{hao2024coconut}, CODI \citep{shen2025codi} and SIM-CoT \citep{wei2026simcot}. The usual response is to read the vectors with a probe \citep{ramjee2026ulterior}. That response rests on three assumptions: that the probed vector holds something the model computed, that the model goes on to use it, and that the model would answer differently without it. None of these has been tested on the released checkpoints with a method that another lab could rerun.
+
+This paper tests all three with interventions only. We never train or fine-tune a model. We take each checkpoint as released, swap, remove and read its thoughts, and measure what the answer does. Everything was preregistered in a running ledger before each run, scored against the prediction afterwards, and every number in this paper comes from a committed artifact.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item \textbf{A method that separates three questions a probe conflates.} ``Twin'' problems that differ in one number tell us whether a thought \emph{carries} a value (transport). Masking tells us whether the model \emph{needs} it (necessity). Probes tell us whether it is \emph{readable}, and the twins tell us whether what a probe reads is \emph{confirmed by behaviour} (faithfulness). We also separate the two routes by which a thought can act: the state it feeds forward and the keys and values it leaves in memory.
+  \item \textbf{A standardised card and a comparison tool.} One command produces one card per (model, dataset, GPU session) with fixed thresholds, five checks, a regime and a monitor-placement verdict, plus fingerprints that let two sessions be compared bit for bit. We ran it on four models, four datasets and two Kaggle accounts.
+  \item \textbf{Findings about the CODI family} (Sections~\ref{sec:transport}--\ref{sec:monitors}): a chain-length gate on transport; a trained carry-and-store ladder with an inert last thought; sufficiency without necessity at 1B; the question register as the most necessary site; and readable-but-unfaithful thoughts under two probe families.
+  \item \textbf{Three uses of the map} (Sections~\ref{sec:leakage}--\ref{sec:repair}): a prompt-leakage control that any latent-monitor evaluation should include; a negative result on error detection from thoughts; and a positive one, latent repair by transplanting a natural thought that holds the right value, with a value from the answer key and, more weakly, from the model's own explicit chain plus a calculator.
+  \item \textbf{A contrast architecture} (Section~\ref{sec:coconut}): on Coconut the audit returns the opposite profile on almost every axis, which shows that the CODI results are properties of its training, not of continuous thoughts in general.
+\end{enumerate}
+
+We also report two corrections to our own earlier readings and one to the literature: the released CODI-1B checkpoint scores 55.5\% on GSM8K, which matches its paper's main figure of 55.6\%; the 51.9\% quoted by later papers is an ablation row.
+
+\section{Related work}
+
+\paragraph{Continuous-thought models.} Coconut \citep{hao2024coconut} feeds the last hidden state back as the next input embedding and replaces reasoning steps with such thoughts by a curriculum. CODI \citep{shen2025codi} distils an explicit-chain teacher into six thoughts through a projector, in one stage. SIM-CoT \citep{wei2026simcot} adds a step-level auxiliary decoder during training. We study released CODI and SIM-CoT checkpoints and a third-party Coconut retrain, since no official Coconut GSM8K checkpoint exists.
+
+\paragraph{Causal analyses of latent thoughts.} \citet{cywinski2025} patched single latent vectors of a self-trained CODI-1B with averages from prompts holding different intermediate values, on twenty templates with two steps, and found the third and fifth vectors store the step values; they left longer problems open. SCIT \citep{ding2026scit} swapped value-cache layers on same-template pairs. \citet{li2026dynamics} overwrite single steps with zeros and report flip rates on the official checkpoints. \citet{aswal2026observable} show that decodable patterns appear in controls without recurrence and call for causal tests. \citet{jin2026final} find accuracy retained when latent computation is removed. Our twins extend \citet{cywinski2025} to natural data, three checkpoints and chains of three or more steps, add the two-route decomposition, necessity and the monitor layer, and run everything from released weights.
+
+\paragraph{Monitoring and probes.} \citet{ramjee2026ulterior} detect misaligned reasoning in a backdoored Coconut-style model by probing early states, with the trigger in the prompt. \citet{ferreira2026outofsight} argue monitorability depends on access and task structure. That decodability is not causality is established elsewhere \citep{openproblems2025,decodability2026,singleposition2026}; we measure it per slot on latent reasoners.
+
+\paragraph{Interventions and repair.} \citet{chang2026unlocking} improve accuracy with training-free geometric edits of cached thoughts, without aiming a value at a problem. \citet{huang2026steering} find synthetic steering of continuous thoughts does not reach the output. \citet{hiddenerror2026} find that on explicit-CoT models probes read errors well but patching does not repair. \citet{lto2026} train a correctness classifier on latent states as a reward. We report a repair that aims a specific value through a specific slot using natural donor states, and the honest comparison against reading the explicit chain.
+
+\section{Setup}\label{sec:setup}
+
+\paragraph{Models.} Table~\ref{tab:models} lists the checkpoints. All CODI-family models produce six thoughts after a begin-of-thought token; each thought's output state goes through a projector into the next input, and each thought also writes keys and values (K/V) into the cache that every later position attends to. Coconut has no projector: the thought \emph{is} the last hidden state, fed back as the next input embedding.
+
+\begin{table}[h]
+\caption{Checkpoints. Accuracies are our greedy GSM8K-test reproductions (1{,}319 problems).}
+\label{tab:models}
+\centering
+\small
+\begin{tabular}{lllrr}
+\toprule
+Name & Base & Source & Paper & Ours \\
+\midrule
+CODI GPT-2 & GPT-2 (124M) & \texttt{zen-E/CODI-gpt2} & 43.7 & 43.6 \\
+CODI-1B & LLaMA-3.2-1B-Instruct & \texttt{zen-E/CODI-llama3.2-1b-Instruct} & 55.6 & 55.5 \\
+SIM-CoT & LLaMA-3.2-1B-Instruct & \texttt{internlm/SIM\_COT-LLaMA3-CODI-1B} & 56.1 & 55.7 \\
+Coconut & GPT-2 (124M) & \texttt{UdeSA/coconut-0.2B-gsm8k-aug} (retrain) & 34.6 & 34.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Datasets (``pools'').} Every experiment needs problems whose solution is an equation chain, written as \texttt{<<16-3-4=9>> <<9*2=18>>}, because the twins recompute the chain. We use four pools: the GSM8k-Aug training split used by CODI itself (2{,}048 rows, plus 14{,}336 extra rows for long chains), the original GSM8K test set with its calculator annotations as the chain (1{,}206 usable rows, 854 with three or more steps), the original GSM8K train set (6{,}998 rows), and ASDiv \citep{miao2020asdiv} with its formula split into steps (1{,}490 rows, 86 with three or more steps). SVAMP \citep{patel2021svamp} serves as a one-step control (300 rows). Problems with at most two steps are ``short''; three or more are ``long''.
+
+\paragraph{Outcome.} For the CODI family we read the model's first answer token under the forced cue ``The answer is:'', which the released decoder uses, and also run native greedy decoding for headline conditions. Every rate comes with a 95\% paired bootstrap interval over problem pairs (2{,}000 resamples). For Coconut, which has no forced cue, every outcome is native decoding.
+
+\section{Method}\label{sec:method}
+
+We describe the instruments in the order the audit runs them. The language is plain on purpose; the code is public and every step has a unit test.
+
+\subsection{Two ways a thought can act}
+
+A thought at position $s$ affects the answer by two routes. Its \emph{state} is the vector it hands to position $s+1$ through the projector. Its \emph{K/V} are the keys and values it writes at its own cache position, which every later position reads through attention. We can edit either route alone: replace the state before it is projected (the ``state'' route), or overwrite the keys and values at that position after they are written (the ``K/V'' route), on any subset of layers. Replacing all six states \emph{and} all six positions' K/V is identical to replacing the K/V alone, because the last state is discarded and everything a state does, it does through the K/V its successors write; we verified this identity exactly. Feeding a thought its own recorded state, or its own K/V, reproduces the original logits to the last bit, which is the test that the plumbing is right.
+
+\subsection{Twins: does a thought carry a value, or only disturb?}\label{sec:twins}
+
+Swapping a thought from an unrelated problem breaks answers, but breaking is not carrying. To test carrying we build \emph{twins}: for a problem, change one integer in the question and recompute the chain, so the twin's answer is the correct answer to the changed question. For example, ``12 cucumbers'' becomes ``13 cucumbers'' and the chain \texttt{<<12*5=60>> <<54+60=114>>} becomes \texttt{<<13*5=65>> <<54+65=119>>}. A number is eligible only if it appears exactly once in the question and once in the chain, is not itself a result, and the recomputed results stay non-negative integers. About half of GSM8k-Aug rows yield a twin.
+
+\paragraph{Competence gate.} We keep a pair only if the model solves both twins natively and at the first token, and their gold first tokens differ. Otherwise ``the answer followed the swapped value'' has no meaning.
+
+\paragraph{Intervention and outcome.} The two twins sit next to each other in the same batch, so their position ids match, and each is the other's donor. We replace one site in the recipient (one thought's state, or one position's K/V on a layer group, or whole tails) with the twin's and read the first answer token. The outcome is \emph{target} if it becomes the twin's answer, \emph{retain} if it stays the recipient's, \emph{other} otherwise. The target rate is \emph{transport}. Both directions are pooled.
+
+\paragraph{Profiles.} The \emph{standard} profile draws 1{,}024 candidate twins from the pool in a fixed shuffled order and perturbs the first eligible number; most pairs are short chains. The \emph{long} profile keeps only chains of three or more steps, perturbs the number that enters the chain latest, and draws from the extended pool. Both cap at 512 pairs. On the GSM8K test and train pools the caps are reached or the number of pairs is reported.
+
+\paragraph{Locating the value.} The model's own output head, applied to a thought's state, decodes a few numeric tokens. If the recipient's state at some thought decodes its own changed value and the twin's decodes the twin's, we say the value is \emph{located} there. ``Uniquely located'' means at one thought only.
+
+\subsection{Masking: does the model need the thought?}
+
+Sufficiency is not necessity. For each thought we run two removals. \emph{Mean}: replace its state by the average state over the pool, so nothing problem-specific reaches the next thought. \emph{Mask}: hide its K/V from every later position through the attention mask, which needs a decoding path that carries the attention mask and explicit position ids through every step (the released LLaMA path drops the mask and we fixed that). We measure the accuracy drop in points, split by chain length, with intervals from a bootstrap over rows. Three preregistered checks: short chains survive any single removal within 5 points (K1), the carriers cost at least 10 points on long chains (K2), the last thought costs at most 2 points (K3).
+
+\subsection{Monitors: readable, and faithful?}
+
+A monitor is a probe trained to read a value from a thought's state. We train two families on the recorded twin states: a ridge map from the state to the embedding of the target number token, decoded by the nearest numeric token; and a two-layer MLP classifier over the numeric vocabulary. The target is the chain's penultimate intermediate result. Folds are assigned by pair so a twin never trains the probe that reads it. \emph{Readability} is held-out accuracy. \emph{Faithfulness} asks: when a monitor placed at this thought reads the twin's value from the twin's state after a swap (that is, raises an alarm), how often did the answer actually follow? A thought can be readable and never faithful.
+
+\subsection{The card}\label{sec:card}
+
+The driver runs the twins (both profiles), the masking audit, the two probe families and the bootstraps, and writes one card. Fixed thresholds: a \emph{carrier} is a thought whose long-chain state transport is at least 0.15; a \emph{store} is a position whose K/V transport is at least 0.15 while its state does not carry; the short-chain ceiling is 0.10; \emph{necessary} means at least 10 points on long chains; a thought is \emph{readable} at probe accuracy 0.30 and \emph{readable-but-unfaithful} if its alarm is confirmed at most 5\% of the time. Five checks: C1, no single site transports on short chains (position~0's K/V excepted, since it holds the question); C2, a carrier exists on long chains; C3, the last thought is inert, unfaithful and unnecessary; C4, readability is dissociated from faithfulness; C5, every carrier is necessary. The \emph{regime} is \emph{critical path} if C5 holds, \emph{backup route} if carriers exist but C5 fails, \emph{no transport} if there is no carrier. A long profile with fewer than 50 gated pairs does not decide carriers. The card records the GPU, library versions, dataset hash, and a SHA-256 fingerprint of every twin run's predictions, and a comparison tool flags disagreements across pools and sessions.
+
+\subsection{Prompt-leakage probes}\label{sec:leakage-method}
+
+To test whether a probe reads the plan or the prompt, we train probes on every thought to predict two properties the question already fixes: the first operator of the chain (four classes) and whether the chain has three or more steps. We report balanced accuracy against chance (0.25 and 0.50) and compare the best slot with the carriers.
+
+\subsection{Error detection from thoughts}\label{sec:errdet-method}
+
+For every GSM8K test problem, right or wrong, we record the thoughts and the native answer, apply the model's own output head to each thought (top-1 numeric value, its probability, the entropy, and agreement with the answer and the other thoughts), and train logistic classifiers (five folds) to predict ``the answer is wrong'': carrier slots only, inert slots only, all slots, the answer's own first-token confidence, and a classifier on all raw state features. We report AUROC with bootstrap intervals.
+
+\subsection{Repair by transplanting a natural thought}\label{sec:repair-method}
+
+We record the thoughts of a bank of 2{,}048 training-pool problems and index each by the value the model's own output head reads at the carrier. For every wrongly answered test problem with three or more steps, we take the needed intermediate value $v^*$ (the chain's penultimate result), find bank problems whose carrier reads $v^*$, and transplant the nearest one's carrier state; we decode again and ask whether the answer became correct. Controls: a random same-value donor, the centroid of same-value states (a synthetic vector, as in \citet{cywinski2025}), a random different-value donor, the store position's K/V alone and with the state, the donor's whole K/V tail, and 128 correctly answered problems to measure harm. The \emph{primary stratum} is wrong problems whose own carrier reads a value other than $v^*$ and that have a donor.
+
+\paragraph{Tool-supplied value.} Every CODI checkpoint was also trained on explicit chains, so decoding the bare question makes it write its own equations. A calculator re-evaluates each one, propagating corrected results into later equations that reference them; the corrected last result is the tool's $v^*$. We report, as the honest ceiling, how often the explicit chain's own answer is right on the same failures.
+
+\subsection{Coconut adapter}\label{sec:coconut-method}
+
+We reimplemented Coconut's forward pass with the same hooks: six latent passes where each input embedding is the previous last hidden state, a state hook that may replace a thought before it is fed on, a K/V hook at each position, K/V masks, and batched cached decoding with left padding. Feeding a thought its own state or K/V reproduces every output exactly, and batch size does not change outputs. All Coconut outcomes are native answers after the \texttt{\#\#\#} marker.
+
+\subsection{Preregistration and reproducibility}
+
+Every experiment was written into a ledger with its predictions before the run, and scored afterwards; eleven predictions were partly or wholly wrong and are reported as such. Runs executed on Kaggle T4 GPUs through the API from two accounts. Five reruns reproduced their twin predictions byte for byte. Code, cards, per-target outcomes and the ledger are in the public repository.
+
+\section{Results: the CODI family}
+
+\subsection{Influence is not transport, and transport has a chain-length gate}\label{sec:transport}
+
+Table~\ref{tab:transport} gives the central numbers. Swapping the whole K/V tail changes 60--75\% of answers on all chains, yet on short chains no single thought moves more than 10\% of answers to the twin's value. On long chains, one thought (GPT-2 and SIM-CoT: thoughts 1 and 3; CODI-1B: thought 3 alone) transports the value 0.20--0.36 of the time, and the K/V of the following position transport it at the same rate. This holds on the augmented training rows, the original test set and the original train set, with overlapping intervals.
+
+\begin{table}[h]
+\caption{Transport (target rate) under a single-site swap, long chains. Columns are thought states $s_0..s_5$ and K/V positions $k_0..k_5$; the carrier/store pairs are bold. Short-chain transport never exceeds 0.10 at any single site. Pairs: 512 unless stated.}
+\label{tab:transport}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llcccccc|cccccc|c}
+\toprule
+Model & Pool & $s_0$ & $s_1$ & $s_2$ & $s_3$ & $s_4$ & $s_5$ & $k_0$ & $k_1$ & $k_2$ & $k_3$ & $k_4$ & $k_5$ & kv\_all \\
+\midrule
+GPT-2 & aug-train & .00 & \textbf{.15} & .00 & \textbf{.33} & .00 & .00 & .12 & .00 & \textbf{.16} & .00 & \textbf{.30} & .00 & .69 \\
+GPT-2 & test (103 pairs) & .00 & .13 & .00 & \textbf{.36} & .00 & .00 & .21 & .00 & .13 & .00 & \textbf{.33} & .00 & .68 \\
+GPT-2 & train-orig & .00 & .14 & .00 & \textbf{.30} & .00 & .00 & .15 & .00 & .13 & .00 & \textbf{.29} & .00 & .61 \\
+CODI-1B & aug-train & .04 & .01 & .01 & \textbf{.34} & .04 & .00 & .04 & .04 & .01 & .00 & \textbf{.26} & .05 & .67 \\
+CODI-1B & test (152 pairs) & .06 & .01 & .00 & \textbf{.30} & .03 & .00 & .07 & .06 & .01 & .00 & \textbf{.24} & .03 & .67 \\
+CODI-1B & train-orig & .06 & .02 & .00 & \textbf{.35} & .03 & .00 & .07 & .06 & .02 & .00 & \textbf{.29} & .04 & .65 \\
+SIM-CoT & aug-train & .04 & \textbf{.19} & .04 & \textbf{.25} & .04 & .00 & .13 & .04 & \textbf{.18} & .04 & \textbf{.23} & .04 & .73 \\
+SIM-CoT & test (168 pairs) & .03 & \textbf{.22} & .05 & \textbf{.20} & .04 & .00 & .22 & .03 & \textbf{.21} & .05 & \textbf{.20} & .04 & .72 \\
+SIM-CoT & train-orig & .03 & \textbf{.21} & .05 & \textbf{.23} & .05 & .00 & .17 & .03 & \textbf{.22} & .05 & \textbf{.22} & .05 & .66 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pattern is a ladder: an odd thought computes and projects into the next even position, which stores the result in its K/V, where the answer decode reads it. The pairing is trained, not fixed: (1$\to$2, 3$\to$4) in GPT-2 and SIM-CoT, (3$\to$4) alone in CODI-1B. The sixth thought's state is discarded by the architecture and its K/V transport is at most 0.05 everywhere. On the one-step control SVAMP, no site transports more than 0.045 and the card reports that nothing is monitorable. On ASDiv the short-chain ceiling holds on all three models; its multi-step subset gave 17--30 pairs, too few to decide carriers, though the point estimates (0.12--0.15 at thought 3) point the same way.
+
+\subsection{Used is not needed}\label{sec:necessity}
+
+Table~\ref{tab:necessity} gives the masking costs. No single thought costs more than 1.3 points on short chains in any model (K1 holds everywhere). On long chains the carriers cost GPT-2 6--20 points and SIM-CoT 4--12, but CODI-1B only 2--4 points, with upper bounds below 10 on every pool. CODI-1B uses thought 3 (transport 0.30--0.35) and does not need it: the \emph{backup route} regime. The single most necessary site in GPT-2 and SIM-CoT is not a thought but position~0's K/V, which holds the question: hiding it costs 19--38 points (GPT-2) and 33--59 points (SIM-CoT) on long chains, and for SIM-CoT it alone transports 0.44--0.66 of short-chain twins. The last thought costs at most 1.9 points anywhere (K3 holds). GPT-2's carrier cost straddles the 10-point line across pools (6.5 [2.4, 10.6] on the test set, 11.7 [7.7, 16.0] and 12.5 [7.2, 17.9] on the others); we do not read a regime change into overlapping intervals.
+
+\begin{table}[h]
+\caption{Accuracy drop in points when one thought is removed (larger of mean-ablation and K/V mask), long chains; 95\% bootstrap intervals over rows where available. ``$k_0$'' is the question register.}
+\label{tab:necessity}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llcccccc|c|l}
+\toprule
+Model & Pool & $k_0$ & 1 & 2 & 3 & 4 & 5 & all & Regime \\
+\midrule
+GPT-2 & aug-train & 37.6 & 20.2 [14.4, 26.2] & 12.2 & 12.5 [7.2, 17.9] & 13.7 & 1.9 & 52.9 & critical path \\
+GPT-2 & test & 18.7 & 12.2 [7.9, 16.8] & 9.2 & 6.5 [2.4, 10.6] & 9.8 & 0.8 & 27.1 & backup route \\
+GPT-2 & train-orig & 29.5 & 18.3 [13.8, 23.2] & 9.5 & 11.7 [7.7, 16.0] & 12.9 & 1.1 & 37.0 & critical path \\
+CODI-1B & aug-train & 3.4 & 2.7 & 1.5 & 2.7 & 4.6 & 0.8 & 38.8 & backup route \\
+CODI-1B & test & 4.3 & 4.1 & 1.9 & 3.8 [1.3, 6.5] & 4.3 & 1.1 & 28.5 & backup route \\
+CODI-1B & train-orig & 3.2 & 7.2 & 3.2 & 2.3 [0.3, 4.3] & 4.6 & 0.9 & 52.4 & backup route \\
+SIM-CoT & aug-train & 58.6 & 10.6 & 11.4 & 9.1 & 8.4 & 3.0 & 76.0 & backup route \\
+SIM-CoT & test & 32.5 & 9.8 [6.5, 13.3] & 7.0 & 4.3 [2.2, 6.8] & 5.7 & 1.9 & 44.2 & backup route \\
+SIM-CoT & train-orig & 49.0 & 12.3 [8.3, 16.3] & 11.7 & 9.2 [5.7, 13.2] & 11.7 & 1.4 & 68.2 & backup route \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Readable is not faithful}\label{sec:monitors}
+
+Table~\ref{tab:monitors} compares what a probe reads with what the behaviour confirms. In every model the carriers are the only thoughts whose alarms are confirmed (0.17--0.40). Thoughts 4 and 5 are read at 0.4--0.8 by the ridge probe and confirmed at 0.00--0.05. The original check C4 (``the most readable slot is inert and readability anti-correlates with faithfulness'') held for GPT-2 under the ridge probe but not under the MLP, and not for the 1B models: it is a probe-dependent statement and we withdraw it. What holds on every card under both families is C4b: a thought exists that a probe reads at $\geq 0.30$ whose reading the behaviour confirms $\leq 5\%$ of the time, and the last thought is such a slot in every model. Carrier faithfulness moves by at most 0.04 between probe families: faithfulness belongs to the slot, not to the probe.
+
+\begin{table}[h]
+\caption{Monitor readability (ridge / MLP) and faithfulness (ridge / MLP) per thought, long chains, penultimate intermediate as the target. Carriers in bold.}
+\label{tab:monitors}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llcccccc}
+\toprule
+Model & Pool & 0 & 1 & 2 & 3 & 4 & 5 \\
+\midrule
+\multicolumn{8}{l}{\emph{Readability ridge / MLP}} \\
+GPT-2 & aug-train & .09/.10 & \textbf{.33/.49} & .46/.48 & \textbf{.40/.58} & .54/.56 & .42/.57 \\
+GPT-2 & test & .05/.03 & .32/.36 & .41/.23 & \textbf{.40/.42} & .51/.27 & .36/.40 \\
+CODI-1B & aug-train & .27/.17 & .15/.06 & .36/.24 & \textbf{.79/.75} & .84/.79 & .81/.73 \\
+CODI-1B & test & .19/.15 & .06/.06 & .16/.08 & \textbf{.59/.52} & .69/.62 & .68/.48 \\
+SIM-CoT & aug-train & .25/.29 & \textbf{.62/.61} & .69/.56 & \textbf{.72/.67} & .74/.62 & .57/.44 \\
+SIM-CoT & test & .10/.12 & \textbf{.44/.38} & .50/.28 & \textbf{.56/.44} & .54/.32 & .32/.19 \\
+\midrule
+\multicolumn{8}{l}{\emph{Faithfulness ridge / MLP (alarm confirmed by behaviour)}} \\
+GPT-2 & aug-train & .00/.00 & \textbf{.19/.17} & .00/.00 & \textbf{.40/.36} & .00/.00 & .00/.00 \\
+GPT-2 & test & .00/.00 & .09/.08 & .00/.00 & \textbf{.29/.31} & .00/.00 & .00/.00 \\
+CODI-1B & aug-train & .02/.01 & .01/.00 & .02/.02 & \textbf{.36/.36} & .05/.05 & .00/.00 \\
+CODI-1B & test & .04/.05 & .06/.06 & .00/.00 & \textbf{.34/.35} & .02/.02 & .00/.00 \\
+SIM-CoT & aug-train & .02/.02 & \textbf{.21/.20} & .02/.01 & \textbf{.28/.29} & .03/.03 & .00/.00 \\
+SIM-CoT & test & .03/.03 & \textbf{.26/.30} & .03/.01 & \textbf{.26/.28} & .02/.04 & .00/.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results: three uses of the map}
+
+\subsection{A monitor can read the prompt instead of the plan}\label{sec:leakage}
+
+Table~\ref{tab:leakage} shows that a probe on \emph{any} thought, position~0 and the unused last thought included, decodes whether the problem is multi-step at 0.76--0.95 balanced accuracy and the chain's first operator at 0.50--0.87 against 0.25. The best slot for the operator is never a carrier: it is the question register or a store position. Only the computed value separates the slots. A monitor evaluated on a property the prompt already fixes (a trigger word, a task type, a difficulty) can therefore score well while reading nothing the model computed. For a trigger-in-the-prompt backdoor evaluation this is a confound, and the fix is cheap: run the same probe on a prompt-only control at the same slot.
+
+\begin{table}[h]
+\caption{Balanced accuracy of a probe decoding two prompt-fixed properties from each thought (ridge / MLP), standard profile. Chance 0.25 (operator) and 0.50 (long chain).}
+\label{tab:leakage}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llccccccc}
+\toprule
+Model & Property & 0 & 1 & 2 & 3 & 4 & 5 & best / carriers \\
+\midrule
+GPT-2 & operator & .63/.76 & .55/.66 & .63/.74 & .60/.67 & .62/.76 & .60/.68 & 4 / \{1,3\} \\
+GPT-2 & long chain & .81/.91 & .81/.86 & .84/.92 & .79/.84 & .85/.91 & .80/.84 & 2 / \{1,3\} \\
+CODI-1B & operator & .85/.86 & .85/.87 & .81/.84 & .72/.72 & .74/.73 & .74/.75 & 1 / \{3\} \\
+CODI-1B & long chain & .89/.91 & .92/.93 & .91/.94 & .91/.91 & .90/.92 & .92/.92 & 2 / \{3\} \\
+SIM-CoT & operator & .84/.80 & .71/.71 & .73/.74 & .74/.73 & .74/.75 & .72/.72 & 0 / \{1,3\} \\
+SIM-CoT & long chain & .93/.95 & .93/.94 & .93/.95 & .93/.93 & .92/.94 & .91/.93 & 0 / \{1,3\} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Thoughts do not catch errors better than confidence}\label{sec:errdet}
+
+Table~\ref{tab:errdet} is a negative result for the application and a positive one for the map. Nothing read from the thoughts predicts a wrong answer better than the answer's own first-token confidence (0.89--0.91 AUROC), not even 12{,}288 raw state features, and adding the carrier readout to confidence gains under 0.01. But on both 1B models the error signal inside the thoughts sits at the carrier the swaps found and nowhere else (carrier 0.82 vs inert 0.60 on CODI-1B), an independent confirmation of the placement from a task it was never fitted to. On GPT-2 the uncertainty is in every slot.
+
+\begin{table}[h]
+\caption{AUROC for ``the native answer is wrong'' on the full GSM8K test set (1{,}319 rows).}
+\label{tab:errdet}
+\centering
+\small
+\begin{tabular}{lrccccc}
+\toprule
+Model & Wrong & Confidence & Carriers & Inert & All slots & Raw states \\
+\midrule
+GPT-2 & 746 & 0.889 & 0.850 & 0.853 & 0.851 & 0.859 \\
+CODI-1B & 587 & 0.912 & 0.821 & 0.596 & 0.827 & 0.835 \\
+SIM-CoT & 584 & 0.913 & 0.754 & 0.650 & 0.799 & 0.836 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The carrier can be written to}\label{sec:repair}
+
+Table~\ref{tab:repair} shows repair rates. With the needed value from the gold chain, transplanting the nearest same-value natural thought into the carrier turns 15--23\% of failures into the gold answer, against 2.6--3.6\% for a different-value donor; the intervals do not overlap. At the 1B models the same transplant harms only 5--7\% of correct answers; at GPT-2, 19\%. Two preregistered predictions were wrong in useful ways: the centroid of same-value states repairs as well as a retrieved natural one, so retrieval buys nothing over averaging; and adding the store position's K/V \emph{lowers} repair, because the donor's K/V carry the donor's problem as well as the value. With the value from the model's own explicit chain plus a calculator, repair survives at CODI-1B (18.8\%, 83\% of the gold rate) and weakens at the other two (9.2\%, 8.4\%). On every model the explicit chain read directly is right on more of the same failures (18.6--22.7\%) than injection recovers, so this is a mechanism result: the audited thought is a writable channel, confirmed by two independent sources of the value, not a method that beats reading the chain.
+
+\begin{table}[h]
+\caption{Repair rate (\%) on wrongly answered $\geq 3$-step GSM8K test problems whose carrier read the wrong value and that have a donor; harm (\%) on correctly answered controls. 95\% bootstrap intervals for the main column.}
+\label{tab:repair}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llrccccccc}
+\toprule
+Value from & Model & $n$ & Nearest donor & Random same & Centroid & Different value & Store K/V & State+K/V & Harm \\
+\midrule
+gold chain & GPT-2 & 357 & 15.1 [11.5, 19.0] & 17.6 & 20.2 & 3.6 & 11.5 & 12.3 & 18.7 \\
+gold chain & CODI-1B & 266 & 22.6 [17.7, 27.8] & 21.8 & 23.7 & 2.6 & 10.2 & 13.2 & 7.0 \\
+gold chain & SIM-CoT & 273 & 15.4 [11.4, 19.8] & 9.9 & 13.2 & 2.6 & 4.0 & 4.4 & 5.2 \\
+\midrule
+calculator & GPT-2 & 282 & 9.2 [6.0, 12.8] & 9.2 & 12.4 & 3.5 & 7.1 & 7.1 & 16.8 \\
+calculator & CODI-1B & 208 & 18.8 [13.9, 24.0] & 14.4 & 16.8 & 3.8 & 10.1 & 10.6 & 6.0 \\
+calculator & SIM-CoT & 214 & 8.4 [5.1, 12.1] & 7.0 & 8.9 & 3.3 & 2.3 & 3.3 & 10.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results: Coconut is the opposite case}\label{sec:coconut}
+
+Table~\ref{tab:coconut} runs the same audit on Coconut. The predicted pairing from its curriculum (two thoughts per step) appears exactly: thought 0's state and position 1's K/V transport at the same rate, as do 2 and 3, and 4 and 5. Everything else inverts. Coconut transports on short chains (0.45 at the first thought), so the chain-length gate is a CODI property. Its long-chain transport is 0.52, higher than any CODI model. Its last position is in use: the state is discarded, but its K/V transport 0.15 and hiding them costs 14 points. Every pair is necessary: removing a single thought costs 45--49 points. And it cannot be written to: a same-value donor repairs 5.6\% against 3.1\% for a different value, while harming 29\% of correct answers, because a Coconut thought transplanted from another problem carries that problem. Same six slots, same task, opposite monitoring profile.
+
+\begin{table}[h]
+\caption{Coconut (GPT-2 retrain, gate 34.57\%). Transport on short (standard, $n=748$) and long ($n=1{,}024$) chains; masking cost on long chains; repair on 360 primary targets.}
+\label{tab:coconut}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccccc|ccc}
+\toprule
+ & $s_0$ & $s_1$ & $s_2$ & $s_3$ & $s_4$ & $s_5$ & $k_1$ & $k_3$ & $k_5$ \\
+\midrule
+transport, short & \textbf{.45} & .07 & .03 & .01 & .02 & .00 & \textbf{.45} & .03 & .02 \\
+transport, long & .19 & .12 & \textbf{.52} & .10 & .14 & .00 & .19 & \textbf{.52} & .15 \\
+masking cost, long (pts) & 49 (mean) & 48 (mask) & 45 (mean) & 46 (mask) & 16 (mean) & 14 (mask) & & & \\
+\midrule
+\multicolumn{10}{l}{repair: nearest same-value donor 5.6\%, different value 3.1\%, centroid 9.4\%; harm 29\% (donor state), 88\% (whole tail)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+
+\paragraph{What this means for monitoring latent reasoning.} For the CODI family a monitor can be placed where it means something, at the carrier, and the audit finds that slot in about an hour. Placing it at the most readable thought is a mistake, since the most readable thoughts are routinely the ones the behaviour never confirms, and any thought will happily report the prompt. For Coconut-style models the picture is reversed: every even thought is both used and needed, and readability tracks use. The practical rule is to run the audit before trusting a probe, and to include a prompt-only control in every monitor evaluation.
+
+\paragraph{Why the two families differ.} CODI distils a teacher into thoughts through a projector and drops the chain's last step during training; what emerges is a narrow channel that holds one intermediate at one slot, with the question kept in position~0's memory and a backup route around the thoughts in the larger model. Coconut replaces steps with thoughts by a curriculum, step by step; what emerges is a thought sequence that is the computation, dense and necessary. Step supervision (SIM-CoT) moves CODI part of the way toward the Coconut profile: more necessary thoughts and a heavier reliance on the question register.
+
+\paragraph{Limitations.} All results are on grade-school arithmetic; ASDiv transfers only the short-chain and terminal findings because its multi-step subset is small, and we found no further dataset with equation chains and small numbers. The Coconut checkpoint is a third-party retrain at GPT-2 scale. The repair's needed value came from the gold chain or from the model's own chain; a deployable repairer would need a tool that supplies it, and reading that chain directly is already better. Outcomes are first answer tokens for the CODI family, with native decoding for headline conditions. Two probe families were tried, not more.
+
+\paragraph{Errata we made along the way.} We first gated the CODI-1B reproduction against 51.9\%, which is an ablation row in its paper; the main figure is 55.6\% and the checkpoint matches it. We first wrote that C4 held on all three training-pool cards; it held on one. We first read GPT-2's cost difference between pools as a regime change; the intervals overlap. All three are recorded in the ledger with the correction.
+
+\section{Conclusion}
+
+Hidden thoughts in CODI-style models are optional, narrow channels: they carry a value only on hard problems, through one trained slot, they mislead readers, and they can be edited from outside. Coconut-style thoughts are necessary, entangled and uneditable. A cheap, inference-only audit tells you which kind you have, where a monitor would mean something, and what a monitor's accuracy could be measuring instead.
+
+\section*{Reproducibility statement}
+
+The repository \texttt{github.com/0x0shephard/latent-reasoning} contains the audit driver, every runner, 80 unit tests for the audit code, the pinned Kaggle notebooks, 14 cards, the per-target outcomes of every repair and error-detection run, and the ledger (\texttt{docs/RESEARCH\_CONTEXT\_LEDGER.md}, sections 108--127) with each preregistration and its scoring. Checkpoints are pinned by revision and SHA-256. Each card records the GPU, library versions and dataset hash. Five reruns, on another account and day, reproduced the twin predictions byte for byte.
+
+\begin{thebibliography}{30}
+\small
+\bibitem[Aswal et al.(2026)]{aswal2026observable} D. Aswal, T. Palmeira Ferraz, Y. Zhou, and M. Peyrard. Observable patterns are not explanations: A causal-geometric analysis of latent reasoning models. \emph{arXiv:2606.12689}, 2026.
+\bibitem[Chang et al.(2026)]{chang2026unlocking} S. Chang et al. Unlocking the black box of latent reasoning: An interpretability-guided approach to intervention. In \emph{ACL}, 2026. arXiv:2606.01243.
+\bibitem[Cywi\'nski et al.(2025)]{cywinski2025} B. Cywi\'nski, B. Bussmann, A. Conmy, J. Engels, N. Nanda, and S. Rajamanoharan. Can we interpret latent reasoning using current mechanistic interpretability tools? \emph{Alignment Forum}, December 2025.
+\bibitem[Ding et al.(2026)]{ding2026scit} Ding, Huang, and Yang. SCIT. In \emph{EMNLP}, 2026. arXiv:2608.27265.
+\bibitem[Ferreira et al.(2026)]{ferreira2026outofsight} Ferreira et al. Does out-of-sight equal out-of-mind in CoT monitorability? \emph{arXiv:2608.04928}, 2026.
+\bibitem[Hao et al.(2024)]{hao2024coconut} S. Hao et al. Training large language models to reason in a continuous latent space. \emph{arXiv:2412.06769}, 2024.
+\bibitem[Hidden Error Awareness(2026)]{hiddenerror2026} Hidden error awareness in chain-of-thought reasoning: The signal is diagnostic, not causal. \emph{arXiv:2605.09502}, 2026.
+\bibitem[Huang and Qi(2026)]{huang2026steering} G. Huang and L. Qi. When steering fails in latent reasoning: A latent-to-language transition gap. \emph{arXiv:2609.21662}, 2026.
+\bibitem[Jin et al.(2026)]{jin2026final} Jin, Yang, and Wang. Final checkpoints are not enough: Analyzing latent reasoning faithfulness along training trajectories. \emph{arXiv:2607.06648}, 2026.
+\bibitem[Li et al.(2026)]{li2026dynamics} Li et al. Dynamics within latent chain-of-thought: An empirical study of causal structure. In \emph{ICML}, 2026. arXiv:2602.08783.
+\bibitem[LTO(2026)]{lto2026} Latent thinking optimization: Your latent reasoning language model secretly encodes reward signals in its latent thoughts. In \emph{ICLR}, 2026. arXiv:2509.26314.
+\bibitem[Miao et al.(2020)]{miao2020asdiv} S.-Y. Miao, C.-C. Liang, and K.-Y. Su. A diverse corpus for evaluating and developing English math word problem solvers. In \emph{ACL}, 2020.
+\bibitem[Open Problems(2025)]{openproblems2025} Open problems in mechanistic interpretability. \emph{arXiv:2501.16496}, 2025.
+\bibitem[Decodability(2026)]{decodability2026} Decodability is not causality: Dissociating probe readouts from behavioral drivers via SAE decomposition. \emph{arXiv:2609.18080}, 2026.
+\bibitem[Single-position(2026)]{singleposition2026} Single-position intervention fails: Distributed output templates drive in-context learning. \emph{arXiv:2605.04061}, 2026.
+\bibitem[Patel et al.(2021)]{patel2021svamp} A. Patel, S. Bhattamishra, and N. Goyal. Are NLP models really able to solve simple math word problems? In \emph{NAACL}, 2021.
+\bibitem[Ramjee et al.(2026)]{ramjee2026ulterior} Ramjee et al. Ulterior motives: Detecting misaligned reasoning in continuous thought models. In \emph{ICLR}, 2026. arXiv:2604.23460.
+\bibitem[Shen et al.(2025)]{shen2025codi} Z. Shen et al. CODI: Compressing chain-of-thought into continuous space via self-distillation. In \emph{EMNLP}, 2025. arXiv:2502.21074.
+\bibitem[Wei et al.(2026)]{wei2026simcot} X. Wei et al. SIM-CoT: Supervised implicit chain-of-thought. In \emph{ICLR}, 2026. arXiv:2509.20317.
+\end{thebibliography}
+
+\end{document}
