@@ -6456,3 +6456,53 @@ three factor measurements.
 
 One kernel per model on dannyism11: bank 2,048 rows + ≈ 800 targets, seven conditions
 ≈ 10 min (GPT-2) to 35 min (1B).
+
+### §126 addendum: Build 3 scored, retrieval-based latent repair on three models (2026-10-13)
+
+Three kernels on dannyism11 (3–6 min of compute each after the bank). 838 eligible test
+questions per model (≥ 3 steps, integer penultimate); the bank's carrier readouts cover
+217–233 distinct values, which gives a donor to 80–82% of the wrong targets. Tables and
+per-target outcomes: `docs/latent_monitor_audit/latent_repair/`.
+
+| model | wrong | primary n | state_nearest | state_random_same | state_centroid | state_random_diff | kv_store | state+kv | kv_tail | harm (state_nearest) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| GPT-2 | 512 | 357 | **15.1** [11.5, 19.0] | 17.6 | 20.2 | 3.6 | 11.5 | 12.3 | 14.3 | 18.7 |
+| CODI-1B | 422 | 266 | **22.6** [17.7, 27.8] | 21.8 | 23.7 | 2.6 | 10.2 | 13.2 | 17.3 | 7.0 |
+| SIM-CoT | 418 | 273 | **15.4** [11.4, 19.8] | 9.9 | 13.2 | 2.6 | 4.0 | 4.4 | 11.0 | 5.2 |
+
+**Predictions scored.**
+- R1 (repair exists): **holds on all three.** A natural donor's carrier state, chosen only
+  by the value the model reads from it, turns 15–23% of the failures into the gold answer.
+- R2 (value, not disturbance): **holds on all three.** A different-value donor repairs
+  2.6–3.6%; the same-value donor repairs 4–9 times as many, with non-overlapping intervals.
+- R3 (natural beats synthetic): **mixed.** The centroid of same-value bank states repairs
+  as well as or better than the nearest donor at GPT-2 (20.2 vs 15.1) and CODI-1B (23.7 vs
+  22.6), worse at SIM-CoT (13.2 vs 15.4). The averaged vector of Cywiński et al. is as
+  good a carrier of the value as a single natural one; retrieval buys nothing over
+  averaging here.
+- R4 (the store adds): **wrong everywhere.** Transplanting the store's K/V alongside the
+  state *lowers* repair (12–13% vs 15–23%); the store alone repairs 4–12%. The donor's K/V
+  carry the donor's problem as well as the value; the state carries the value more purely.
+- R5 (harmless where right): **holds at the 1B models** (7.0%, 5.2%), **fails at GPT-2**
+  (18.7%). A foreign-value donor harms 24–63%, the whole tail 46–70%.
+
+**Reading.** This is the first positive capability result of the program and the
+strongest finding of §125–§126: *the carrier the audit located can be written to.* Put the
+right value there through a natural state and about one failure in five is repaired, with
+the value doing the work (the different-value control is at 3%) and, at 1B, little
+collateral damage. The mechanism is what the twins predicted: single-state transport of
+0.30–0.36 on solved problems becomes 0.15–0.23 repair on failed ones, the shortfall being
+the failures whose cause is not that intermediate (the "carrier already right" stratum
+still repairs 13–15%, which says the readout is an imperfect witness of what is used). As
+an application it needs v*: here it came from the gold chain, so this is an upper bound on
+"latent tool use" (a calculator supplying the intermediate) rather than a deployable
+fixer, and the paper says so. The net effect with an oracle v* on these long problems:
+CODI-1B about +5 points, SIM-CoT about +3.5, GPT-2 about +1 (its harm cancels its repair).
+
+**What is new relative to the literature in §126.** Chang et al. improve accuracy with
+un-aimed geometric edits; Cywiński et al. aimed averaged vectors on templated solved
+problems; Huang & Qi found synthetic directions fail; "Hidden Error Awareness" found
+patching fails on explicit CoT. Here, on natural failed problems and official checkpoints,
+aimed transplants into the audited carrier repair at 15–23% against a 3% control, natural
+or averaged alike, and the K/V route that stores the value is the wrong route to write
+through. That is a new, measured fact about continuous thoughts as a writable interface.
