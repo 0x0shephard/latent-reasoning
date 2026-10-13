@@ -33,11 +33,11 @@
 
 ## Verdict
 
-- regime: **no_transport**
+- regime: **not_evaluable**
 - carrying slots: []
 - placement slots: []
 - store slots (K/V carries, state does not): []
 - inert slots: [5] (readable but inert: [])
-- No thought carries a value on this pool; nothing here is monitorable through the thoughts (one-step chains; no long profile).
+- Long profile too thin (17 gated pairs, fewer than 50): carriers, faithfulness and necessity on long chains are not decided here; short-chain results stand.
 
 - stage seconds: {'twins_standard': 440.8, 'twins_long': 35.1, 'masking': 119.3}

@@ -383,10 +383,10 @@
       5
     ],
     "readable_inert_slots": [],
-    "regime": "no_transport",
+    "regime": "not_evaluable",
     "register_position_0": true,
-    "summary": "No thought carries a value on this pool; nothing here is monitorable through the thoughts (one-step chains; no long profile)."
+    "summary": "Long profile too thin (17 gated pairs, fewer than 50): carriers, faithfulness and necessity on long chains are not decided here; short-chain results stand."
   },
-  "created_at_utc": "2026-10-13T16:51:51.990835+00:00",
+  "created_at_utc": "2026-10-13T16:52:22.625870+00:00",
   "smoke": false
 }

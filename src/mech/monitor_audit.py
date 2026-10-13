@@ -335,7 +335,9 @@ def verdict_from(card: dict, carriers: list[int]) -> dict:
     inert = [s for s in SLOTS if slots[str(s)]["role"] in ("inert", "readable_inert", "terminal_inert")]
     readable_inert = [s for s in SLOTS if slots[str(s)]["role"] == "readable_inert"]
     stores = [s for s in SLOTS if slots[str(s)]["role"] == "store"]
-    if checks["c2_max_long_transport"] is None:
+    if card.get("long_profile_thin"):
+        regime = "not_evaluable"
+    elif checks["c2_max_long_transport"] is None:
         # no long profile (one-step pool): if the standard profile shows no transport anywhere, nothing is monitorable here
         regime = "no_transport" if checks["c1_no_single_site_transport_on_short_chains"] is True else "not_evaluable"
     elif not carriers:

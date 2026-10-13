@@ -311,7 +311,7 @@
       "gate_accuracy": 0.4359363153904473,
       "carriers": [],
       "placement": [],
-      "regime": "no_transport",
+      "regime": "not_evaluable",
       "transport_long": {
         "0": 0.0,
         "1": 0.11764705882352941,
