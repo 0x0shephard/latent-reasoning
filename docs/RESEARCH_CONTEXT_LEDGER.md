@@ -6572,3 +6572,30 @@ reported as absent otherwise.
 
 ASDiv: three audit kernels (≈ 15–45 min). Tool repair: three kernels (≈ 5–10 min plus
 explicit decoding). Coconut: one kernel (≈ 30 min). All on dannyism11.
+
+### §127 addendum: Item B scored, repair with a calculator-supplied value (2026-10-13)
+
+Three kernels; targets and controls as §126; v* now from the model's own explicit chain
+re-evaluated by the calculator. Summaries and per-target outcomes in
+`docs/latent_monitor_audit/latent_repair_tool/`.
+
+| model | tool has a value | agrees with gold v* | explicit chain right on latent-wrong targets | repair, primary (gold → tool) | different-value control | centroid | harm (state_nearest) |
+|---|---|---|---|---|---|---|---|
+| GPT-2 | 586 / 640 | 36% | 18.6% | 15.1 → **9.2** [6.0, 12.8] | 3.5 | 12.4 | 16.8 |
+| CODI-1B | 516 / 550 | 44% | 22.7% | 22.6 → **18.8** [13.9, 24.0] | 3.8 | 16.8 | 6.0 |
+| SIM-CoT | 508 / 546 | 42% | 20.6% | 15.4 → **8.4** [5.1, 12.1] | 3.3 | 8.9 | 10.4 |
+
+**P12 scored.** At CODI-1B: tool/gold ratio 0.83 (bar 0.6) **holds**; control ≤ 0.05
+**holds**; agreement with gold 44% (bar 0.5) **misses narrowly**. At GPT-2 the ratio is
+0.61 and at SIM-CoT 0.55; the control ratio falls below 3× at both (2.6×, 2.5×). So a
+tool-supplied value repairs through the carrier on all three models, cleanly at the 1B
+plain model and weakly at the other two.
+
+**The honest ceiling, as preregistered.** On every model the explicit chain's own answer
+is right on more of the latent-wrong targets (18.6–22.7%) than latent injection recovers
+across all wrong targets (≈ 5–11%, since only 73–80% have a donor and the primary stratum
+is a subset). Latent injection of a tool value is therefore a *mechanism* result, the
+thought is writable from outside, and not a method that beats reading the explicit chain.
+The paper says exactly that and uses the result for what it shows: a continuous-thought
+model exposes one slot through which an external value enters the computation, located by
+the audit and confirmed by two independent sources of the value.
