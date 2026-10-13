@@ -16,10 +16,9 @@
 \title{Readable Is Not Used, Used Is Not Needed:\\An Inference-Only Audit of Continuous-Thought Reasoners}
 
 \author{%
-  Jon Raza\\
-  \texttt{jon@titannetwork.com}\\
-  \And
-  (with Claude Fable 5.1 as research assistant)\\
+  Anonymous Author(s)\\
+  Affiliation\\
+  \texttt{email}\\
 }
 
 \begin{document}
@@ -106,9 +105,25 @@ Swapping a thought from an unrelated problem breaks answers, but breaking is not
 
 Sufficiency is not necessity. For each thought we run two removals. \emph{Mean}: replace its state by the average state over the pool, so nothing problem-specific reaches the next thought. \emph{Mask}: hide its K/V from every later position through the attention mask, which needs a decoding path that carries the attention mask and explicit position ids through every step (the released LLaMA path drops the mask and we fixed that). We measure the accuracy drop in points, split by chain length, with intervals from a bootstrap over rows. Three preregistered checks: short chains survive any single removal within 5 points (K1), the carriers cost at least 10 points on long chains (K2), the last thought costs at most 2 points (K3).
 
+\subsection{What a probe is, and how it reads a thought}\label{sec:probes}
+
+A thought is a vector of 768 numbers (GPT-2) or 2{,}048 numbers (the 1B models). A \emph{probe} is a small model trained, after the fact, to predict a label from such a vector. It never touches the reasoning model; it only reads vectors we recorded. We use three readers.
+
+\begin{enumerate}
+  \item \textbf{The model's own output head (no training).} The reasoning model ends with a matrix that turns a vector into scores over its vocabulary. Applying it to a thought's state asks ``if this vector were about to be spoken, which token would it say?'' We keep the numeric tokens and read the top few. This reader costs nothing and uses the model's own notion of a number; it is what the released decoder would do if it decoded the thought.
+  \item \textbf{A ridge probe (linear).} We fit a linear map $W$ so that $xW$ is close to the embedding of the target number's token, with a small penalty on $W$ to avoid overfitting (ridge regression, closed form). To read, we map the state and pick the numeric token whose embedding is nearest. The target during training is the chain's penultimate intermediate result, the value the carriers hold.
+  \item \textbf{An MLP probe (non-linear).} A two-layer network (hidden width 256) trained to classify the state into one of about 900 numeric tokens, with weight decay, 300 full-batch steps and a fixed seed. It can read structure a linear map cannot.
+\end{enumerate}
+
+\paragraph{Held-out reading.} Probes are trained on four fifths of the recorded pairs and read the remaining fifth, five times over, with folds assigned by twin pair so a probe is never read on a problem whose twin it trained on. \emph{Readability} is the held-out accuracy. A readability of 0.79 at thought 3 of CODI-1B means that, on four problems in five it had not seen, the probe named the right intermediate value from that one vector.
+
+\paragraph{Why readability is not enough.} A probe can read a value from a vector the model never uses, the way a bystander can read a note the recipient threw away. So we ask a second question with the twins. After a swap at thought $s$, the recipient holds the twin's state there. A monitor placed at $s$ would read the twin's value and raise an alarm, ``the model is working with value $v'$ now''. \emph{Faithfulness} is the share of those alarms the behaviour confirms: how often the answer actually became the twin's. At CODI-1B thought 3 the probe reads at 0.79 and the alarm is confirmed 0.36 of the time; at thought 4 it reads at 0.84 and the alarm is confirmed 0.05 of the time. Both are readable; only one is a monitor.
+
+\paragraph{Prompt-leakage probes.} The same machinery, with a different label, tests what else a probe can read. We train probes to predict two things the question already fixes before any reasoning: the first operator in the chain and whether the problem has three or more steps. If these are readable from every thought, a probe's accuracy on a prompt-fixed property says nothing about the plan.
+
 \subsection{Monitors: readable, and faithful?}
 
-A monitor is a probe trained to read a value from a thought's state. We train two families on the recorded twin states: a ridge map from the state to the embedding of the target number token, decoded by the nearest numeric token; and a two-layer MLP classifier over the numeric vocabulary. The target is the chain's penultimate intermediate result. Folds are assigned by pair so a twin never trains the probe that reads it. \emph{Readability} is held-out accuracy. \emph{Faithfulness} asks: when a monitor placed at this thought reads the twin's value from the twin's state after a swap (that is, raises an alarm), how often did the answer actually follow? A thought can be readable and never faithful.
+A monitor is a probe trained to read a value from a thought's state (Section~\ref{sec:probes}). We train two families on the recorded twin states: a ridge map from the state to the embedding of the target number token, decoded by the nearest numeric token; and a two-layer MLP classifier over the numeric vocabulary. The target is the chain's penultimate intermediate result. Folds are assigned by pair so a twin never trains the probe that reads it. \emph{Readability} is held-out accuracy. \emph{Faithfulness} asks: when a monitor placed at this thought reads the twin's value from the twin's state after a swap (that is, raises an alarm), how often did the answer actually follow? A thought can be readable and never faithful.
 
 \subsection{The card}\label{sec:card}
 
@@ -123,6 +138,14 @@ To test whether a probe reads the plan or the prompt, we train probes on every t
 For every GSM8K test problem, right or wrong, we record the thoughts and the native answer, apply the model's own output head to each thought (top-1 numeric value, its probability, the entropy, and agreement with the answer and the other thoughts), and train logistic classifiers (five folds) to predict ``the answer is wrong'': carrier slots only, inert slots only, all slots, the answer's own first-token confidence, and a classifier on all raw state features. We report AUROC with bootstrap intervals.
 
 \subsection{Repair by transplanting a natural thought}\label{sec:repair-method}
+
+The audit says the carrier thought holds the intermediate value and passes it on. Repair asks whether that channel can be used in reverse: if the model got a problem wrong, can we put the right intermediate value into the carrier and get the right answer out? We cannot write a number into a vector directly, since we do not know the code. But we can find a problem the model solved where the carrier already holds that number, and borrow its vector.
+
+\paragraph{Worked example.} The test problem asks for $(18\times3)+(12\times5)$; the chain is \texttt{<<18*3=54>> <<12*5=60>> <<54+60=114>>}, so the penultimate intermediate is $v^*=60$. CODI-1B answers 108 and its carrier reads 48. In the bank of 2{,}048 training problems, the model's output head reads 60 at the carrier of 41 problems. We take the one whose carrier vector is most similar to the test problem's (cosine), copy that vector in at thought 3 while decoding the test problem, and read the new answer. If it is 114, the problem is \emph{repaired}; if it is still 108, \emph{unchanged}; if something else, \emph{changed but wrong}.
+
+\paragraph{Steps.} (1) Decode the 2{,}048 bank problems once, recording all six thoughts and their K/V; read each carrier with the output head to index the bank by value. (2) Decode every test problem with three or more steps; keep the wrongly answered ones (up to 512) and 128 correctly answered ones as controls. (3) For each target, find bank entries whose carrier reads $v^*$; pick the nearest. (4) Decode the target again under each condition and classify the answer. (5) Report rates with bootstrap intervals, on the \emph{primary stratum} (wrong targets whose own carrier reads something other than $v^*$ and that have a donor) and on all wrong targets with a donor.
+
+\paragraph{Controls, and what each rules out.} A \emph{random same-value} donor rules out the nearest-neighbour choice mattering. The \emph{centroid} of all same-value bank vectors is a synthetic vector in the style of \citet{cywinski2025}; it tests whether a natural single vector is needed. A \emph{random different-value} donor is the key control: if it repaired as often, the repair would be a disturbance that happens to shake a wrong answer loose, not the value. The \emph{store K/V} and \emph{state plus K/V} conditions test the second route. The donor's \emph{whole K/V tail} is a ceiling on transport, not a repair. The 128 correct controls measure \emph{harm}: how often the same transplant, with $v^*$ set to the control's own penultimate value, breaks a right answer.
 
 We record the thoughts of a bank of 2{,}048 training-pool problems and index each by the value the model's own output head reads at the carrier. For every wrongly answered test problem with three or more steps, we take the needed intermediate value $v^*$ (the chain's penultimate result), find bank problems whose carrier reads $v^*$, and transplant the nearest one's carrier state; we decode again and ask whether the answer became correct. Controls: a random same-value donor, the centroid of same-value states (a synthetic vector, as in \citet{cywinski2025}), a random different-value donor, the store position's K/V alone and with the state, the donor's whole K/V tail, and 128 correctly answered problems to measure harm. The \emph{primary stratum} is wrong problems whose own carrier reads a value other than $v^*$ and that have a donor.
 
@@ -324,6 +347,24 @@ masking cost, long (pts) & 49 (mean) & 48 (mask) & 45 (mean) & 46 (mask) & 16 (m
 \section{Discussion}
 
 \paragraph{What this means for monitoring latent reasoning.} For the CODI family a monitor can be placed where it means something, at the carrier, and the audit finds that slot in about an hour. Placing it at the most readable thought is a mistake, since the most readable thoughts are routinely the ones the behaviour never confirms, and any thought will happily report the prompt. For Coconut-style models the picture is reversed: every even thought is both used and needed, and readability tracks use. The practical rule is to run the audit before trusting a probe, and to include a prompt-only control in every monitor evaluation.
+
+\paragraph{Can the repair raise accuracy?} Not as a method, and we say so plainly. We costed three policies on the 838 long-chain test problems using the per-target outcomes of the calculator runs (Table~\ref{tab:policies}). Applying the repair to every problem gains 2.8 points on CODI-1B and loses points on the other two, because the harm to correct answers outweighs the repairs. Applying it only when the model's explicit chain disagrees with its latent answer (a trigger that needs no answer key) gains 3.4 points on CODI-1B, 1.1 on SIM-CoT and nothing on GPT-2. But the obvious alternative, switching to the explicit chain's answer on the same disagreement, gains 5.3, 3.2 and 5.6 points, and it needs no transplant. Repair also costs an explicit decode to obtain the value, so it is not cheaper either. What the repair shows is a property of the model, a writable channel at a known slot, not a better way to get answers out of it.
+
+\begin{table}[h]
+\caption{Net accuracy change (points) on the 838 long-chain GSM8K test problems under three policies, scaled from the repair runs' outcomes (calculator-supplied value). Latent accuracy: GPT-2 35.6, CODI-1B 49.6, SIM-CoT 50.1.}
+\label{tab:policies}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Policy & GPT-2 & CODI-1B & SIM-CoT \\
+\midrule
+Transplant the donor thought on every problem & $-1.8$ & $+2.8$ & $-2.0$ \\
+Transplant only when the explicit chain disagrees with the latent answer & $-0.1$ & $+3.4$ & $+1.1$ \\
+Switch to the explicit chain's answer when it disagrees & $+5.6$ & $+5.3$ & $+3.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Why the two families differ.} CODI distils a teacher into thoughts through a projector and drops the chain's last step during training; what emerges is a narrow channel that holds one intermediate at one slot, with the question kept in position~0's memory and a backup route around the thoughts in the larger model. Coconut replaces steps with thoughts by a curriculum, step by step; what emerges is a thought sequence that is the computation, dense and necessary. Step supervision (SIM-CoT) moves CODI part of the way toward the Coconut profile: more necessary thoughts and a heavier reliance on the question register.
 
