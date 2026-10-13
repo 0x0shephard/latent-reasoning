@@ -6371,3 +6371,88 @@ the method, and the paper reports both in one table.
 
 **Consequence for the plan.** Build 3 (retrieval-based latent repair) is now the only
 application that can turn the audit into a capability; its preregistration follows.
+
+## 126. Preregistered: Build 3, retrieval-based latent repair
+
+Designed 2026-10-13 after §125 addendum 2. Contract `official_codi_latent_repair_v1`.
+No training. The question: when a model answers a multi-step problem wrongly, can the
+right intermediate value be put into its carrier thought by transplanting a *natural*
+thought from another problem that holds that value, and does the answer then come right?
+
+### What people have done (checked 2026-10-13)
+
+- Chang et al. (ACL 2026, arXiv 2606.01243): training-free decode-time edits of cached
+  continuous thoughts along probe-identified directions (norm-preserving projections)
+  raise accuracy across scales and tasks; the edits impose global geometric priors, they
+  do not aim a specific value at a specific problem, and a reviewer notes the causal link
+  between the probes and the gains is not shown.
+- Cywiński et al. (Alignment Forum, Dec 2025): patching the fifth latent vector of a
+  self-trained CODI-1B with the *average* vector of prompts sharing a target Step-2 value
+  shifts the answer toward that value "significantly more often" than random vectors but
+  at a modest rate, on 20 templates with two intermediate steps. The closest precedent
+  for aiming a value; averaged synthetic vectors, templated problems, correct problems.
+- Huang & Qi (arXiv 2609.21662): synthetic steering directions move continuous thoughts
+  without moving the language output (a latent-to-language transition gap); on
+  Coconut-style 7–8B models.
+- "Hidden Error Awareness" (arXiv 2605.09502): on explicit-CoT models, probes read error
+  well but activation patching and steering do not repair and patching destroys
+  coherence: "diagnostic, not causal".
+- "When Chain-of-Thought Fails, the Solution Hides in the Hidden States" (arXiv
+  2604.23351): cached CoT hidden states patched into a no-CoT pass on GSM8K to test
+  recoverability.
+- No work retrieves a natural donor thought by the value it carries and transplants it,
+  or its stored K/V, to repair a wrongly answered natural problem.
+
+What our own data say before the run: a natural donor's carrier state moves the answer
+to the donor's value 0.30–0.36 of the time on solved long-chain twins (§113, §117,
+§119), the store's K/V 0.29–0.33, the whole K/V tail 0.61–0.72; the carrier's readout
+names the changed value in 61–65% of long-chain twins. A repair can only succeed where
+(i) the wrong answer traces to the carrier's intermediate, (ii) a donor with the right
+value exists, and (iii) the transplant transports. The run measures each factor.
+
+### Protocol
+
+- **Bank**: the 2,048 rows of the `gsm8k_aug_train` fit split (as §120's masking),
+  natively decoded, states and K/V of all six thoughts recorded; each row's carrier
+  readout (the model's own output head on the carrier state, top-1 numeric token) indexes
+  the bank by value.
+- **Targets**: GSM8K test rows with a chain of ≥ 3 steps and an integer penultimate
+  intermediate v*, natively decoded. *Wrong targets*: native answer ≠ gold (all of them,
+  cap 512). *Correct controls*: 128 seeded rows answered correctly (for harm).
+- **Carrier and store** from the model's card: GPT-2 slot 3 / store 4 on the test pool,
+  CODI-1B 3 / 4, SIM-CoT 3 / 4 (SIM-CoT's slot 1 is its other carrier; slot 3 is used for
+  comparability and slot 1 is run as a second carrier condition).
+- **Donor choice** per target: candidates are bank rows whose carrier readout equals v*;
+  *nearest* = highest cosine similarity of carrier states; *random-same* = a random
+  candidate; *random-diff* = a random bank row whose readout ≠ v* (control); *centroid* =
+  the mean carrier state over candidates (Cywiński's synthetic vector).
+- **Conditions** (native greedy decoding under the intervention): `state_nearest`,
+  `state_random_same`, `state_centroid`, `state_random_diff`, `kv_store_nearest`,
+  `state_kv_nearest` (both), `kv_tail_nearest` (whole donor tail, a transport ceiling,
+  not a repair).
+- **Outcomes** per wrong target: repaired (answer = gold), unchanged, changed-but-wrong.
+  Per correct control: harmed (answer ≠ gold) under `state_nearest` with v* = its own
+  penultimate value and the donor ≠ itself. Strata: whether the target's own carrier
+  readout already equals v* (then the error is elsewhere) and whether a donor exists.
+  Paired bootstrap over targets (2,000 draws) for every rate.
+
+### Predictions, before the run
+
+- R1 (repair exists): at CODI-1B, `state_nearest` repairs ≥ 0.10 of the wrong targets
+  whose carrier readout ≠ v* and that have a donor; at GPT-2 and SIM-CoT ≥ 0.05.
+- R2 (it is the value, not the disturbance): `state_nearest` repairs ≥ 3 × `state_random_diff`
+  on the same targets.
+- R3 (natural beats synthetic): `state_nearest` ≥ `state_centroid` at every model.
+- R4 (the store adds): `state_kv_nearest` ≥ `state_nearest`.
+- R5 (harmless where right): on correct controls, `state_nearest` harms ≤ 0.10.
+- Expected ceiling: `kv_tail_nearest` changes most answers and repairs few, since a
+  foreign tail answers the donor's problem.
+
+If R1 fails everywhere, the finding is that transport on solved twins does not convert
+into repair on failed problems, and Build 3 closes as a negative result, reported with the
+three factor measurements.
+
+### Cost
+
+One kernel per model on dannyism11: bank 2,048 rows + ≈ 800 targets, seven conditions
+≈ 10 min (GPT-2) to 35 min (1B).
