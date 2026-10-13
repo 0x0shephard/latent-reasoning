@@ -139,6 +139,62 @@ def checks_from(report: dict, model_key: str) -> dict:
             "r5_harmless_where_right": None if harm is None else harm <= R5_MAX_HARM}
 
 
+# ----------------------------------------------------------------------------- the tool (ledger §127 B)
+def recompute_chain(chain_text: str) -> tuple[list[float], list[float]] | None:
+    """Re-evaluate a generated equation chain with a calculator.  Operands equal to an
+    earlier *stated* result are references and take that step's *corrected* result.
+    Returns (stated results, corrected results) or None when nothing parses."""
+    from src.data.counterfactual_chain import _evaluate
+    equations = parse_chain(chain_text)
+    if not equations:
+        return None
+    stated = [e["result"] for e in equations]
+    corrected: list[float] = []
+    for i, eq in enumerate(equations):
+        pieces, cursor, left = [], 0, eq["left"]
+        base = eq["span"][0] + 2
+        for op in eq["operands"]:
+            start, end = op["span"][0] - base, op["span"][1] - base
+            pieces.append(left[cursor:start])
+            ref = next((k for k in range(i) if abs(op["value"] - stated[k]) < 1e-6), None)
+            pieces.append(repr(corrected[ref]) if ref is not None else op["text"])
+            cursor = end
+        pieces.append(left[cursor:])
+        try:
+            corrected.append(float(_evaluate("".join(pieces))))
+        except (ValueError, SyntaxError, ZeroDivisionError, TypeError):
+            return None
+    return stated, corrected
+
+
+def tool_value(chain_text: str) -> str | None:
+    """The tool's v*: the corrected result of the last generated equation, as an integer string."""
+    out = recompute_chain(chain_text)
+    if out is None:
+        return None
+    v = out[1][-1]
+    return str(int(round(v))) if abs(v - round(v)) < 1e-6 and v >= 0 else None
+
+
+def explicit_chains(model, tokenizer, questions: list[str], *, batch_size: int, device, max_new_tokens: int = 96) -> list[str]:
+    """Teacher-mode decoding: the question alone (no BOT) makes the checkpoint write its own
+    equation chain and 'The answer is: X'."""
+    from src.models.official_codi import official_codi_base_model
+    base = official_codi_base_model(model)
+    side = tokenizer.padding_side; tokenizer.padding_side = "left"
+    pad = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+    add_special = bool(getattr(model, "question_special_tokens", True))
+    outs = []
+    with torch.inference_mode():
+        for start in range(0, len(questions), batch_size):
+            enc = tokenizer(questions[start:start + batch_size], return_tensors="pt", padding=True, add_special_tokens=add_special).to(device)
+            gen = base.generate(input_ids=enc.input_ids, attention_mask=enc.attention_mask, max_new_tokens=max_new_tokens, do_sample=False,
+                                pad_token_id=pad, eos_token_id=tokenizer.eos_token_id)
+            outs += [tokenizer.decode(g[enc.input_ids.shape[1]:], skip_special_tokens=True) for g in gen]
+    tokenizer.padding_side = side
+    return outs
+
+
 def _number_text(value):
     return None if value is None else (str(int(round(value))) if abs(value - round(value)) < 1e-6 else str(value))
 
@@ -196,7 +252,22 @@ def run(args):
     is_control = [False] * len(wrong_idx) + [True] * len(control_idx)
     t_traj = donor_view(traj, sel)
     t_rows = [rows[i] for i in sel]; t_native = [native[i] for i in sel]
-    t_values = [r["v_star"] for r in t_rows]
+    gold_values = [r["v_star"] for r in t_rows]
+    tool = None
+    if args.v_source == "tool":
+        chains = explicit_chains(model, tokenizer, [r["question"] for r in t_rows], batch_size=bs, device=device)
+        tool_v = [tool_value(c) for c in chains]
+        explicit_numbers = [extract_official_answer_number(c) for c in chains]
+        explicit_correct = [n is not None and abs(n - r["gold"]) < 1e-6 for n, r in zip(explicit_numbers, t_rows)]
+        tool = {"chains": chains, "v": tool_v, "explicit_numbers": explicit_numbers,
+                "has_value": sum(v is not None for v in tool_v), "agrees_with_gold": sum(1 for v, g in zip(tool_v, gold_values) if v == g),
+                "explicit_accuracy_on_wrong_targets": sum(c for c, ctrl in zip(explicit_correct, is_control) if not ctrl) / max(1, len(wrong_idx)),
+                "explicit_accuracy_on_controls": sum(c for c, ctrl in zip(explicit_correct, is_control) if ctrl) / max(1, len(control_idx))}
+        print(f"tool: value for {tool['has_value']}/{len(t_rows)} targets, agrees with gold v* on {tool['agrees_with_gold']}; "
+              f"explicit mode right on {tool['explicit_accuracy_on_wrong_targets']:.3f} of the latent-wrong targets")
+        t_values = [v if v is not None else "__none__" for v in tool_v]
+    else:
+        t_values = gold_values
     own_read = {c: top1_numbers(t_traj.states[:, c], readout, vocab_ids, strings) for c in [carrier] + extra}
     print(f"targets: {len(rows)} eligible, {sum(1 for c in correct if not c)} wrong ({len(wrong_idx)} used), {len(control_idx)} correct controls; native accuracy {sum(correct)/len(correct):.3f}")
 
@@ -267,15 +338,19 @@ def run(args):
         "changed": {"with_donor": rates(lambda t: not is_control[t] and has_donor[t], kind="changed_wrong")},
         "harm": {name: rate([r != "kept" for r, c, h in zip(res, is_control, has_donor) if c and h]) for name, res in results.items()},
     }
+    if tool is not None:
+        report["tool"] = {k: v for k, v in tool.items() if k not in ("chains", "v", "explicit_numbers")}
     checks = checks_from(report, args.model_key)
     with (out / "targets.jsonl").open("w") as handle:
         for t in range(len(sel)):
-            handle.write(json.dumps({"question": t_rows[t]["question"], "gold": gold[t], "v_star": t_values[t], "steps": t_rows[t]["steps"], "control": is_control[t],
+            handle.write(json.dumps({"question": t_rows[t]["question"], "gold": gold[t], "v_star": t_values[t], "gold_v_star": gold_values[t],
+                                     "tool_chain": None if tool is None else tool["chains"][t], "steps": t_rows[t]["steps"], "control": is_control[t],
                                      "native": t_native[t], "carrier_read": own_read[carrier][t], "has_donor": has_donor[t],
                                      "nearest_donor": donors["nearest"][t], "outcomes": {k: v[t] for k, v in results.items()},
                                      "numbers": {k: v[t] for k, v in numbers.items()}}) + "\n")
     _atomic_torch_save({"target_states": t_traj.states.half(), "bank_values": bank_values, "bank_questions": [r["question"] for r in bank_rows]}, out / "repair_states.pt")
-    summary = {"schema_version": 1, "contract": CONTRACT + ("_smoke" if smoke else ""), "smoke": smoke, "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    summary = {"schema_version": 1, "contract": CONTRACT + ("_tool" if args.v_source == "tool" else "") + ("_smoke" if smoke else ""), "smoke": smoke,
+               "created_at_utc": datetime.now(timezone.utc).isoformat(), "v_source": args.v_source,
                "checkpoint_sha256": load_report.checkpoint_sha256, "model_key": args.model_key, "carrier": carrier, "store": store, "extra_carriers": extra,
                "preregistration": {"bank_rows": len(bank_rows), "max_targets": args.max_targets, "controls": args.controls, "min_steps": MIN_STEPS, "seed": SEED,
                                    "conditions": list(results), "r1_min": R1_MIN, "r2_ratio": R2_RATIO, "r5_max_harm": R5_MAX_HARM},
@@ -297,6 +372,7 @@ def main():
     parser.add_argument("--carrier", type=int, default=3)
     parser.add_argument("--store", type=int, default=4)
     parser.add_argument("--extra-carriers", nargs="*", default=[])
+    parser.add_argument("--v-source", choices=("gold", "tool"), default="gold", help="where v* comes from: the gold chain, or the model's own explicit chain re-evaluated by a calculator (ledger §127 B)")
     parser.add_argument("--bank-rows", type=int, default=BANK_ROWS)
     parser.add_argument("--max-targets", type=int, default=MAX_TARGETS)
     parser.add_argument("--controls", type=int, default=CONTROLS)

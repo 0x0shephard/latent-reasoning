@@ -11,6 +11,8 @@ from scripts.run_codi_latent_repair import (  # noqa: E402
     classify,
     penultimate_value,
     rate,
+    recompute_chain,
+    tool_value,
     top1_numbers,
 )
 
@@ -51,3 +53,11 @@ def test_classify_rate_and_checks():
     report["repair"]["primary"]["state_nearest"]["rate"] = 0.06
     c = checks_from(report, "codi1b"); assert not c["r1_repair_exists"] and not c["r2_value_not_disturbance"]
     assert checks_from(report, "gpt2")["r1_repair_exists"] and checks_from(report, "gpt2")["r1_threshold"] == 0.05
+
+
+def test_tool_recomputes_and_propagates():
+    stated, corrected = recompute_chain("<<16-3-4=9>> <<9*2=19>>")          # second equation mis-stated
+    assert stated == [9.0, 19.0] and corrected == [9.0, 18.0] and tool_value("<<16-3-4=9>> <<9*2=19>>") == "18"
+    stated, corrected = recompute_chain("<<16-3=12>> <<12*2=24>>")           # first wrong; the reference 12 is corrected to 13
+    assert corrected == [13.0, 26.0] and tool_value("<<16-3=12>> <<12*2=24>>") == "26"
+    assert tool_value("<<5/2=2>>") is None and tool_value("no chain here") is None and recompute_chain("<<2/0=1>>") is None

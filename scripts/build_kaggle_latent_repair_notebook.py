@@ -22,18 +22,18 @@ MODELS = {
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_latent_repair_runner.py", "tests/test_chain_pools.py"]
 
 
-def title(model: str) -> str:
-    return f"Latent repair {MODELS[model]['title']}"
+def title(model: str, source: str = "gold") -> str:
+    return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 
 
-def slug(model: str) -> str:
+def slug(model: str, source: str = "gold") -> str:
     import re
-    return re.sub(r"[^a-z0-9]+", "-", title(model).lower()).strip("-")
+    return re.sub(r"[^a-z0-9]+", "-", title(model, source).lower()).strip("-")
 
 
-def build(model: str) -> Path:
+def build(model: str, source: str = "gold") -> Path:
     spec = MODELS[model]
-    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / model
+    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / (model if source == "gold" else f"{model}_tool")
     out_dir.mkdir(parents=True, exist_ok=True)
     nb = nbf.v4.new_notebook()
     cells = []
@@ -59,6 +59,7 @@ MODEL = "{model}"
 PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/repair_{model}"
 CARRIER, STORE, EXTRA = "{spec['carrier']}", "{spec['store']}", {json.dumps([str(c) for c in spec['extra']])}
+V_SOURCE = "{source}"
 RUN_SMOKE = True
 
 import glob, json, os, pathlib, subprocess, sys, time
@@ -102,7 +103,7 @@ def run_with_retry(command, attempts=3, wait=60):
     code(r'''
 def repair(out, smoke):
     cmd = [sys.executable, "-u", "scripts/run_codi_latent_repair.py", "--config", CONFIG, "--model-key", MODEL, "--output-dir", out,
-           "--carrier", CARRIER, "--store", STORE, "--batch-size", "32", "--precision", PRECISION, "--device", "cuda"]
+           "--carrier", CARRIER, "--store", STORE, "--batch-size", "32", "--precision", PRECISION, "--device", "cuda", "--v-source", V_SOURCE]
     if EXTRA:
         cmd += ["--extra-carriers", *EXTRA]
     if smoke:
@@ -116,6 +117,8 @@ summary = repair(OUTPUT_ROOT, False)
 import pandas as pd
 from IPython.display import display
 print(json.dumps(summary["report"]["targets"], indent=2)); print(json.dumps(summary["checks"], indent=2))
+if "tool" in summary["report"]:
+    print("tool:", json.dumps(summary["report"]["tool"], indent=2))
 for part in ("primary", "with_donor", "carrier_already_right"):
     print("--- repair rate,", part)
     display(pd.DataFrame({k: {"rate": v["rate"], "ci95": v["ci95"], "n": v["n"]} for k, v in summary["report"]["repair"][part].items()}).T)
@@ -125,10 +128,10 @@ print("Reminder: publish this notebook's output as a dataset (Output tab -> New 
     nb["cells"] = cells
     nb["metadata"] = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
                       "language_info": {"name": "python", "version": "3"}, "kaggle": {"accelerator": "gpu", "internet": True}}
-    name = f"kaggle_latent_repair_{model}.ipynb"
+    name = f"kaggle_latent_repair_{model}{'_tool' if source == 'tool' else ''}.ipynb"
     nbf.write(nb, out_dir / name)
     (out_dir / "kernel-metadata.json").write_text(json.dumps({
-        "id": f"{KAGGLE_USER}/{slug(model)}", "title": title(model), "code_file": name, "language": "python", "kernel_type": "notebook",
+        "id": f"{KAGGLE_USER}/{slug(model, source)}", "title": title(model, source), "code_file": name, "language": "python", "kernel_type": "notebook",
         "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": [], "model_sources": []}, indent=2) + "\n")
     return out_dir
 
@@ -136,9 +139,11 @@ print("Reminder: publish this notebook's output as a dataset (Output tab -> New 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", choices=sorted(MODELS) + ["all"], default="all")
+    parser.add_argument("--source", choices=("gold", "tool", "all"), default="all")
     args = parser.parse_args()
     for model in (sorted(MODELS) if args.model == "all" else [args.model]):
-        print(build(model))
+        for source in (("gold", "tool") if args.source == "all" else [args.source]):
+            print(build(model, source))
     return 0
 
 

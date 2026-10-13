@@ -2,6 +2,8 @@ import pytest
 
 from src.data.chain_pools import (
     DEFAULT_POOL,
+    asdiv_chain_row,
+    formula_chain,
     POOLS,
     chain_rows,
     eval_pool,
@@ -16,7 +18,7 @@ from src.data.counterfactual_chain import parse_chain, perturb_row
 
 
 def test_pools_are_declared():
-    assert DEFAULT_POOL == "gsm8k_aug_train" and set(POOLS) == {"gsm8k_aug_train", "gsm8k_test", "svamp", "gsm8k_train_original"}
+    assert DEFAULT_POOL == "gsm8k_aug_train" and set(POOLS) == {"gsm8k_aug_train", "gsm8k_test", "svamp", "gsm8k_train_original", "asdiv"}
     assert POOLS["svamp"]["long_profile"] is False and POOLS["gsm8k_test"]["long_profile"] is True
     spec = POOLS["gsm8k_train_original"]["spec"]
     assert spec["data_file"].endswith("3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/train.jsonl") and spec["split"] == "train"
@@ -68,3 +70,15 @@ def test_eval_pool_dedupes_shuffles_deterministically_and_hashes():
 def test_unknown_pool_is_rejected():
     with pytest.raises(ValueError):
         pool_rows("nope", data_cfg=None, tokenizer=None, bot_token_id=0)
+
+
+def test_asdiv_formula_becomes_a_stepwise_chain():
+    assert formula_chain("(16-3-4)*2=18") == "<<16-3=13>> <<13-4=9>> <<9*2=18>>"
+    assert formula_chain("7+2=9") == "<<7+2=9>>" and formula_chain("3*(4+5)=27") == "<<4+5=9>> <<3*9=27>>"
+    assert formula_chain("5/2=2.5") is None and formula_chain("2-5=-3") is None and formula_chain("abc") is None
+    row = asdiv_chain_row({"body": "Tom has 16 apples. He eats 3 and gives away 4.", "question": "How many does he keep if he doubles the rest?",
+                           "formula": "(16-3-4)*2=18", "answer": "18 (apples)", "solution_type": "Multi-step"})
+    assert row["cot"] == "<<16-3=13>> <<13-4=9>> <<9*2=18>>" and row["answer"] == "18" and row["question"].startswith("Tom has")
+    assert len(parse_chain(row["cot"])) == 3 and perturb_row(row) is not None
+    assert asdiv_chain_row({"body": "b", "question": "q", "formula": "5/2=2.5", "answer": "2.5 (units)"}) is None
+    assert POOLS["asdiv"]["adapter"] == "asdiv" and POOLS["asdiv"]["spec"]["hf_id"] == "EleutherAI/asdiv"

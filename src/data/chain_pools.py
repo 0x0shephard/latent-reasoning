@@ -23,6 +23,9 @@ POOLS = {
     "gsm8k_test": {"source": "openai/grade-school-math test.jsonl; calculator annotations joined as the chain", "eval_name": "gsm8k",
                    "long_profile": True},
     "svamp": {"source": "ChilleD/SVAMP test.json; Equation as a one-step chain", "eval_name": "svamp", "long_profile": False},
+    "asdiv": {"source": "EleutherAI/asdiv (Miao, Liang & Su 2020; CC BY-NC 4.0); the formula's expression tree evaluated in order as the chain",
+              "eval_name": None, "adapter": "asdiv", "long_profile": True,
+              "spec": {"hf_id": "EleutherAI/asdiv", "split": "validation", "kind": "asdiv", "revision": "refs/convert/parquet"}},
     "gsm8k_train_original": {
         "source": "openai/grade-school-math train.jsonl (the questions GSM8k-Aug augments, in-distribution); calculator annotations as the chain",
         "eval_name": None, "adapter": "gsm8k", "long_profile": True,
@@ -92,7 +95,61 @@ def svamp_chain_row(raw: dict) -> dict | None:
     return _chain_row((body + " " + question).strip(), f"<<{expression}={gold_text}>>", gold_text)
 
 
-CHAIN_ADAPTERS = {"gsm8k": gsm8k_chain_row, "svamp": svamp_chain_row}
+def formula_chain(formula: str) -> str | None:
+    """``(16-3-4)*2=18`` → ``<<16-3=13>> <<13-4=9>> <<9*2=18>>``: the expression tree evaluated in
+    order, one step per operator, operands written by value (the GSM8k-Aug convention)."""
+    import ast
+    left = str(formula).split("=")[0].replace(" ", "")
+    if not left or not re.fullmatch(r"[\d.+\-*/()]+", left):
+        return None
+    try:
+        tree = ast.parse(left, mode="eval").body
+    except SyntaxError:
+        return None
+    ops = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+    steps: list[str] = []
+
+    def fmt(v: float) -> str | None:
+        return str(int(round(v))) if abs(v - round(v)) < 1e-6 else None
+
+    def walk(node) -> float | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            v = walk(node.operand); return None if v is None else -v
+        if isinstance(node, ast.BinOp) and type(node.op) in ops:
+            a, b = walk(node.left), walk(node.right)
+            if a is None or b is None:
+                return None
+            op = ops[type(node.op)]
+            if op == "/" and b == 0:
+                return None
+            c = a + b if op == "+" else a - b if op == "-" else a * b if op == "*" else a / b
+            fa, fb, fc = fmt(a), fmt(b), fmt(c)
+            if fa is None or fb is None or fc is None or c < 0:
+                return None
+            steps.append(f"<<{fa}{op}{fb}={fc}>>")
+            return c
+        return None
+
+    return " ".join(steps) if walk(tree) is not None and steps else None
+
+
+def asdiv_chain_row(raw: dict) -> dict | None:
+    """EleutherAI/asdiv: ``body + question``; ``formula`` split into steps; ``answer`` like ``9 (apples)``."""
+    answer = str(raw.get("answer", "")).split("(")[0].strip().replace(",", "")
+    try:
+        gold_text = _integer_text(float(answer))
+    except ValueError:
+        return None
+    chain = formula_chain(raw.get("formula", ""))
+    if gold_text is None or chain is None:
+        return None
+    question = (str(raw.get("body", "") or "").strip() + " " + str(raw.get("question", "") or "").strip()).strip()
+    return _chain_row(question, chain, gold_text)
+
+
+CHAIN_ADAPTERS = {"gsm8k": gsm8k_chain_row, "svamp": svamp_chain_row, "asdiv": asdiv_chain_row}
 
 
 def load_raw_eval_rows(spec: dict) -> list[dict]:
@@ -100,6 +157,9 @@ def load_raw_eval_rows(spec: dict) -> list[dict]:
     from datasets import load_dataset
 
     kwargs = {"split": spec.get("split", "test")}
+    if spec.get("revision") and not spec.get("data_file") and not spec.get("data_files"):
+        kwargs["revision"] = spec["revision"]
+        return [dict(row) for row in load_dataset(spec["hf_id"], split=kwargs["split"], revision=spec["revision"])]
     if "config" in spec:
         kwargs["name"] = spec["config"]
     if spec.get("data_files"):

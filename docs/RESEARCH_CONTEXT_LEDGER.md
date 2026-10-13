@@ -6506,3 +6506,69 @@ patching fails on explicit CoT. Here, on natural failed problems and official ch
 aimed transplants into the audited carrier repair at 15–23% against a 3% control, natural
 or averaged alike, and the K/V route that stores the value is the wrong route to write
 through. That is a new, measured fact about continuous thoughts as a writable interface.
+
+## 127. Preregistered: the three additions for a main-track submission
+
+Designed 2026-10-13 after §126 addendum. No model training. Three items, each with its
+own runner and prediction; they share the audit's contracts and the repair protocol.
+
+### Item A: a second task family, `asdiv`
+
+ASDiv (Miao, Liang & Su, ACL 2020; `EleutherAI/asdiv`, 2,305 problems, CC BY-NC 4.0),
+a corpus of different authorship and style from GSM8K, annotated with a formula per
+problem. The formula is split into a chain by evaluating its expression tree in order
+(`(16-3-4)*2=18` → `<<16-3=13>> <<13-4=9>> <<9*2=18>>`), which gives the GSM8k-Aug form;
+617 problems have two or more operators. Integer answers only. Pool `asdiv` runs the full
+card (both twin profiles where chains of ≥ 3 steps exist; the long profile is kept but
+may be thin).
+
+Prediction P11: on `asdiv` the short-chain ceiling (C1) and the terminal result (C3) hold
+for all three models; where the long profile has ≥ 50 pairs, the carrier is slot 3 and
+its transport interval overlaps the GSM8K-test interval; the question register at
+position 0 costs ≥ 10 points on long chains for SIM-CoT.
+
+### Item B: repair with a tool-supplied value
+
+The §126 repair took v* from the gold chain. Here v* comes from the model itself plus a
+calculator: every CODI checkpoint was trained with the explicit-chain teacher task, so
+decoding from the bare question (no BOT) yields its own equation chain
+(`<<16-3-4=9>>The answer is: 18`, verified on GPT-2; by training the chain omits the final
+equation). The calculator re-evaluates each generated equation from its operands,
+propagating corrected results into later equations that reference them; the tool's v* is
+the corrected result of the last generated equation. Everything else is §126's protocol.
+Two baselines are reported beside the repair rate: the explicit chain's own answer
+(accuracy of the teacher mode on the latent-wrong targets), and the agreement rate
+between the tool's v* and the gold v*.
+
+Prediction P12: at CODI-1B the tool-supplied repair rate on the primary stratum is ≥ 0.6
+of the gold-supplied rate (≥ 0.135 against 0.226), the tool's v* agrees with the gold v*
+on ≥ 0.5 of targets, and the different-value control stays ≤ 0.05. The explicit mode's
+own accuracy on the latent-wrong targets is reported as the honest ceiling: if it exceeds
+the repair rate, the paper states that latent injection is a mechanism result, not a
+better method than reading the explicit chain.
+
+### Item C: Coconut
+
+No official Coconut GSM8K checkpoint exists (the UdeSA model card says so). The
+third-party `UdeSA/coconut-0.2B-gsm8k-aug` (revision 741379d8; GPT-2, GSM8k-Aug, the
+official two-stage recipe, c_thought 2 × max_latent_stage 3 = six continuous thoughts,
+34.57% on GSM8K test against the paper's 34.1%) is used, provenance stated. Coconut's
+continuous thought is the last hidden state fed back as the next input embedding, with no
+projector; after the sixth thought the model emits `<|end-latent|>` and then text (any
+remaining steps beyond the third, then `### answer`). An adapter (`src/models/coconut.py`)
+reproduces the released forward pass with the audit's hooks (state swap at a slot, K/V
+patch at a position, K/V mask) and batched cached decoding; the gate is 34.57% ± 3.
+The Coconut audit uses native decoding outcomes throughout (there is no forced cue):
+twins (both profiles), masking, and §126's repair with gold v*.
+
+Prediction P13: Coconut shows the chain-length gate and a terminal-inert sixth thought;
+its carrier is not slot 3 (the two-thoughts-per-step curriculum pairs thoughts (0,1),
+(2,3), (4,5), so the value of step 2 is predicted at slots 2–3 and of step 1 at 0–1);
+single-thought transport on long chains is below CODI GPT-2's 0.33; repair with a
+same-value donor exceeds the different-value control by ≥ 3× if transport ≥ 0.10, and is
+reported as absent otherwise.
+
+### Cost
+
+ASDiv: three audit kernels (≈ 15–45 min). Tool repair: three kernels (≈ 5–10 min plus
+explicit decoding). Coconut: one kernel (≈ 30 min). All on dannyism11.
