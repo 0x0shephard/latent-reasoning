@@ -34,7 +34,7 @@ def test_notebook_pinned_and_complete(model):
     cells = json.loads(path.read_text())["cells"]
     text = "\n".join("".join(c["source"]) for c in cells)
     assert f'RUN_COMMIT = "{commit}"' in text and "scripts/run_codi_latent_repair.py" in text and "No training" in text and "New Dataset" in text
-    assert ('EXTRA = ["1"]' in text) == (model == "simcot")
+    assert ('EXTRA = "3", "4", ["1"]' in text) == (model == "simcot")
     for i, cell in enumerate(cells):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"{model}-cell-{i}")
