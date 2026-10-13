@@ -1,9 +1,10 @@
 # Latent Monitor Audit: comparison
 
-12 cards; 1 flag(s)
+13 cards; 1 flag(s)
 
 | model | pool | device | dtype | gate | carriers | placement | regime | transport long by slot | mask cost long by slot (pts) | register cost (pts) |
 |---|---|---|---|---|---|---|---|---|---|---|
+| codi1b | asdiv | Tesla T4 | float16 | 0.555 | [] | [] | not_evaluable | 0.02 0.02 0.00 0.12 0.00 0.00 | 6.9 0.0 0.0 3.4 0.0 0.0 | 0.0 |
 | codi1b | gsm8k_aug_train | Kaggle GPU (§120 run) | float16 | — | [3] | [3] | backup_route | 0.04 0.01 0.01 0.34 0.04 0.00 | 4.2 2.7 1.5 2.7 4.6 0.8 | 3.4 |
 | codi1b | gsm8k_test | Tesla T4 | float16 | 0.555 | [3] | [3] | backup_route | 0.06 0.01 0.00 0.30 0.03 0.00 | 5.7 4.1 1.9 3.8 4.3 1.1 | 4.3 |
 | codi1b | gsm8k_train_original | Tesla T4 | float16 | 0.555 | [3] | [3] | backup_route | 0.06 0.02 0.00 0.35 0.03 0.00 | 9.2 7.2 3.2 2.3 4.6 0.9 | 3.2 |

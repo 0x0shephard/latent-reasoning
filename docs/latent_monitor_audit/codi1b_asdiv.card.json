@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "contract": "latent_monitor_audit_card_v1",
+  "model": {
+    "name": "codi1b",
+    "config": "configs/official_codi_llama1b.yaml",
+    "checkpoint_repo": "zen-E/CODI-llama3.2-1b-Instruct",
+    "checkpoint_revision": "b2c88ba224b06b12b52ef39b87f794b98a6eb1c8",
+    "checkpoint_sha256": "c6d4b4b096f03fafca18409a4a7535ac9539f558ed741b31878fecadb40ed23b",
+    "base_model": "unsloth/Llama-3.2-1B-Instruct",
+    "layers": 16,
+    "latent_iterations": 6
+  },
+  "pool": {
+    "chain_rows": 1490,
+    "hash": "b5fde33de6fa266da6d366b935bb1be09ff4ca679f6193c420e42ddb6c070a9b",
+    "long_profile": true,
+    "max_steps": 8,
+    "n": 1490,
+    "pool": "asdiv",
+    "raw_rows": 2305,
+    "seed": 20260923,
+    "source": "EleutherAI/asdiv (Miao, Liang & Su 2020; CC BY-NC 4.0); the formula's expression tree evaluated in order as the chain",
+    "steps_histogram": {
+      "1": 1044,
+      "2": 360,
+      "3": 52,
+      "4": 14,
+      "5": 6,
+      "6": 10,
+      "7": 3,
+      "8": 1
+    }
+  },
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-6.18.48+-x86_64-with-glibc2.39",
+    "executable": "/usr/bin/python3",
+    "dtype": "float16",
+    "batch_size": 32,
+    "device": "cuda",
+    "device_name": "Tesla T4",
+    "cuda_capability": "7.5",
+    "torch": "2.11.0+cu128",
+    "transformers": "4.52.4",
+    "peft": "0.15.2",
+    "cuda": "12.8",
+    "environment_source": "kernel card",
+    "from_existing": true
+  },
+  "gate": {
+    "accuracy": 0.5549658832448825,
+    "published": 0.556,
+    "tolerance": 0.03,
+    "direction": "two_sided",
+    "status": "passed",
+    "evaluated": 1319,
+    "summary": "outputs/official_codi_llama1b/eval/revision_b2c88ba2/full_all/summary.json"
+  },
+  "long_profile_thin": true,
+  "long_pairs": 28,
+  "thresholds": {
+    "carrier_min_transport": 0.15,
+    "short_max_transport": 0.1,
+    "inert_max_transport": 0.05,
+    "readable_min": 0.3,
+    "placement_min_faithfulness": 0.1,
+    "necessary_min_cost": 0.1,
+    "register_min_cost": 0.1,
+    "terminal_max_transport": 0.05,
+    "terminal_max_faithfulness": 0.02,
+    "terminal_max_cost": 0.02,
+    "short_max_steps": 2
+  },
+  "runs": {
+    "twins_standard": {
+      "contract": "official_codi_directed_counterfactual_v1",
+      "pairs": 512,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 1024
+      },
+      "strata_counts": {
+        "n1_k1": 702,
+        "n2_k1": 248,
+        "n2_k2": 48,
+        "n3_k1": 16,
+        "n3_k2": 4,
+        "n3_k3": 2,
+        "n4_k2": 4
+      }
+    },
+    "twins_long": {
+      "contract": "official_codi_directed_counterfactual_long_v1",
+      "pairs": 28,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 56
+      },
+      "strata_counts": {
+        "n3_k1": 2,
+        "n3_k2": 12,
+        "n3_k3": 38,
+        "n4_k2": 2,
+        "n4_k3": 2
+      }
+    },
+    "masking": {
+      "contract": "official_codi_masking_audit_v1",
+      "baseline": {
+        "first_token_accuracy": 0.88671875,
+        "long_rows": 29,
+        "mask_carrying_path_forced_for_this_model": false,
+        "rows": 512,
+        "short_rows": 483
+      },
+      "checks": {
+        "k1_short_chains_survive_any_single_mask": true,
+        "k2_carrying_slot_needed_on_long_chains": null,
+        "k2_per_slot": {},
+        "k3_terminal_slot_never_needed": true,
+        "position_0_mask_drop_short": 0.006211180124223614
+      }
+    }
+  },
+  "slots": {
+    "0": {
+      "transport_all": 0.009765625,
+      "transport_short": 0.0070140280561122245,
+      "transport_long": 0.017857142857142856,
+      "transport_long_ci95": [
+        0.0,
+        0.05357142857142857
+      ],
+      "kv_transport_all": 0.0400390625,
+      "kv_transport_short": 0.036072144288577156,
+      "kv_transport_long": 0.0,
+      "readability_long": 0.16071428571428573,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.07142857142857142,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.008281573498964745,
+      "mask_cost_long": 0.06896551724137934,
+      "mask_cost_all": 0.01171875,
+      "mask_cost_long_condition": "mean_0",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.1724137931034483
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.018633540372670808
+      ],
+      "role": "inert"
+    },
+    "1": {
+      "transport_all": 0.001953125,
+      "transport_short": 0.0,
+      "transport_long": 0.017857142857142856,
+      "transport_long_ci95": [
+        0.0,
+        0.05357142857142857
+      ],
+      "kv_transport_all": 0.009765625,
+      "kv_transport_short": 0.0070140280561122245,
+      "kv_transport_long": 0.017857142857142856,
+      "readability_long": 0.0,
+      "faithfulness_long": null,
+      "readability_long_mlp": 0.0,
+      "faithfulness_long_mlp": null,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.0020703933747411307,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.001953125,
+      "mask_cost_long_condition": "mask_1",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.006211180124223602
+      ],
+      "role": "inert"
+    },
+    "2": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.0009765625,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.017857142857142856,
+      "readability_long": 0.03571428571428571,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.03571428571428571,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.0041407867494823725,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.001953125,
+      "mask_cost_long_condition": "mean_2",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.010351966873706004
+      ],
+      "role": "inert"
+    },
+    "3": {
+      "transport_all": 0.013671875,
+      "transport_short": 0.011022044088176353,
+      "transport_long": 0.125,
+      "transport_long_ci95": [
+        0.03571428571428571,
+        0.23214285714285715
+      ],
+      "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.0,
+      "readability_long": 0.17857142857142858,
+      "faithfulness_long": 0.2,
+      "readability_long_mlp": 0.14285714285714285,
+      "faithfulness_long_mlp": 0.125,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.008281573498964745,
+      "mask_cost_long": 0.034482758620689724,
+      "mask_cost_all": 0.009765625,
+      "mask_cost_long_condition": "mean_3",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.10344827586206896
+      ],
+      "mask_cost_short_ci95": [
+        -0.002070393374741201,
+        0.020703933747412008
+      ],
+      "role": "weak"
+    },
+    "4": {
+      "transport_all": 0.001953125,
+      "transport_short": 0.001002004008016032,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.0126953125,
+      "kv_transport_short": 0.01002004008016032,
+      "kv_transport_long": 0.125,
+      "readability_long": 0.17857142857142858,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.14285714285714285,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.0020703933747411307,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.001953125,
+      "mask_cost_long_condition": "mean_4",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        -0.004140786749482402,
+        0.010351966873706004
+      ],
+      "role": "weak"
+    },
+    "5": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.0009765625,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.0,
+      "readability_long": 0.16071428571428573,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.10714285714285714,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 56,
+      "mask_cost_short": 0.0020703933747411307,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.001953125,
+      "mask_cost_long_condition": "mean_5",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        -0.004140786749482402,
+        0.010351966873706004
+      ],
+      "role": "terminal_inert"
+    }
+  },
+  "registers": {
+    "position_0": {
+      "kv_transport_all": 0.0400390625,
+      "kv_transport_short": 0.036072144288577156,
+      "kv_transport_long": 0.0,
+      "kv_mask_cost_short": 0.006211180124223614,
+      "kv_mask_cost_long": 0.0,
+      "kv_mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "tails": {
+    "kv_all_transport_all": 0.140625,
+    "kv_all_other_all": 0.0009765625,
+    "kv_all_transport_long": 0.3392857142857143,
+    "state_all_transport_long": 0.32142857142857145,
+    "mask_all_cost_long": 0.3103448275862069,
+    "mask_all_cost_long_ci95": [
+      0.13793103448275862,
+      0.5172413793103449
+    ],
+    "mean_all_cost_long": 0.06896551724137934,
+    "mask_even_cost_long": 0.034482758620689724,
+    "mask_odd_cost_long": 0.0
+  },
+  "fingerprints": {
+    "twins_standard": {
+      "predictions": "383252a308767382bf03cdd023aad715122a2ac12e5ffcbb18b3fe2e31a63e90",
+      "pairs": "1d05948f29b45831363da47173e5748ca6b83eb186e5a94d8b52ae77b964caab"
+    },
+    "twins_long": {
+      "predictions": "0bb58f7cca160f031a8a38aea9ebabd184a651866b49fc566691f27dd59b791f",
+      "pairs": "57491654fd68c0215f1edd00f5211185be086cb4532870781369910b39683966"
+    }
+  },
+  "stage_seconds": {
+    "twins_standard": 1082.3,
+    "twins_long": 117.3,
+    "masking": 274.9
+  },
+  "checks": {
+    "c1_no_single_site_transport_on_short_chains": true,
+    "c1_max_short_transport": 0.011022044088176353,
+    "c2_chain_length_gate": null,
+    "c2_max_long_transport": null,
+    "c3_terminal_inert_unfaithful_unnecessary": true,
+    "c4_readability_dissociated_from_faithfulness": false,
+    "c4_most_readable_slot": 4,
+    "c4_spearman": 0.5590169943749475,
+    "c4_mlp_readability_dissociated_from_faithfulness": false,
+    "c4_mlp_most_readable_slot": 4,
+    "c4_mlp_spearman": 0.5441071875825088,
+    "c4_families_agree": true,
+    "c4b_readable_unfaithful_slot_exists": false,
+    "c4b_slots": [],
+    "c4b_mlp_readable_unfaithful_slot_exists": false,
+    "c4b_mlp_slots": [],
+    "c4b_both_families": false,
+    "c4b_both_slots": [],
+    "c5_carriers_necessary": null,
+    "c5_carrier_costs_long": {},
+    "register_position_0": false,
+    "register_cost_long": 0.0
+  },
+  "verdict": {
+    "carrying_slots": [],
+    "placement_slots": [],
+    "store_slots": [],
+    "inert_slots": [
+      0,
+      1,
+      2,
+      5
+    ],
+    "readable_inert_slots": [],
+    "regime": "not_evaluable",
+    "register_position_0": false,
+    "summary": "Long profile too thin (28 gated pairs, fewer than 50): carriers, faithfulness and necessity on long chains are not decided here; short-chain results stand."
+  },
+  "created_at_utc": "2026-10-13T17:06:57.764539+00:00",
+  "smoke": false
+}
