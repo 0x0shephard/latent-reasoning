@@ -6340,3 +6340,34 @@ bounds below every GPT-2 point estimate. The register at position 0 costs 18.7�
 (GPT-2), 32.5–58.6 (SIM-CoT) and 3.2–4.3 (CODI-1B) points. Position 0 is the most
 necessary single site in two of three models and the thoughts are nowhere individually
 necessary at 1B without step supervision.
+
+### §125 addendum 2: Build 2 scored, error detection from the carrier thoughts (2026-10-13)
+
+Three kernels on dannyism11 (4–9 min each). Full GSM8K test set, native decoding, 1,319
+rows per model. Results in `docs/latent_monitor_audit/error_detection/`.
+
+| model | wrong | confidence | carriers | inert | raw states | carriers + confidence | entropy AUROC at slots 0–5 |
+|---|---|---|---|---|---|---|---|
+| GPT-2 | 746 | 0.889 [0.871, 0.907] | 0.850 [0.829, 0.871] | 0.853 [0.831, 0.872] | 0.859 | 0.897 | .62 .80 .68 .86 .72 .86 |
+| CODI-1B | 587 | 0.912 [0.895, 0.925] | 0.821 [0.796, 0.844] | 0.596 [0.567, 0.627] | 0.835 | 0.915 | .74 .54 .54 .84 .79 .59 |
+| SIM-CoT | 584 | 0.913 [0.897, 0.928] | 0.754 [0.727, 0.779] | 0.650 [0.621, 0.678] | 0.836 | 0.915 | .51 .75 .55 .69 .63 .64 |
+
+**P10 scored.** "Carriers beat confidence by ≥ 0.05": **wrong on all three**; the answer's
+own first-token confidence is the best detector everywhere (0.89–0.91) and the carrier
+readout adds ≤ 0.01 to it. "Carriers beat inert slots by ≥ 0.05": **wrong at GPT-2**
+(0.850 vs 0.853; the inert terminal slot's readout entropy is as diagnostic as the
+carrier's, 0.86 vs 0.86), **holds at CODI-1B** (0.821 vs 0.596, a 0.22 gap; slots 1, 2, 5
+near chance) and **at SIM-CoT** (0.754 vs 0.650). "Carriers reach 80% of the raw-state
+gain over confidence": not evaluable, the raw-state classifier never beats confidence.
+
+**Reading.** As a product, carrier-based error detection fails: nothing read from the
+thoughts beats the answer logits, with or without 12,288 raw features, so the LTO-style
+latent reward signal is, on these models, the answer's confidence seen earlier. As
+evidence about the audit, it is informative where it was predicted to be: at 1B the error
+signal inside the thoughts sits at the carrier the swaps found and nowhere else, which is
+an independent confirmation of the placement; at GPT-2 the uncertainty is in every slot.
+Build 2 therefore closes as a negative result for the application and a positive one for
+the method, and the paper reports both in one table.
+
+**Consequence for the plan.** Build 3 (retrieval-based latent repair) is now the only
+application that can turn the audit into a capability; its preregistration follows.
