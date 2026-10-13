@@ -239,3 +239,14 @@ def test_compare_flags_disagreements_across_pools_and_environments():
     assert cmp["consistent"], cmp["flags"]
     text = comparison_markdown(cmp)
     assert "| gpt2 | gsm8k_aug_train | Tesla T4 |" in text and "- none" in text
+
+
+def test_thin_long_profile_does_not_decide_carriers():
+    thin = _twins({1: 0.118, 3: 0.147}); thin["gate"]["selected_pairs"] = 17
+    card = _card(twins_long=thin, masking=_masking({}, {}))
+    assert card["long_profile_thin"] is True and card["long_pairs"] == 17
+    assert card["verdict"]["carrying_slots"] == [] and card["verdict"]["regime"] == "not_evaluable" and "too thin" in card["verdict"]["summary"]
+    assert card["checks"]["c2_chain_length_gate"] is None and card["slots"]["3"]["transport_long"] == 0.147
+    full = _twins({1: 0.118, 3: 0.147}); full["gate"]["selected_pairs"] = 200
+    card = _card(twins_long=full, masking=_masking({}, {}))
+    assert card["long_profile_thin"] is False and card["verdict"]["regime"] == "no_transport"
