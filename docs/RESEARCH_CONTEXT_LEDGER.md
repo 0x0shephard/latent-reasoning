@@ -6623,3 +6623,46 @@ Consequence for the paper: the short-chain result and the inert terminal thought
 across datasets; the carrier claim rests on GSM8K's three pools, and ASDiv's multi-step
 subset is too small to extend it. A fourth source with many ≥ 3-step problems would be
 needed for that, and none with equation annotations and small numbers was found.
+
+### §127 addendum 3: Item C scored, Coconut (2026-10-13)
+
+One kernel, 8.6 min of compute (`docs/latent_monitor_audit/coconut/summary.json`).
+Gate: 34.57% on the 1,319 test rows, the model card's figure to four decimals. Both twin
+profiles reached 512 pairs; masking on 512 fit rows (263 long); repair on 512 wrong
+long-chain targets with gold v*. Native-decoding outcomes throughout.
+
+**Transport (target rate under a single-site swap).**
+
+| | state 0 | state 1 | state 2 | state 3 | state 4 | state 5 | K/V 1 | K/V 3 | K/V 5 | state_all | kv_all |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| short chains (standard, n = 748) | **0.45** | 0.07 | 0.03 | 0.01 | 0.02 | 0.00 | 0.45 | 0.03 | 0.02 | 0.60 | 0.89 |
+| long chains (long profile, n = 1,024) | 0.19 | 0.12 | **0.52** | 0.10 | 0.14 | 0.00 | 0.19 | 0.52 | 0.15 | 0.85 | 0.90 |
+
+**Masking cost on long chains (points):** mean_0 49, mask_1 48, mean_2 45, mask_3 46,
+mean_4 16, mask_4 23, mask_5 14, mean_5 0; mask_all 62. **Repair (primary, n = 360):**
+state_nearest 5.6%, random-different 3.1%, centroid 9.4%; harm to correct controls 29%
+(state_nearest), 88% (whole tail).
+
+**P13 scored.**
+- Carrier not slot 3, pairing (0,1), (2,3), (4,5): **holds exactly.** The even thought
+  computes and the next odd position's K/V store it, at every pair: state 0 ↔ K/V 1
+  (0.45 / 0.45 short, 0.19 / 0.19 long), state 2 ↔ K/V 3 (0.52 / 0.52), state 4 ↔ K/V 5
+  (0.14 / 0.15). The c_thought = 2 curriculum is visible in the mechanism.
+- Chain-length gate: **wrong.** Coconut transports on short chains (0.45 at the first
+  thought). The gate is a CODI property, not a property of continuous thoughts.
+- Terminal thought inert: **wrong.** Its state is discarded (0.00) but its K/V carry 0.15
+  and hiding them costs 14 points; the sixth thought is the store of the third pair.
+- Transport below CODI GPT-2's 0.33: **wrong**, 0.52 at the long carrier.
+- Repair ≥ 3× control: **wrong** (1.8×), with 29% harm: a Coconut thought transplanted
+  from another problem carries that problem, not just the value.
+
+**Reading.** Coconut is the contrast case the paper needed. Where CODI's distillation
+yields thoughts that carry a value only on multi-step problems, are readable at the
+terminal slot without being used, and can mostly be removed (1B) or written to with a
+foreign value (15–23% repair), Coconut's curriculum yields thoughts that are necessary at
+every pair (45–49 points), carry on one-step problems, keep the last position in use, and
+cannot be written to from outside without carrying the donor's context. Same six slots,
+same task, opposite monitoring profile: on Coconut a monitor at any even thought reads a
+used value and a mask anywhere is felt; on CODI the thoughts are optional and the carrier
+is a narrow, writable channel. The audit distinguishes the two with one run each.
+Caveats: a third-party retrain (official recipe, matched accuracy) and GPT-2 only.

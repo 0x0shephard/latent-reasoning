@@ -1,0 +1,956 @@
+{
+  "checkpoint": {
+    "provenance": "third-party retrain (UdeSA); no official Coconut GSM8K checkpoint exists",
+    "repo_id": "UdeSA/coconut-0.2B-gsm8k-aug",
+    "revision": "741379d8425c1d0640ea92756bf3fa0c291532e9"
+  },
+  "checks": {
+    "below_codi_gpt2_0_33": false,
+    "carrier_not_slot_3": true,
+    "carriers": [
+      0,
+      2
+    ],
+    "chain_length_gate": false,
+    "max_long_transport": 0.51953125,
+    "repair_3x_control": false,
+    "terminal_inert": false
+  },
+  "contract": "official_coconut_audit_v1",
+  "created_at_utc": "2026-10-13T17:40:26.592578+00:00",
+  "gate": {
+    "accuracy": 0.3457164518574678,
+    "published": 0.3457,
+    "rows": 1319,
+    "status": "passed",
+    "tolerance": 0.03
+  },
+  "masking": {
+    "mask_0": {
+      "accuracy_drop_all": 0.17578125,
+      "accuracy_drop_long": 0.13688212927756654,
+      "accuracy_drop_short": 0.21686746987951808,
+      "n_long": 263
+    },
+    "mask_1": {
+      "accuracy_drop_all": 0.44140625,
+      "accuracy_drop_long": 0.4828897338403042,
+      "accuracy_drop_short": 0.39759036144578314,
+      "n_long": 263
+    },
+    "mask_2": {
+      "accuracy_drop_all": 0.2421875,
+      "accuracy_drop_long": 0.2661596958174905,
+      "accuracy_drop_short": 0.21686746987951808,
+      "n_long": 263
+    },
+    "mask_3": {
+      "accuracy_drop_all": 0.259765625,
+      "accuracy_drop_long": 0.46387832699619774,
+      "accuracy_drop_short": 0.04417670682730924,
+      "n_long": 263
+    },
+    "mask_4": {
+      "accuracy_drop_all": 0.12890625,
+      "accuracy_drop_long": 0.22813688212927757,
+      "accuracy_drop_short": 0.024096385542168676,
+      "n_long": 263
+    },
+    "mask_5": {
+      "accuracy_drop_all": 0.07421875,
+      "accuracy_drop_long": 0.14068441064638784,
+      "accuracy_drop_short": 0.004016064257028112,
+      "n_long": 263
+    },
+    "mask_all": {
+      "accuracy_drop_all": 0.5625,
+      "accuracy_drop_long": 0.6197718631178707,
+      "accuracy_drop_short": 0.5020080321285141,
+      "n_long": 263
+    },
+    "mask_even": {
+      "accuracy_drop_all": 0.392578125,
+      "accuracy_drop_long": 0.4068441064638783,
+      "accuracy_drop_short": 0.37751004016064255,
+      "n_long": 263
+    },
+    "mask_odd": {
+      "accuracy_drop_all": 0.521484375,
+      "accuracy_drop_long": 0.5665399239543726,
+      "accuracy_drop_short": 0.4738955823293173,
+      "n_long": 263
+    },
+    "mean_0": {
+      "accuracy_drop_all": 0.419921875,
+      "accuracy_drop_long": 0.49049429657794674,
+      "accuracy_drop_short": 0.3453815261044177,
+      "n_long": 263
+    },
+    "mean_1": {
+      "accuracy_drop_all": 0.083984375,
+      "accuracy_drop_long": 0.1444866920152091,
+      "accuracy_drop_short": 0.020080321285140562,
+      "n_long": 263
+    },
+    "mean_2": {
+      "accuracy_drop_all": 0.2421875,
+      "accuracy_drop_long": 0.44866920152091255,
+      "accuracy_drop_short": 0.024096385542168676,
+      "n_long": 263
+    },
+    "mean_3": {
+      "accuracy_drop_all": 0.103515625,
+      "accuracy_drop_long": 0.19391634980988592,
+      "accuracy_drop_short": 0.008032128514056224,
+      "n_long": 263
+    },
+    "mean_4": {
+      "accuracy_drop_all": 0.08203125,
+      "accuracy_drop_long": 0.155893536121673,
+      "accuracy_drop_short": 0.004016064257028112,
+      "n_long": 263
+    },
+    "mean_5": {
+      "accuracy_drop_all": 0.0,
+      "accuracy_drop_long": 0.0,
+      "accuracy_drop_short": 0.0,
+      "n_long": 263
+    },
+    "mean_all": {
+      "accuracy_drop_all": 0.53125,
+      "accuracy_drop_long": 0.6007604562737643,
+      "accuracy_drop_short": 0.4578313253012048,
+      "n_long": 263
+    }
+  },
+  "pool": {
+    "extra_hash": "3bf9e6e8565c20677685ff42b252a5e2a120d288d59acbb9b41ee931260bda59",
+    "hash": "1dbcf2169165d6fa6e1187ecf6cfdf26ea0f01a3deba49d4afea620a111607ab",
+    "long_profile": true,
+    "max_steps": 13,
+    "n": 16384,
+    "pool": "gsm8k_aug_train",
+    "seed": 20260923,
+    "source": "zen-E/GSM8k-Aug train, deterministic fit split (+extra) of ledger \u00a7110",
+    "steps_histogram": {
+      "0": 34,
+      "1": 2642,
+      "10": 1,
+      "12": 1,
+      "13": 1,
+      "2": 6110,
+      "3": 4415,
+      "4": 2024,
+      "5": 784,
+      "6": 248,
+      "7": 95,
+      "8": 25,
+      "9": 4
+    }
+  },
+  "repair": {
+    "harm": {
+      "kv_store_nearest": {
+        "ci95": [
+          0.2627118644067797,
+          0.4408898305084734
+        ],
+        "n": 118,
+        "rate": 0.3559322033898305
+      },
+      "kv_tail_nearest": {
+        "ci95": [
+          0.8220338983050848,
+          0.9322033898305084
+        ],
+        "n": 118,
+        "rate": 0.8813559322033898
+      },
+      "state_centroid": {
+        "ci95": [
+          0.22033898305084745,
+          0.3898305084745763
+        ],
+        "n": 118,
+        "rate": 0.3050847457627119
+      },
+      "state_kv_nearest": {
+        "ci95": [
+          0.2457627118644068,
+          0.4152542372881356
+        ],
+        "n": 118,
+        "rate": 0.3305084745762712
+      },
+      "state_nearest": {
+        "ci95": [
+          0.2033898305084746,
+          0.3644067796610169
+        ],
+        "n": 118,
+        "rate": 0.288135593220339
+      },
+      "state_random_diff": {
+        "ci95": [
+          0.8220338983050848,
+          0.9322033898305084
+        ],
+        "n": 118,
+        "rate": 0.8813559322033898
+      },
+      "state_random_same": {
+        "ci95": [
+          0.2033898305084746,
+          0.3728813559322034
+        ],
+        "n": 118,
+        "rate": 0.288135593220339
+      }
+    },
+    "primary": {
+      "kv_store_nearest": {
+        "ci95": [
+          0.03333333333333333,
+          0.08055555555555556
+        ],
+        "n": 360,
+        "rate": 0.05555555555555555
+      },
+      "kv_tail_nearest": {
+        "ci95": [
+          0.025,
+          0.06666666666666667
+        ],
+        "n": 360,
+        "rate": 0.044444444444444446
+      },
+      "state_centroid": {
+        "ci95": [
+          0.06388888888888888,
+          0.12777777777777777
+        ],
+        "n": 360,
+        "rate": 0.09444444444444444
+      },
+      "state_kv_nearest": {
+        "ci95": [
+          0.03611111111111111,
+          0.08611111111111111
+        ],
+        "n": 360,
+        "rate": 0.06111111111111111
+      },
+      "state_nearest": {
+        "ci95": [
+          0.03333333333333333,
+          0.08055555555555556
+        ],
+        "n": 360,
+        "rate": 0.05555555555555555
+      },
+      "state_random_diff": {
+        "ci95": [
+          0.013888888888888888,
+          0.05
+        ],
+        "n": 360,
+        "rate": 0.030555555555555555
+      },
+      "state_random_same": {
+        "ci95": [
+          0.044444444444444446,
+          0.10277777777777777
+        ],
+        "n": 360,
+        "rate": 0.07222222222222222
+      }
+    },
+    "targets": {
+      "bank_distinct_values": 203,
+      "carrier": 2,
+      "controls": 128,
+      "eligible": 838,
+      "primary_stratum": 360,
+      "store": 3,
+      "with_donor": 420,
+      "wrong_used": 512
+    },
+    "with_donor": {
+      "kv_store_nearest": {
+        "ci95": [
+          0.0380952380952381,
+          0.08333333333333333
+        ],
+        "n": 420,
+        "rate": 0.05952380952380952
+      },
+      "kv_tail_nearest": {
+        "ci95": [
+          0.023809523809523808,
+          0.06190476190476191
+        ],
+        "n": 420,
+        "rate": 0.04285714285714286
+      },
+      "state_centroid": {
+        "ci95": [
+          0.07142857142857142,
+          0.1261904761904762
+        ],
+        "n": 420,
+        "rate": 0.09761904761904762
+      },
+      "state_kv_nearest": {
+        "ci95": [
+          0.0380952380952381,
+          0.08333333333333333
+        ],
+        "n": 420,
+        "rate": 0.05952380952380952
+      },
+      "state_nearest": {
+        "ci95": [
+          0.03571428571428571,
+          0.07857142857142857
+        ],
+        "n": 420,
+        "rate": 0.05714285714285714
+      },
+      "state_random_diff": {
+        "ci95": [
+          0.014285714285714285,
+          0.047619047619047616
+        ],
+        "n": 420,
+        "rate": 0.02857142857142857
+      },
+      "state_random_same": {
+        "ci95": [
+          0.05952380952380952,
+          0.11190476190476191
+        ],
+        "n": 420,
+        "rate": 0.08571428571428572
+      }
+    }
+  },
+  "schema_version": 1,
+  "seconds": 547.760323141,
+  "smoke": false,
+  "stage_seconds": {
+    "gate": 18.1,
+    "masking": 92.8,
+    "repair": 97.5,
+    "twins_long": 167.0,
+    "twins_standard": 140.3
+  },
+  "transport_long": {
+    "0": 0.189453125,
+    "1": 0.1181640625,
+    "2": 0.51953125,
+    "3": 0.1025390625,
+    "4": 0.142578125,
+    "5": 0.0
+  },
+  "twins": {
+    "long": {
+      "candidates": 1536,
+      "conditions": {
+        "kv_0": {
+          "all": {
+            "n": 1024,
+            "other": 0.0078125,
+            "retain": 0.9921875,
+            "target": 0.0
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0078125,
+            "retain": 0.9921875,
+            "target": 0.0
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_1": {
+          "all": {
+            "n": 1024,
+            "other": 0.021484375,
+            "retain": 0.7890625,
+            "target": 0.189453125
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.021484375,
+            "retain": 0.7890625,
+            "target": 0.189453125
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_2": {
+          "all": {
+            "n": 1024,
+            "other": 0.0126953125,
+            "retain": 0.974609375,
+            "target": 0.0126953125
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0126953125,
+            "retain": 0.974609375,
+            "target": 0.0126953125
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_3": {
+          "all": {
+            "n": 1024,
+            "other": 0.0830078125,
+            "retain": 0.400390625,
+            "target": 0.5166015625
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0830078125,
+            "retain": 0.400390625,
+            "target": 0.5166015625
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_4": {
+          "all": {
+            "n": 1024,
+            "other": 0.0283203125,
+            "retain": 0.91015625,
+            "target": 0.0615234375
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0283203125,
+            "retain": 0.91015625,
+            "target": 0.0615234375
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_5": {
+          "all": {
+            "n": 1024,
+            "other": 0.033203125,
+            "retain": 0.8203125,
+            "target": 0.146484375
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.033203125,
+            "retain": 0.8203125,
+            "target": 0.146484375
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "kv_all": {
+          "all": {
+            "n": 1024,
+            "other": 0.017578125,
+            "retain": 0.0810546875,
+            "target": 0.9013671875
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.017578125,
+            "retain": 0.0810546875,
+            "target": 0.9013671875
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_0": {
+          "all": {
+            "n": 1024,
+            "other": 0.021484375,
+            "retain": 0.7890625,
+            "target": 0.189453125
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.021484375,
+            "retain": 0.7890625,
+            "target": 0.189453125
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_1": {
+          "all": {
+            "n": 1024,
+            "other": 0.0322265625,
+            "retain": 0.849609375,
+            "target": 0.1181640625
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0322265625,
+            "retain": 0.849609375,
+            "target": 0.1181640625
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_2": {
+          "all": {
+            "n": 1024,
+            "other": 0.083984375,
+            "retain": 0.396484375,
+            "target": 0.51953125
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.083984375,
+            "retain": 0.396484375,
+            "target": 0.51953125
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_3": {
+          "all": {
+            "n": 1024,
+            "other": 0.0244140625,
+            "retain": 0.873046875,
+            "target": 0.1025390625
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0244140625,
+            "retain": 0.873046875,
+            "target": 0.1025390625
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_4": {
+          "all": {
+            "n": 1024,
+            "other": 0.033203125,
+            "retain": 0.82421875,
+            "target": 0.142578125
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.033203125,
+            "retain": 0.82421875,
+            "target": 0.142578125
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_5": {
+          "all": {
+            "n": 1024,
+            "other": 0.0,
+            "retain": 1.0,
+            "target": 0.0
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0,
+            "retain": 1.0,
+            "target": 0.0
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        },
+        "state_all": {
+          "all": {
+            "n": 1024,
+            "other": 0.0263671875,
+            "retain": 0.119140625,
+            "target": 0.8544921875
+          },
+          "long": {
+            "n": 1024,
+            "other": 0.0263671875,
+            "retain": 0.119140625,
+            "target": 0.8544921875
+          },
+          "short": {
+            "n": 0,
+            "other": null,
+            "retain": null,
+            "target": null
+          }
+        }
+      },
+      "profile": "long",
+      "selected_pairs": 512,
+      "strata_counts": {
+        "n3_k1": 150,
+        "n3_k2": 514,
+        "n3_k3": 184,
+        "n4_k1": 24,
+        "n4_k2": 38,
+        "n4_k3": 74,
+        "n4_k4": 24,
+        "n5_k2": 2,
+        "n5_k3": 6,
+        "n5_k4": 6,
+        "n6_k4": 2
+      }
+    },
+    "standard": {
+      "candidates": 1024,
+      "conditions": {
+        "kv_0": {
+          "all": {
+            "n": 1024,
+            "other": 0.00390625,
+            "retain": 0.96484375,
+            "target": 0.03125
+          },
+          "long": {
+            "n": 276,
+            "other": 0.0036231884057971175,
+            "retain": 0.9963768115942029,
+            "target": 0.0
+          },
+          "short": {
+            "n": 748,
+            "other": 0.004010695187165791,
+            "retain": 0.9532085561497327,
+            "target": 0.0427807486631016
+          }
+        },
+        "kv_1": {
+          "all": {
+            "n": 1024,
+            "other": 0.0224609375,
+            "retain": 0.4375,
+            "target": 0.5400390625
+          },
+          "long": {
+            "n": 276,
+            "other": 0.021739130434782566,
+            "retain": 0.19202898550724637,
+            "target": 0.7862318840579711
+          },
+          "short": {
+            "n": 748,
+            "other": 0.022727272727272707,
+            "retain": 0.5280748663101604,
+            "target": 0.44919786096256686
+          }
+        },
+        "kv_2": {
+          "all": {
+            "n": 1024,
+            "other": 0.0126953125,
+            "retain": 0.94140625,
+            "target": 0.0458984375
+          },
+          "long": {
+            "n": 276,
+            "other": 0.025362318840579712,
+            "retain": 0.9746376811594203,
+            "target": 0.0
+          },
+          "short": {
+            "n": 748,
+            "other": 0.008021390374331472,
+            "retain": 0.929144385026738,
+            "target": 0.06283422459893048
+          }
+        },
+        "kv_3": {
+          "all": {
+            "n": 1024,
+            "other": 0.0380859375,
+            "retain": 0.8779296875,
+            "target": 0.083984375
+          },
+          "long": {
+            "n": 276,
+            "other": 0.10144927536231896,
+            "retain": 0.6630434782608695,
+            "target": 0.23550724637681159
+          },
+          "short": {
+            "n": 748,
+            "other": 0.014705882352941124,
+            "retain": 0.9572192513368984,
+            "target": 0.02807486631016043
+          }
+        },
+        "kv_4": {
+          "all": {
+            "n": 1024,
+            "other": 0.015625,
+            "retain": 0.9677734375,
+            "target": 0.0166015625
+          },
+          "long": {
+            "n": 276,
+            "other": 0.04347826086956519,
+            "retain": 0.9202898550724637,
+            "target": 0.036231884057971016
+          },
+          "short": {
+            "n": 748,
+            "other": 0.005347593582887611,
+            "retain": 0.9852941176470589,
+            "target": 0.009358288770053475
+          }
+        },
+        "kv_5": {
+          "all": {
+            "n": 1024,
+            "other": 0.013671875,
+            "retain": 0.9560546875,
+            "target": 0.0302734375
+          },
+          "long": {
+            "n": 276,
+            "other": 0.03985507246376818,
+            "retain": 0.8876811594202898,
+            "target": 0.07246376811594203
+          },
+          "short": {
+            "n": 748,
+            "other": 0.004010695187165791,
+            "retain": 0.9812834224598931,
+            "target": 0.014705882352941176
+          }
+        },
+        "kv_all": {
+          "all": {
+            "n": 1024,
+            "other": 0.01953125,
+            "retain": 0.0732421875,
+            "target": 0.9072265625
+          },
+          "long": {
+            "n": 276,
+            "other": 0.018115942028985494,
+            "retain": 0.028985507246376812,
+            "target": 0.9528985507246377
+          },
+          "short": {
+            "n": 748,
+            "other": 0.020053475935828874,
+            "retain": 0.08957219251336898,
+            "target": 0.8903743315508021
+          }
+        },
+        "state_0": {
+          "all": {
+            "n": 1024,
+            "other": 0.0263671875,
+            "retain": 0.4375,
+            "target": 0.5361328125
+          },
+          "long": {
+            "n": 276,
+            "other": 0.025362318840579684,
+            "retain": 0.1956521739130435,
+            "target": 0.7789855072463768
+          },
+          "short": {
+            "n": 748,
+            "other": 0.0267379679144385,
+            "retain": 0.5267379679144385,
+            "target": 0.446524064171123
+          }
+        },
+        "state_1": {
+          "all": {
+            "n": 1024,
+            "other": 0.0078125,
+            "retain": 0.935546875,
+            "target": 0.056640625
+          },
+          "long": {
+            "n": 276,
+            "other": 0.010869565217391242,
+            "retain": 0.9565217391304348,
+            "target": 0.03260869565217391
+          },
+          "short": {
+            "n": 748,
+            "other": 0.006684491978609541,
+            "retain": 0.9278074866310161,
+            "target": 0.06550802139037433
+          }
+        },
+        "state_2": {
+          "all": {
+            "n": 1024,
+            "other": 0.041015625,
+            "retain": 0.875,
+            "target": 0.083984375
+          },
+          "long": {
+            "n": 276,
+            "other": 0.10144927536231896,
+            "retain": 0.6630434782608695,
+            "target": 0.23550724637681159
+          },
+          "short": {
+            "n": 748,
+            "other": 0.018716577540106916,
+            "retain": 0.9532085561497327,
+            "target": 0.02807486631016043
+          }
+        },
+        "state_3": {
+          "all": {
+            "n": 1024,
+            "other": 0.0126953125,
+            "retain": 0.9697265625,
+            "target": 0.017578125
+          },
+          "long": {
+            "n": 276,
+            "other": 0.03623188405797095,
+            "retain": 0.9347826086956522,
+            "target": 0.028985507246376812
+          },
+          "short": {
+            "n": 748,
+            "other": 0.00401069518716568,
+            "retain": 0.982620320855615,
+            "target": 0.013368983957219251
+          }
+        },
+        "state_4": {
+          "all": {
+            "n": 1024,
+            "other": 0.0146484375,
+            "retain": 0.9521484375,
+            "target": 0.033203125
+          },
+          "long": {
+            "n": 276,
+            "other": 0.04347826086956519,
+            "retain": 0.8731884057971014,
+            "target": 0.08333333333333333
+          },
+          "short": {
+            "n": 748,
+            "other": 0.004010695187165791,
+            "retain": 0.9812834224598931,
+            "target": 0.014705882352941176
+          }
+        },
+        "state_5": {
+          "all": {
+            "n": 1024,
+            "other": 0.0,
+            "retain": 1.0,
+            "target": 0.0
+          },
+          "long": {
+            "n": 276,
+            "other": 0.0,
+            "retain": 1.0,
+            "target": 0.0
+          },
+          "short": {
+            "n": 748,
+            "other": 0.0,
+            "retain": 1.0,
+            "target": 0.0
+          }
+        },
+        "state_all": {
+          "all": {
+            "n": 1024,
+            "other": 0.021484375,
+            "retain": 0.28515625,
+            "target": 0.693359375
+          },
+          "long": {
+            "n": 276,
+            "other": 0.021739130434782566,
+            "retain": 0.043478260869565216,
+            "target": 0.9347826086956522
+          },
+          "short": {
+            "n": 748,
+            "other": 0.021390374331550832,
+            "retain": 0.37433155080213903,
+            "target": 0.6042780748663101
+          }
+        }
+      },
+      "profile": "standard",
+      "selected_pairs": 512,
+      "strata_counts": {
+        "n1_k1": 280,
+        "n2_k1": 340,
+        "n2_k2": 128,
+        "n3_k1": 194,
+        "n3_k2": 20,
+        "n3_k3": 20,
+        "n4_k1": 28,
+        "n4_k2": 8,
+        "n4_k3": 2,
+        "n4_k4": 4
+      }
+    }
+  }
+}
