@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/coconut-audit-gpt-2",
+  "title": "Coconut audit GPT-2",
+  "code_file": "kaggle_coconut_audit.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

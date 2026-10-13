@@ -12,7 +12,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "21577155ec9761bf207c34c7dad9bb7a64af43f8"   # pinned after the tests pass
+RUN_COMMIT = "3e2c73b4e95017156cad3919c1e5537b60635531"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "carrier": 3, "store": 4, "extra": []},

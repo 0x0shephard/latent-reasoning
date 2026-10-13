@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/latent-repair-codi-gpt-2-with-a-calculator",
+  "title": "Latent repair CODI GPT-2 with a calculator",
+  "code_file": "kaggle_latent_repair_gpt2_tool.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

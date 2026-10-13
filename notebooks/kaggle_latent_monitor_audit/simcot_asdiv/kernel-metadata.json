@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/lma-sim-cot-codi-1b-on-asdiv",
+  "title": "LMA SIM-CoT CODI-1B on asdiv",
+  "code_file": "kaggle_lma_simcot_asdiv.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

@@ -8,7 +8,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts" / "build_kaggle_latent_monitor_audit_notebook.py"
 CASES = (("gpt2", "gsm8k_test"), ("gpt2", "svamp"), ("gpt2", "gsm8k_aug_train"), ("codi1b", "gsm8k_test"), ("simcot", "gsm8k_test"),
-         ("gpt2", "gsm8k_train_original"), ("codi1b", "gsm8k_train_original"), ("simcot", "gsm8k_train_original"))
+         ("gpt2", "gsm8k_train_original"), ("codi1b", "gsm8k_train_original"), ("simcot", "gsm8k_train_original"),
+         ("gpt2", "asdiv"), ("codi1b", "asdiv"), ("simcot", "asdiv"))
 
 
 def _notebook(model, pool):
