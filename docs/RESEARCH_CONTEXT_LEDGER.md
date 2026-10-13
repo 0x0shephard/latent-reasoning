@@ -6599,3 +6599,27 @@ thought is writable from outside, and not a method that beats reading the explic
 The paper says exactly that and uses the result for what it shows: a continuous-thought
 model exposes one slot through which an external value enters the computation, located by
 the audit and confirmed by two independent sources of the value.
+
+### §127 addendum 2: Item A scored, the `asdiv` pool on three models (2026-10-13)
+
+1,490 usable problems (1,044 one-step, 360 two-step, 86 with three or more). Both twin
+profiles ran; the standard profile reached 512 pairs on every model, the long profile only
+17 / 28 / 30 gated pairs (GPT-2 / CODI-1B / SIM-CoT), below the 50-pair floor P11 set, so
+carriers and regimes are not decided on this pool and the cards say so (a rule added to
+the card for this: a thin long profile reads `not_evaluable`).
+
+| model | standard pairs | C1 short ceiling | C3 terminal | slot-3 transport, long (thin) | register cost, long (pts) | single-mask max cost, short |
+|---|---|---|---|---|---|---|
+| GPT-2 | 512 | holds (max 0.024) | holds | 0.147 [0.03, 0.29], n = 17 | 13.8 [0.0, 31.0] | 0.8 |
+| CODI-1B | 512 | holds (max 0.011) | holds | 0.125 [0.04, 0.23], n = 28 | 0.0 | 0.8 |
+| SIM-CoT | 512 | holds (max 0.001) | holds | 0.117 [0.03, 0.23], n = 30 | 24.1 [10.3, 41.4] | 1.2 |
+
+**P11 scored.** C1 and C3 **hold on all three** on a corpus of different authorship. The
+carrier clause was conditional on ≥ 50 long pairs and is **not evaluable**; the thin
+samples point the same way as GSM8K (slot 3 is the largest single-state transport on all
+three, the K/V of slot 4 the largest store, every interval overlapping the GSM8K-test
+interval). SIM-CoT's register costs ≥ 10 points on long chains: **holds** (24.1 on 29 rows).
+Consequence for the paper: the short-chain result and the inert terminal thought transfer
+across datasets; the carrier claim rests on GSM8K's three pools, and ASDiv's multi-step
+subset is too small to extend it. A fourth source with many ≥ 3-step problems would be
+needed for that, and none with equation annotations and small numbers was found.

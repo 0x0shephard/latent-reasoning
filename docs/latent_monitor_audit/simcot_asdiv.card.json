@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "contract": "latent_monitor_audit_card_v1",
+  "model": {
+    "name": "simcot",
+    "config": "configs/official_simcot_codi_llama1b.yaml",
+    "checkpoint_repo": "internlm/SIM_COT-LLaMA3-CODI-1B",
+    "checkpoint_revision": "6e16fe4215025a9c48bc90d214c57349f247b017",
+    "checkpoint_sha256": "fc7f2d9285e4134a0c5bfdbfc19985c322e6fa27024b5fdd41edff6bf8c183aa",
+    "base_model": "unsloth/Llama-3.2-1B-Instruct",
+    "layers": 16,
+    "latent_iterations": 6
+  },
+  "pool": {
+    "chain_rows": 1490,
+    "hash": "b5fde33de6fa266da6d366b935bb1be09ff4ca679f6193c420e42ddb6c070a9b",
+    "long_profile": true,
+    "max_steps": 8,
+    "n": 1490,
+    "pool": "asdiv",
+    "raw_rows": 2305,
+    "seed": 20260923,
+    "source": "EleutherAI/asdiv (Miao, Liang & Su 2020; CC BY-NC 4.0); the formula's expression tree evaluated in order as the chain",
+    "steps_histogram": {
+      "1": 1044,
+      "2": 360,
+      "3": 52,
+      "4": 14,
+      "5": 6,
+      "6": 10,
+      "7": 3,
+      "8": 1
+    }
+  },
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-6.18.48+-x86_64-with-glibc2.39",
+    "executable": "/usr/bin/python3",
+    "dtype": "float16",
+    "batch_size": 32,
+    "device": "cuda",
+    "device_name": "Tesla T4",
+    "cuda_capability": "7.5",
+    "torch": "2.11.0+cu128",
+    "transformers": "4.52.4",
+    "peft": "0.15.2",
+    "cuda": "12.8",
+    "environment_source": "kernel card",
+    "from_existing": true
+  },
+  "gate": {
+    "accuracy": 0.5572403335860501,
+    "published": 0.561,
+    "tolerance": 0.03,
+    "direction": "at_least",
+    "status": "passed",
+    "evaluated": 1319,
+    "summary": "outputs/official_simcot_codi_llama1b/eval/revision_6e16fe42/full_all/summary.json"
+  },
+  "long_profile_thin": true,
+  "long_pairs": 30,
+  "thresholds": {
+    "carrier_min_transport": 0.15,
+    "short_max_transport": 0.1,
+    "inert_max_transport": 0.05,
+    "readable_min": 0.3,
+    "placement_min_faithfulness": 0.1,
+    "necessary_min_cost": 0.1,
+    "register_min_cost": 0.1,
+    "terminal_max_transport": 0.05,
+    "terminal_max_faithfulness": 0.02,
+    "terminal_max_cost": 0.02,
+    "short_max_steps": 2
+  },
+  "runs": {
+    "twins_standard": {
+      "contract": "official_codi_directed_counterfactual_v1",
+      "pairs": 512,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 1024
+      },
+      "strata_counts": {
+        "n1_k1": 694,
+        "n2_k1": 256,
+        "n2_k2": 46,
+        "n3_k1": 18,
+        "n3_k2": 4,
+        "n3_k3": 2,
+        "n4_k2": 4
+      }
+    },
+    "twins_long": {
+      "contract": "official_codi_directed_counterfactual_long_v1",
+      "pairs": 30,
+      "baseline": {
+        "first_token_accuracy": 1.0,
+        "first_token_equals_target": 0.0,
+        "native_exact_match": 1.0,
+        "rows": 60
+      },
+      "strata_counts": {
+        "n3_k2": 14,
+        "n3_k3": 38,
+        "n4_k1": 2,
+        "n4_k2": 2,
+        "n4_k3": 2,
+        "n4_k4": 2
+      }
+    },
+    "masking": {
+      "contract": "official_codi_masking_audit_v1",
+      "baseline": {
+        "first_token_accuracy": 0.876953125,
+        "long_rows": 29,
+        "mask_carrying_path_forced_for_this_model": false,
+        "rows": 512,
+        "short_rows": 483
+      },
+      "checks": {
+        "k1_short_chains_survive_any_single_mask": true,
+        "k2_carrying_slot_needed_on_long_chains": null,
+        "k2_per_slot": {},
+        "k3_terminal_slot_never_needed": true,
+        "position_0_mask_drop_short": 0.012422360248447228
+      }
+    }
+  },
+  "slots": {
+    "0": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.03333333333333333,
+      "transport_long_ci95": [
+        0.0,
+        0.1
+      ],
+      "kv_transport_all": 0.1416015625,
+      "kv_transport_short": 0.12751004016064257,
+      "kv_transport_long": 0.06666666666666667,
+      "readability_long": 0.03333333333333333,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.03333333333333333,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.012422360248447228,
+      "mask_cost_long": 0.24137931034482762,
+      "mask_cost_all": 0.025390625,
+      "mask_cost_long_condition": "mask_0",
+      "mask_cost_long_ci95": [
+        0.10344827586206896,
+        0.41379310344827586
+      ],
+      "mask_cost_short_ci95": [
+        -0.006211180124223602,
+        0.031055900621118012
+      ],
+      "role": "weak"
+    },
+    "1": {
+      "transport_all": 0.0068359375,
+      "transport_short": 0.0,
+      "transport_long": 0.08333333333333333,
+      "transport_long_ci95": [
+        0.0,
+        0.18333333333333332
+      ],
+      "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.03333333333333333,
+      "readability_long": 0.15,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.13333333333333333,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.006211180124223614,
+      "mask_cost_long": 0.034482758620689724,
+      "mask_cost_all": 0.005859375,
+      "mask_cost_long_condition": "mask_1",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.10344827586206896
+      ],
+      "mask_cost_short_ci95": [
+        -0.004140786749482402,
+        0.016563146997929608
+      ],
+      "role": "weak"
+    },
+    "2": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.03333333333333333,
+      "transport_long_ci95": [
+        0.0,
+        0.1
+      ],
+      "kv_transport_all": 0.0068359375,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.06666666666666667,
+      "readability_long": 0.1,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.03333333333333333,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.0020703933747411307,
+      "mask_cost_long": 0.034482758620689724,
+      "mask_cost_all": 0.00390625,
+      "mask_cost_long_condition": "mean_2",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.10344827586206896
+      ],
+      "mask_cost_short_ci95": [
+        -0.006211180124223602,
+        0.012422360248447204
+      ],
+      "role": "weak"
+    },
+    "3": {
+      "transport_all": 0.0009765625,
+      "transport_short": 0.001004016064257028,
+      "transport_long": 0.11666666666666667,
+      "transport_long_ci95": [
+        0.03333333333333333,
+        0.23333333333333334
+      ],
+      "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.03333333333333333,
+      "readability_long": 0.11666666666666667,
+      "faithfulness_long": 0.2857142857142857,
+      "readability_long_mlp": 0.08333333333333333,
+      "faithfulness_long_mlp": 0.2,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.0020703933747411307,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.001953125,
+      "mask_cost_long_condition": "mean_3",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        -0.006211180124223602,
+        0.012422360248447204
+      ],
+      "role": "weak"
+    },
+    "4": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.11666666666666667,
+      "readability_long": 0.1,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.06666666666666667,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.0,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.0,
+      "mask_cost_long_condition": "mean_4",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        -0.008281573498964804,
+        0.008281573498964804
+      ],
+      "role": "weak"
+    },
+    "5": {
+      "transport_all": 0.0,
+      "transport_short": 0.0,
+      "transport_long": 0.0,
+      "transport_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "kv_transport_all": 0.0,
+      "kv_transport_short": 0.0,
+      "kv_transport_long": 0.0,
+      "readability_long": 0.06666666666666667,
+      "faithfulness_long": 0.0,
+      "readability_long_mlp": 0.08333333333333333,
+      "faithfulness_long_mlp": 0.0,
+      "monitor_rows_long": 60,
+      "mask_cost_short": 0.0,
+      "mask_cost_long": 0.0,
+      "mask_cost_all": 0.0,
+      "mask_cost_long_condition": "mean_5",
+      "mask_cost_long_ci95": [
+        0.0,
+        0.0
+      ],
+      "mask_cost_short_ci95": [
+        0.0,
+        0.0
+      ],
+      "role": "terminal_inert"
+    }
+  },
+  "registers": {
+    "position_0": {
+      "kv_transport_all": 0.1416015625,
+      "kv_transport_short": 0.12751004016064257,
+      "kv_transport_long": 0.06666666666666667,
+      "kv_mask_cost_short": 0.012422360248447228,
+      "kv_mask_cost_long": 0.24137931034482762,
+      "kv_mask_cost_long_ci95": [
+        0.10344827586206896,
+        0.41379310344827586
+      ]
+    }
+  },
+  "tails": {
+    "kv_all_transport_all": 0.1494140625,
+    "kv_all_other_all": 0.001953125,
+    "kv_all_transport_long": 0.35,
+    "state_all_transport_long": 0.3333333333333333,
+    "mask_all_cost_long": 0.3103448275862069,
+    "mask_all_cost_long_ci95": [
+      0.1724137931034483,
+      0.4827586206896552
+    ],
+    "mean_all_cost_long": 0.20689655172413796,
+    "mask_even_cost_long": 0.3793103448275862,
+    "mask_odd_cost_long": 0.034482758620689724
+  },
+  "fingerprints": {
+    "twins_standard": {
+      "predictions": "d0cb698345ccb32b2ab42ce163aa41be746949c0cd482bc5fd72875743a3778b",
+      "pairs": "8449f0893ab296d08df04157ea36bdd9ec450b917c8098fbed5ba7d8ac4221d3"
+    },
+    "twins_long": {
+      "predictions": "5b5d017967ed64ca81f6b049e60cc542050282b8fef22377c02646df5f1d9f7a",
+      "pairs": "797e0820609922759fb885c11a92174caf54cae30cd03192438e44b9fe0d5939"
+    }
+  },
+  "stage_seconds": {
+    "twins_standard": 1083.7,
+    "twins_long": 135.5,
+    "masking": 285.1
+  },
+  "checks": {
+    "c1_no_single_site_transport_on_short_chains": true,
+    "c1_max_short_transport": 0.001004016064257028,
+    "c2_chain_length_gate": null,
+    "c2_max_long_transport": null,
+    "c3_terminal_inert_unfaithful_unnecessary": true,
+    "c4_readability_dissociated_from_faithfulness": false,
+    "c4_most_readable_slot": 1,
+    "c4_spearman": 0.3985266984930429,
+    "c4_mlp_readability_dissociated_from_faithfulness": false,
+    "c4_mlp_most_readable_slot": 1,
+    "c4_mlp_spearman": 0.26967994498529685,
+    "c4_families_agree": true,
+    "c4b_readable_unfaithful_slot_exists": false,
+    "c4b_slots": [],
+    "c4b_mlp_readable_unfaithful_slot_exists": false,
+    "c4b_mlp_slots": [],
+    "c4b_both_families": false,
+    "c4b_both_slots": [],
+    "c5_carriers_necessary": null,
+    "c5_carrier_costs_long": {},
+    "register_position_0": true,
+    "register_cost_long": 0.24137931034482762
+  },
+  "verdict": {
+    "carrying_slots": [],
+    "placement_slots": [],
+    "store_slots": [],
+    "inert_slots": [
+      5
+    ],
+    "readable_inert_slots": [],
+    "regime": "not_evaluable",
+    "register_position_0": true,
+    "summary": "Long profile too thin (30 gated pairs, fewer than 50): carriers, faithfulness and necessity on long chains are not decided here; short-chain results stand."
+  },
+  "created_at_utc": "2026-10-13T17:34:54.285741+00:00",
+  "smoke": false
+}
