@@ -42,6 +42,8 @@ def test_hooks_identity_and_swap_on_a_tiny_model():
     assert isinstance(swapped, list) and len(swapped) == 3
     masked = coconut_generate_under(m, qs, batch_size=2, device=torch.device("cpu"), mask_slots=(0, 1, 2, 3, 4, 5), max_new_tokens=6)
     assert len(masked) == 3
+    light, light_texts = coconut_record(m, qs, batch_size=2, device=torch.device("cpu"), max_new_tokens=6, record_kv=False)
+    assert light_texts == texts and light.states.shape == traj.states.shape and light.keys.numel() == 0   # states only, no K/V
     # batch-size invariance of the native path (left padding handled)
     one_by_one = [coconut_record(m, [q], batch_size=1, device=torch.device("cpu"), max_new_tokens=6)[1][0] for q in qs]
     assert one_by_one == texts

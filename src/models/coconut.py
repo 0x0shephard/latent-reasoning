@@ -165,8 +165,11 @@ def coconut_record(model: CoconutGPT2, questions: Sequence[str], *, batch_size: 
     S, K, V, T = [], [], [], []
     for start in range(0, len(questions), batch_size):
         s, k, v, t = model.run_batch(questions[start:start + batch_size], device=device, **kw)
-        S.append(s); K.append(k); V.append(v); T += t
-    return Trajectory(states=torch.cat(S), keys=torch.cat(K), values=torch.cat(V)), T
+        S.append(s); T += t
+        if k is not None:
+            K.append(k); V.append(v)
+    empty = torch.empty(0)
+    return Trajectory(states=torch.cat(S), keys=torch.cat(K) if K else empty, values=torch.cat(V) if V else empty), T
 
 
 def coconut_generate_under(model: CoconutGPT2, questions: Sequence[str], *, batch_size: int, device, hidden_donors: dict[int, torch.Tensor] | None = None,

@@ -107,7 +107,6 @@ def run(args):
             if len(cands) >= limit:
                 break
         cand_rows = [r for o, t, _ in cands for r in (o, t)]
-        _, texts = coconut_record(model, [r["question"] for r in cand_rows], batch_size=bs, device=device, record_kv=False) if False else (None, None)
         texts = coconut_generate_under(model, [r["question"] for r in cand_rows], batch_size=bs, device=device)
         nums = answers(texts)
         ok = [eq(n, float(r["gold"])) for n, r in zip(nums, cand_rows)]
