@@ -11,7 +11,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "3e2c73b4e95017156cad3919c1e5537b60635531"   # pinned after the tests pass
+RUN_COMMIT = "ecfe36e7652d8117df335671b0f997c52aee3c78"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 TITLE = "Coconut audit GPT-2"
 TESTS = ["tests/test_coconut.py", "tests/test_latent_repair_runner.py", "tests/test_chain_pools.py", "tests/test_cache_carrier.py"]

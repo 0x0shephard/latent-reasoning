@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 from src.data.chain_pools import POOLS  # noqa: E402
 
-RUN_COMMIT = "3e2c73b4e95017156cad3919c1e5537b60635531"   # pinned after the tests pass (see tests/test_latent_monitor_audit_notebook.py)
+RUN_COMMIT = "ecfe36e7652d8117df335671b0f997c52aee3c78"   # pinned after the tests pass (see tests/test_latent_monitor_audit_notebook.py)
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "gate": "dataset",
