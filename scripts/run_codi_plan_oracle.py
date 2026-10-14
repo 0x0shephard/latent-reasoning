@@ -116,6 +116,15 @@ def markdown(report: dict) -> str:
     return "\n".join(lines)
 
 
+def write_outputs(out: Path, records: list[dict], summary: dict) -> None:
+    """The run's files: one JSON line per problem and the atomic summary (the call that failed on Kaggle once, argument order)."""
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "rows.jsonl").open("w") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec) + "\n")
+    _atomic_json(summary, out / "summary.json")
+
+
 def run(args) -> dict:
     smoke = bool(args.smoke); out = args.output_dir; out.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
@@ -181,11 +190,3 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-
-def write_outputs(out: Path, records: list[dict], summary: dict) -> None:
-    """The run's files: one JSON line per problem and the atomic summary (the call that failed on Kaggle once, argument order)."""
-    out.mkdir(parents=True, exist_ok=True)
-    with (out / "rows.jsonl").open("w") as fh:
-        for rec in records:
-            fh.write(json.dumps(rec) + "\n")
-    _atomic_json(summary, out / "summary.json")

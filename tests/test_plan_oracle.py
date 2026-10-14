@@ -62,3 +62,13 @@ def test_write_outputs_round_trips(tmp_path):
     write_outputs(tmp_path / "run", records, {"contract": "official_codi_plan_oracle_v1", "report": {}})
     assert json.loads((tmp_path / "run" / "summary.json").read_text())["contract"] == "official_codi_plan_oracle_v1"
     assert json.loads((tmp_path / "run" / "rows.jsonl").read_text().splitlines()[0])["question"] == "q"
+
+
+def test_every_function_is_defined_before_the_main_guard():
+    """A helper appended after ``if __name__ == "__main__"`` is undefined when the script runs (the second Kaggle failure)."""
+    import ast
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[1] / "scripts" / "run_codi_plan_oracle.py"
+    body = ast.parse(source.read_text()).body
+    guard = next(i for i, node in enumerate(body) if isinstance(node, ast.If) and "__main__" in ast.unparse(node.test))
+    assert not any(isinstance(node, (ast.FunctionDef, ast.ClassDef)) for node in body[guard + 1:])
