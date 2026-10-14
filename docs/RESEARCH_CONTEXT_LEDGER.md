@@ -7125,3 +7125,53 @@ that fills such a channel can. Contract `official_codi_plan_oracle_v1`, no train
 If P18a fails in the strong form (latent gold-hint recovery ≥ 0.30 of plan-wrong failures
 *and* net latent gain ≥ +5 at 1B or 3B), a plan channel has a ceiling worth training for and
 §133 preregisters the training. Otherwise the proposal is closed with this measurement.
+
+### §132 addendum: the plan oracle scored on three models (2026-10-14)
+
+Three kernels on dannyism11 (9 / 10 / 21 minutes); two earlier versions failed at the end
+of the smoke stage on a write bug and a definition placed after the script's main guard
+(both fixed with tests, commits 739d3b8 and 7a85ffe). Files:
+`docs/latent_monitor_audit/plan_oracle/{codi1b,simcot,codi3b}.*`. 855 ≥3-step test problems.
+
+**Accuracy (%) under each hint, and recovery (%) of plan-wrong latent failures:**
+
+| model | mode | none | gold plan | wrong plan | length only | plan-wrong recovery gold / wrong / length (n) |
+|---|---|---|---|---|---|---|
+| CODI-1B | latent | 49.0 | 18.5 | 15.8 | 21.2 | 7.8 / 2.5 / 5.3 (244) |
+| CODI-1B | explicit | 52.7 | 30.1 | 20.1 | 34.6 | 7.8 / 5.3 / 6.6 |
+| SIM-CoT | latent | 49.4 | 22.2 | 15.2 | 23.2 | 6.6 / 3.9 / 3.9 (259) |
+| SIM-CoT | explicit | 52.4 | 26.9 | 18.2 | 30.5 | 5.8 / 4.6 / 6.2 |
+| SIM-CoT-3B | latent | 55.6 | 40.4 | 28.8 | 52.5 | 5.7 / 6.9 / 5.2 (174) |
+| SIM-CoT-3B | explicit | 67.8 | 55.8 | 31.2 | 67.1 | 17.8 / 8.6 / 14.9 |
+
+Harm on latent-correct problems: gold hint 60–70% at 1B, 32% at 3B in latent mode. Any
+hint appended to the question costs these checkpoints 15–33 points in latent mode: they
+were trained on bare questions and cannot use text they were not trained to read. The
+wrong-plan and length-only arms are therefore the comparison that matters, not the bare
+question.
+
+**P18a scored.** Latent gold-hint recovery of plan-wrong failures ≤ 0.15: **holds** (0.06–0.08
+everywhere, and at 3B *below* the wrong-plan control, 5.7 vs 6.9). Wrong-plan control ≤ 0.05:
+holds at 1B, **fails at 3B** (0.069); the point stands, since the gold hint does no better.
+**P18b scored.** Explicit gold recovery ≥ 0.25 and above latent: **wrong** (0.06–0.18); at 3B
+the gold plan beats the wrong plan in writing mode by 9 points of the class (17.8 vs 8.6,
+intervals [12, 24] vs [5, 13]), the only place a plan's content shows any effect, at a cost
+of 26% of correct answers.
+**P18c scored.** Length-only ≥ half of gold in explicit mode: **holds** at every model (the
+step count carries most of what the hint carries).
+**P18d scored.** Net latent change from the gold hint ≤ +3: **holds** (−15 to −31).
+**Decision rule:** latent gold recovery ≥ 0.30 and net gain ≥ +5: **not met** anywhere. The
+plan-channel training is not built.
+
+**Reading.** A plan handed to the model does not rescue the failures the taxonomy calls
+plan-wrong: in latent mode the gold plan recovers 6–8% of them and a wrong plan 3–7%, so the
+recovery is disturbance, not content. In writing mode the 3B model can use the plan a little
+(9 points of the class above the wrong-plan control) and the 1B models cannot. Two caveats
+are recorded: the hint is out of distribution for every checkpoint, so this bounds what a
+*prompted* plan can do, and a trained plan slot could in principle be used better than a
+prompted one. Against that stands the fact that these models already see gold plans in
+training, that SIM-CoT's step supervision adds 0.5 points at 1B, and that even the explicit
+mode, which can follow instructions, recovers at most a sixth of the class. The proposal is
+closed. The durable result is the one the taxonomy already gave: plan-wrong failures are a
+capability gap of the model, present in its written reasoning too, and no channel into the
+thoughts reaches them.
