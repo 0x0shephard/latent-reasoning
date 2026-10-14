@@ -7347,3 +7347,40 @@ four; the states make the gate *worse* at 25% routed at three models (−1.0, �
 routing budget that matters: at the top of the ranking, where a quarter of problems is routed,
 the thoughts add noise, not signal. The oracle gap above the cascade (6 points at 3B) is not
 closable from the thoughts. Confidence is the whole gate.
+
+### §133 addendum C: the readable-but-unfaithful slot holds a stale copy of the computed value (2026-10-14)
+
+`docs/latent_monitor_audit/analyses/unfaithful_slot_{model}.json`. Multinomial logistic probes
+(5 folds, balanced accuracy, 256 principal directions per slot) on the §125/§131 readout
+states of the 855 ≥3-step test problems, for the question's first number (20 classes), its
+number count (7), the step count (4), the first operator (4) and the penultimate value (20),
+against a hashed bag-of-words probe on the question text. The first probe version (one-hot
+ridge) could not separate middle classes of an ordinal target (0.71 on a 3-class toy against
+0.86 for the logistic) and was replaced before any model was read; the test records this.
+
+| model | unfaithful slot | step count: unfaithful / carrier | number count | first number | first operator (best slot) | **penultimate value: unfaithful / carrier / best** |
+|---|---|---|---|---|---|---|
+| GPT-2 | 5 | 0.35 / 0.34 | 0.25 / 0.22 | 0.10 / 0.12 | 0.45 (slot 0) | 0.18 / 0.19 / 0.19 (slots 3, 4) |
+| CODI-1B | 5 | 0.40 / 0.38 | 0.22 / 0.20 | 0.12 / 0.11 | 0.51 (slot 1) | **0.47 / 0.42 / 0.49 (slot 4)** |
+| SIM-CoT | 5 | 0.43 / 0.45 | 0.23 / 0.23 | 0.10 / 0.15 | 0.49 (slot 0) | 0.26 / 0.38 / 0.44 (slot 4) |
+| SIM-CoT-3B | 3 (store) | 0.42 / 0.42 | 0.24 / 0.25 | 0.12 / 0.14 | 0.52 (slot 0) | **0.42 / 0.46 / 0.46 (slot 2)** |
+
+Text-only probe: first number 0.08, number count 0.16, step count 0.28, operator 0.28,
+penultimate 0.04 (a weak reader on 700 training rows; the slot-against-slot comparison is
+the one that carries weight, and the §125 prompt-leakage probes remain the control for
+"reads the prompt").
+
+**P21 scored** (the unfaithful slot reads the step count and the question's numbers at the
+carrier's level): **holds** for the step count and the number count at all four models and
+for the first number at three (SIM-CoT's slot 0 holds the first number, 0.26, and slot 5 does
+not). Question attributes are spread evenly over every slot at a modest level; no slot is
+special for them, and slot 0 is the best reader of the first number and the operator.
+
+**The unregistered result is the penultimate value.** At CODI-1B the inert last thought reads
+the computed penultimate value at 0.47, *above* the carrier (0.42), and slot 4 at 0.49; at 3B
+the store slot reads it at 0.42 against the carrier's 0.46, while the second carrier, slot 4,
+reads it at only 0.16. The readable-but-unfaithful slot is not mainly a prompt reader. It
+holds a copy of the value the carrier computed, carried forward in the residual stream after
+the carrier handed it to the K/V cache, where it is as readable as at the source and no
+longer used. Readability outlives use: that is the mechanism behind C4b, and it is why a
+probe placed by readability lands on a stale copy.
