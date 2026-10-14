@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/lma-sim-cot-codi-8b-on-svamp",
+  "title": "LMA SIM-CoT CODI-8B on svamp",
+  "code_file": "kaggle_lma_codi8b_svamp.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

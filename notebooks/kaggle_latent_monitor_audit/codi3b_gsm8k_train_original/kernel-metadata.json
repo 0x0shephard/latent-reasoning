@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/lma-sim-cot-codi-3b-on-gsm8k-train-original",
+  "title": "LMA SIM-CoT CODI-3B on gsm8k_train_original",
+  "code_file": "kaggle_lma_codi3b_gsm8k_train_original.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
