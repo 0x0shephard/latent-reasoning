@@ -1,0 +1,14 @@
+{
+  "id": "dannyism11/plan-oracle-sim-cot-codi-3b",
+  "title": "Plan oracle SIM-CoT CODI-3B",
+  "code_file": "kaggle_plan_oracle_codi3b.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

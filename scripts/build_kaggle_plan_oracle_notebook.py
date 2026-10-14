@@ -5,14 +5,17 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 try:
     import nbformat as nbf
 except ImportError:  # pragma: no cover
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "0000000000000000000000000000000000000000"   # pinned after the tests pass
+RUN_COMMIT = "29453c304aea2ac165cab4bf556c67075ae56889"   # pinned after the tests pass
 KAGGLE_USER = "dannyism11"
 MODELS = {
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "float16"},
