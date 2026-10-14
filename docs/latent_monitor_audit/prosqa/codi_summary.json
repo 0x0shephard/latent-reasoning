@@ -1,0 +1,995 @@
+{
+  "card": {
+    "carriers": [],
+    "family": "codi",
+    "max_long_transport": 0.0,
+    "max_short_transport": 0.0,
+    "monitors": "not_evaluable: ProsQA twins share every intermediate node",
+    "regime": "no_transport",
+    "slots": {
+      "0": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      },
+      "1": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      },
+      "2": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      },
+      "3": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      },
+      "4": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      },
+      "5": {
+        "kv_transport_long": 0.0,
+        "kv_transport_short": 0.0,
+        "mask_cost_all": 0.0,
+        "mask_cost_long": 0.0,
+        "transport_long": 0.0,
+        "transport_short": 0.0
+      }
+    },
+    "tails": {
+      "kv_all_transport_all": 0.004629629629629629,
+      "kv_all_transport_long": 0.007352941176470588,
+      "mask_all_cost_all": null,
+      "mean_all_cost_all": 0.0,
+      "meankv_all_cost_all": 0.0,
+      "state_all_transport_long": 0.0
+    }
+  },
+  "checkpoint": "connordilgren/llama32-1b-prosqa-codi@78872dcd",
+  "checks": {
+    "p25a_all_six_cost_under_5_points": true,
+    "p25a_no_single_slot_costs_over_2_points": true,
+    "p25b_no_single_site_transports_0_10": true,
+    "p25b_regime_no_transport": true,
+    "p25b_tail_kv_swap_under_0_30": true,
+    "p25c_names_readable_from_every_slot_0_80": false,
+    "p25d_accuracy_within_3_points_of_published": true
+  },
+  "contract": "prosqa_latent_audit_v1",
+  "created_at_utc": "2026-10-14T18:21:01.590366+00:00",
+  "data": {
+    "hops_histogram": {
+      "3": 202,
+      "4": 217,
+      "5": 69,
+      "6": 12
+    },
+    "path": "/kaggle/working/prosqa_test.json",
+    "rows": 500,
+    "sha256": "82ddc0afe6ee30eb31bb16fa208e293e55278a20fa987098d48519cae7e12680"
+  },
+  "family": "codi",
+  "gate": {
+    "accuracy": 0.99,
+    "published": 0.99,
+    "rows": 500,
+    "status": "passed",
+    "tolerance": 0.03
+  },
+  "leakage": {
+    "gold_option": {
+      "classes": 38,
+      "slots": {
+        "0": 0.40370123727321866,
+        "1": 0.366753475712454,
+        "2": 0.33080564086756037,
+        "3": 0.3137901636547148,
+        "4": 0.324530749608149,
+        "5": 0.32172951962038643
+      }
+    },
+    "hops": {
+      "classes": 4,
+      "slots": {
+        "0": 0.292649706765908,
+        "1": 0.2955153434598118,
+        "2": 0.28028586769716846,
+        "3": 0.27602803858827074,
+        "4": 0.2949662527863686,
+        "5": 0.26852501168770454
+      }
+    },
+    "option_1": {
+      "classes": 38,
+      "slots": {
+        "0": 0.3767272333744144,
+        "1": 0.3474346451350688,
+        "2": 0.2980027319963363,
+        "3": 0.30463901581915265,
+        "4": 0.2648820149940404,
+        "5": 0.26865962667860993
+      }
+    },
+    "option_2": {
+      "classes": 38,
+      "slots": {
+        "0": 0.5030302278560792,
+        "1": 0.5056603397191225,
+        "2": 0.5091272241192805,
+        "3": 0.4198122506691433,
+        "4": 0.31371936230987885,
+        "5": 0.2850176358955078
+      }
+    },
+    "subject": {
+      "classes": 17,
+      "slots": {
+        "0": 0.8972803098411618,
+        "1": 0.6444197677463397,
+        "2": 0.4465639335872601,
+        "3": 0.42209286431395965,
+        "4": 0.4022118747828687,
+        "5": 0.416324013114074
+      }
+    }
+  },
+  "masking": {
+    "mean_0": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_1": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_2": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_3": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_4": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_5": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "mean_all": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_0": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_1": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_2": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_3": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_4": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_5": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    },
+    "meankv_all": {
+      "all": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 500
+      },
+      "long": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 298
+      },
+      "short": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "drop": 0.0,
+        "n": 202
+      }
+    }
+  },
+  "schema_version": 1,
+  "seconds": 1393.299406157,
+  "smoke": false,
+  "stage_seconds": {
+    "leakage": 21.6,
+    "masking": 817.0,
+    "native": 57.2,
+    "twins": 438.7
+  },
+  "twins": {
+    "candidates": 335,
+    "conditions": {
+      "kv_0": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_1": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_2": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_3": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_4": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_5": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "kv_all": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 0.9953703703703703,
+          "target": 0.004629629629629629,
+          "target_ci95": [
+            0.0,
+            0.013888888888888888
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 0.9926470588235294,
+          "target": 0.007352941176470588,
+          "target_ci95": [
+            0.0,
+            0.022058823529411766
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_0": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_1": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_2": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_3": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_4": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_5": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "state_all": {
+        "all": {
+          "n": 216,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "long": {
+          "n": 136,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "short": {
+          "n": 80,
+          "other": 0.0,
+          "retain": 1.0,
+          "target": 0.0,
+          "target_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "hops_histogram": {
+      "3": 80,
+      "4": 92,
+      "5": 36,
+      "6": 8
+    },
+    "native_correct_both": 108,
+    "selected_pairs": 108
+  },
+  "warnings": [
+    "Released checkpoints only; no training. Native greedy decoding under every intervention; the answer is the first option named."
+  ]
+}

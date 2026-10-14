@@ -7543,3 +7543,33 @@ audit's third profile, and the one Dilgren and Wiegreffe's early-stopping result
 A sanity check records that the states are non-degenerate (row standard deviation 0.66 per
 slot) and that the same intervention code moves 45–49 points of accuracy on the GSM8K
 Coconut (§127), so the zeros are the model's, not the instrument's.
+
+### §135 addendum B: CODI on ProsQA, the same profile (2026-10-14)
+
+`docs/latent_monitor_audit/prosqa/codi_*`; kernel 23 minutes (a first version failed on an
+import inside the loader, fixed with the imports hoisted so the test import catches it);
+accuracy 99.0% (published 99.0%); 5 of 500 wrong; answers in the training format
+(`The answer is: Sally is a sterpus.`).
+
+**Twins.** 108 of 335 pairs pass the gate (the model answers 227 edited twins with the
+original option). On the 216 gated rows: transport 0.000 at every state and K/V site and for
+the whole state tail; the whole K/V tail moves 1 of 216 answers (0.005).
+**Masking.** Mean state and mean K/V, per slot and all six: drop 0.000 on all 500 rows.
+**Readability.** The subject reads at 0.90 from slot 0 and decays along the thoughts (0.64,
+0.45, 0.42, 0.40, 0.42); option 2 at 0.50 on slots 0–2 falling to 0.29; the gold option at
+0.32–0.40; hops at chance. Unlike Coconut's flat 0.99, CODI's thoughts lose the prompt's
+names slot by slot while still deciding nothing.
+
+**P25a, P25b, P25d hold; P25c wrong as stated** (subject 0.90 at slot 0 only).
+
+**Reading of §135.** Both ProsQA checkpoints return the audit's third profile, `no_transport`:
+no thought carries the answer, none is needed, and the whole cache of thoughts can be swapped
+or averaged away at no cost. The answer is settled in the question's own positions. The twin
+pass rates (21% Coconut, 32% CODI) add a result the audit was not built for: a one-premise
+rewrite that flips the correct option is answered with the old option four times in five, so
+the 97–99% accuracy on ProsQA does not come from following the path the data annotates. That
+is consistent with No-CoT at 87.8% on the same base and with Dilgren and Wiegreffe's
+early-stopping result, and it places ProsQA outside the set of tasks where a latent monitor
+could mean anything: there is nothing in the thoughts to monitor, and nothing in them to
+repair. The paper gains its third row in the regime table and a clear statement that the
+GSM8K findings are properties of tasks where the thoughts are used at all.
