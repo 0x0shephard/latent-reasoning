@@ -28,6 +28,11 @@ from scripts.collect_kv_subspaces import _atomic_json, _atomic_torch_save
 from scripts.run_codi_latent_repair import rate
 from src.data.prosqa import answer_option, gold_option, load_prosqa, options, twin_pairs
 from src.mech.cache_carrier import CacheEdit, Trajectory, donor_view
+from src.mech.cache_carrier import generate_under, record_native_trajectory
+from src.mech.cache_carrier import backbone_layers
+from src.models.official_codi import (build_official_codi_gpt2, checkpoint_shard_hashes, download_official_checkpoint, load_official_checkpoint,
+                                      place_official_model)
+from src.utils.config import load_config
 
 CONTRACT = "prosqa_latent_audit_v1"
 SLOTS = (0, 1, 2, 3, 4, 5)
@@ -141,11 +146,6 @@ def load_family(args, device, dtype):
                                           mask_slots=mask_slots, max_new_tokens=MAX_NEW_TOKENS)
         return {"record": record, "generate": generate, "n_layers": model.n_layers(), "checkpoint": f"{spec.repo_id}@{spec.revision[:8]}/{spec.weight_file}",
                 "can_hide": True, "readout_dim": model.hidden_size()}
-    from src.eval.official_codi import select_device  # noqa: F401  (import kept for parity with the other runners)
-    from src.mech.cache_carrier import generate_under, record_native_trajectory
-    from src.models.official_codi import (backbone_layers, build_official_codi_gpt2, checkpoint_shard_hashes, download_official_checkpoint,
-                                          load_official_checkpoint, place_official_model)
-    from src.utils.config import load_config
     cfg = load_config(str(args.config)); token = os.environ.get("HF_TOKEN") or None
     checkpoint = args.checkpoint_path or download_official_checkpoint(repo_id=str(cfg.checkpoint.repo_id), revision=str(cfg.checkpoint.revision),
                                                                       filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token,
