@@ -1,6 +1,6 @@
 {
-  "id": "jonraza15/latent-repair-sim-cot-codi-1b-with-a-learned-writer",
-  "title": "Latent repair SIM-CoT CODI-1B with a learned writer",
+  "id": "jonraza15/latent-repair-sim-cot-1b-with-a-learned-writer",
+  "title": "Latent repair SIM-CoT 1B with a learned writer",
   "code_file": "kaggle_latent_repair_simcot_writer.ipynb",
   "language": "python",
   "kernel_type": "notebook",

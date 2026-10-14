@@ -23,8 +23,9 @@ TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "t
 
 
 def title(model: str, source: str = "gold") -> str:
-    if source == "writer":
-        return f"Latent repair {MODELS[model]['title']} with a learned writer"
+    if source == "writer":   # Kaggle slugs are capped at 50 characters; SIM-CoT's full title would exceed it
+        short = {"simcot": "SIM-CoT 1B"}.get(model, MODELS[model]["title"])
+        return f"Latent repair {short} with a learned writer"
     return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 
 
