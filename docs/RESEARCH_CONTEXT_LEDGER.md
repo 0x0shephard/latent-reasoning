@@ -7175,3 +7175,128 @@ mode, which can follow instructions, recovers at most a sixth of the class. The 
 closed. The durable result is the one the taxonomy already gave: plan-wrong failures are a
 capability gap of the model, present in its written reasoning too, and no channel into the
 thoughts reaches them.
+
+## 133. Preregistered: six analyses on the data already on disk (no new runs)
+
+Designed 2026-10-14 after §132. Every file named exists in `outputs/kaggle_runs/` or
+`docs/latent_monitor_audit/`; nothing is decoded again. Run in order; each is scored before
+the next is read.
+
+### A. Are latent-only failures slips or hard problems? (`scripts/analyze_cross_model_failures.py`)
+
+Per-problem latent correctness for GPT-2, CODI-1B, SIM-CoT and SIM-CoT-3B from the §125/§131
+readouts (same 1,319 test rows, same order), failure class per wrong ≥3-step problem from the
+§129/§130 calculator repair targets, joined by question. Reported on the ≥3-step rows: for each
+model and class, the share of its failures that each other model answers correctly, against
+that model's accuracy on the same rows; Jaccard overlap of failure sets against the overlap
+expected under independence; the share of latent-only failures no other model fails; accuracy
+of a majority vote over the three 1B-and-smaller models and of "any model right".
+- P19a (slips): a model's latent-only failures are answered correctly by each other 1B-scale
+  model at a rate at least that model's base accuracy on the rows (≈ 0.50); its plan-wrong
+  failures at a rate at most 0.35.
+- P19b (shared hardness): the failure-set Jaccard between CODI-1B and SIM-CoT exceeds the
+  independence value by ≥ 0.10.
+- P19c (vote): the three-model majority vote gains ≤ 2 points over the best single model.
+
+### B. Where does the write take, and where does it break? (`scripts/analyze_repair_predictors.py`)
+
+Per-target repair outcomes from the §129/§130 calculator runs (one-slot donor, primary
+stratum) joined with the readout's first-token probability and margin; harm outcomes on the
+128 correct controls joined with the same, and with the §123 test-pool twin pairs (long
+profile, competence-gated, so only controls can join) for whether the control's carrier
+transported under the swap. Reported per model: repair rate by confidence half and quartile;
+AUROC of confidence for "repaired" among touched latent-only failures; harm rate by
+confidence quartile; harm rate for controls whose carrier transported against those whose
+carrier did not, where ≥ 20 rows join.
+- P20a: among touched failures the repair rate in the lower confidence half is ≥ 1.5× the
+  upper half at CODI-1B and 3B.
+- P20b: harm on controls is concentrated in the lowest confidence quartile (≥ 2× the top).
+- P20c (exploratory, thin): harm is higher on controls whose carrier transported.
+
+### C–F (after A and B; each scored on its own addendum)
+
+C. What the readable-but-unfaithful slot holds: ridge probes on the §125 readout states for
+the question's first number, number count, step count and first operator, per slot, against
+the prompt-only baseline; prediction P21: the store/terminal slot reads the step count and the
+question's numbers at ≥ the carrier's level. D. The cascade with a combined gate (confidence
+plus per-slot readout entropy, 5-fold out-of-fold logistic scores) through the §131 scorer;
+P22: ≤ +1 point over confidence alone at 25% routed. E. Harm predictability: §130 harm rows
+against confidence and the question-register proxy; P23: the top confidence quartile of
+controls has harm ≤ 3%. F. The slot-to-step map across scale from the §129/§130 ladder
+summaries, as one figure; descriptive, no prediction.
+
+### §133 addendum A: latent-only failures are hard problems, not slips (2026-10-14)
+
+`docs/latent_monitor_audit/analyses/cross_model_failures.json`; 855 ≥3-step test rows;
+accuracy GPT-2 34.7, CODI-1B 49.0, SIM-CoT 49.2, SIM-CoT-3B 55.6.
+
+| failures of | class | n | answered by GPT-2 | CODI-1B | SIM-CoT | 3B |
+|---|---|---|---|---|---|---|
+| CODI-1B | latent-only | 96 | 18% | — | 39% | 46% |
+| CODI-1B | plan-wrong | 245 | 8% | — | 11% | 21% |
+| SIM-CoT | latent-only | 86 | 12% | 38% | — | 48% |
+| SIM-CoT | plan-wrong | 259 | 10% | 12% | — | 22% |
+| 3B | latent-only | 143 | 8% | 25% | 28% | — |
+| 3B | plan-wrong | 174 | 8% | 12% | 9% | — |
+| GPT-2 | latent-only | 95 | — | 66% | 66% | 66% |
+
+Failure sets overlap far above independence: Jaccard 0.70 for CODI-1B vs SIM-CoT (0.34 if
+independent), 0.60–0.66 for every other pair. Of the 3B model's latent-only failures, 58% are
+answered by no other model; of CODI-1B's, 36%; only 3–8% are answered by every other model
+(GPT-2: 46%). A majority vote over the three small models scores 44.2 against the best single
+49.2; "any of the four right" reaches 68.7, and 268 problems defeat all four.
+
+**P19a scored.** Latent-only failures answered by the other 1B model at or above its base
+accuracy: **wrong** (38–39% against a base of 49%). Plan-wrong failures answered at ≤ 0.35:
+holds (8–22%). **P19b** (shared hardness ≥ 0.10 above independence): **holds**, by 0.36.
+**P19c** (vote gains ≤ 2 points): **holds**; the vote loses 5.
+
+**Reading.** A latent-only failure is not a slip. It is a problem at the edge of the model's
+competence: its own written mode, which is a few points stronger, gets it, and a peer model
+at the same strength misses it more often than not. The only model whose latent-only
+failures look like slips is GPT-2, and only because every other model is stronger. This
+sharpens the taxonomy: the latent–explicit gap is a competence gap of the same kind as the
+plan-wrong class, measured against a slightly stronger reasoner of the same model, which is
+why the write reaches a third of it at best and the cascade, which simply uses that stronger
+reasoner, reaches all of it. It also closes ensembling: the four models fail together.
+
+### §133 addendum B: the write takes on confident failures and breaks unconfident successes (2026-10-14)
+
+`docs/latent_monitor_audit/analyses/repair_predictors_{gpt2,codi1b,simcot,codi3b}.json`.
+One-slot donor, calculator value, touched failures (mismatched carrier, donor exists) and the
+128 correct controls, joined with the readout's first-token probability; controls also joined
+with the long-profile twin pairs (46–54 controls per model, 11–23 of them with a carrier that
+transported). The 3B twins `pairs.jsonl` on disk was a Kaggle 502 page and was re-fetched.
+
+**Repair rate by confidence quartile of the wrong answer (low → high):**
+
+| model | touched (n) | Q1 | Q2 | Q3 | Q4 | latent-only touched (n) | Q1 | Q4 |
+|---|---|---|---|---|---|---|---|---|
+| GPT-2 | 282 | 0% | 10% | 7% | 20% | 68 | 24% | 35% |
+| CODI-1B | 208 | 8% | 19% | 17% | 31% | 62 | 38% | 73% |
+| SIM-CoT | 214 | 4% | 11% | 11% | 8% | 54 | 7% | 15% |
+| SIM-CoT-3B | 207 | 10% | 12% | 10% | 12% | 90 | 30% | 23% |
+
+**Harm on correct controls by confidence quartile (low → high):** GPT-2 31 / 16 / 12 / 3%;
+CODI-1B 19 / 3 / 0 / 0%; SIM-CoT 22 / 9 / 3 / 3%; 3B 22 / 6 / 0 / 3%. AUROC of low
+confidence for harm 0.71–0.88. Harm where the control's carrier transported under the swap
+against where it did not: 17 vs 6% (GPT-2), 9 vs 5% (CODI-1B), 15 vs 6% (SIM-CoT), 4 vs 6% (3B).
+
+**P20a scored** (low-confidence half repairs ≥ 1.5× the high half): **wrong everywhere, and
+reversed** at GPT-2 and CODI-1B (ratio 0.37 and 0.56): the write takes most on the failures
+the model is *most* sure of. **P20b** (bottom-quartile harm ≥ 2× top): **holds** at three
+models and vacuous at CODI-1B, whose top two quartiles have no harm at all. **P20c**
+(exploratory): harm higher where the carrier transported at the three small models (by 4–11
+points on 46–53 rows), not at 3B. **E/P23** (top confidence quartile harm ≤ 3%): **holds** at
+all four (3, 0, 3, 3%), scored here since B already measures it.
+
+**Reading.** Confidence predicts both sides of the write. A confident wrong answer is one
+the model committed to through its carrier, and replacing the carrier's value moves it; an
+unconfident wrong answer was never decided by the carrier, and writing it does little. An
+unconfident right answer is held loosely and a write knocks it over; a confident right
+answer survives any write. This gives the write a gate it lacked: write only above a
+confidence threshold, where harm is 0–3% and repair is highest, and send everything below
+the threshold to the explicit chain, which is the cascade. The two policies partition the
+problems by the same number. On the transport side, the controls that break are more often
+the ones whose carrier was live, which is what the audit's map predicts, though the rows are
+few.

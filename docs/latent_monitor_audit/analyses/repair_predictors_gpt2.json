@@ -1,0 +1,172 @@
+{
+  "targets": 640,
+  "n_touched": 282,
+  "n_touched_latent_only": 68,
+  "n_controls": 128,
+  "touched": {
+    "repair_rate": 0.09219858156028368,
+    "by_half": [
+      {
+        "n": 141,
+        "rate": 0.04964539007092199,
+        "conf_range": [
+          -1.0,
+          0.27924132347106934
+        ]
+      },
+      {
+        "n": 141,
+        "rate": 0.1347517730496454,
+        "conf_range": [
+          0.2804192006587982,
+          0.9993625283241272
+        ]
+      }
+    ],
+    "by_quartile": [
+      {
+        "n": 71,
+        "rate": 0.0,
+        "conf_range": [
+          -1.0,
+          0.12758146226406097
+        ]
+      },
+      {
+        "n": 71,
+        "rate": 0.09859154929577464,
+        "conf_range": [
+          0.12790948152542114,
+          0.2804192006587982
+        ]
+      },
+      {
+        "n": 70,
+        "rate": 0.07142857142857142,
+        "conf_range": [
+          0.2805982530117035,
+          0.5347378849983215
+        ]
+      },
+      {
+        "n": 70,
+        "rate": 0.2,
+        "conf_range": [
+          0.5373842120170593,
+          0.9993625283241272
+        ]
+      }
+    ],
+    "ratio_low_over_high_half": 0.368421052631579,
+    "auroc_confidence_for_repaired": 0.3203125,
+    "auroc_margin_for_repaired": 0.4315655048076923
+  },
+  "touched_latent_only": {
+    "repair_rate": 0.27941176470588236,
+    "by_half": [
+      {
+        "n": 34,
+        "rate": 0.17647058823529413,
+        "conf_range": [
+          -1.0,
+          0.34667402505874634
+        ]
+      },
+      {
+        "n": 34,
+        "rate": 0.38235294117647056,
+        "conf_range": [
+          0.3557131290435791,
+          0.9428329467773438
+        ]
+      }
+    ],
+    "by_quartile": [
+      {
+        "n": 17,
+        "rate": 0.23529411764705882,
+        "conf_range": [
+          -1.0,
+          0.21224327385425568
+        ]
+      },
+      {
+        "n": 17,
+        "rate": 0.11764705882352941,
+        "conf_range": [
+          0.2201874703168869,
+          0.34667402505874634
+        ]
+      },
+      {
+        "n": 17,
+        "rate": 0.4117647058823529,
+        "conf_range": [
+          0.3557131290435791,
+          0.5941664576530457
+        ]
+      },
+      {
+        "n": 17,
+        "rate": 0.35294117647058826,
+        "conf_range": [
+          0.5964980721473694,
+          0.9428329467773438
+        ]
+      }
+    ],
+    "ratio_low_over_high_half": 0.4615384615384616,
+    "auroc_confidence_for_repaired": 0.34801288936627284,
+    "auroc_margin_for_repaired": 0.45542427497314714
+  },
+  "controls_harm": {
+    "harm_rate": 0.15625,
+    "by_quartile": [
+      {
+        "n": 32,
+        "rate": 0.3125,
+        "conf_range": [
+          0.12007709592580795,
+          0.7663109302520752
+        ]
+      },
+      {
+        "n": 32,
+        "rate": 0.15625,
+        "conf_range": [
+          0.7816459536552429,
+          0.9878768920898438
+        ]
+      },
+      {
+        "n": 32,
+        "rate": 0.125,
+        "conf_range": [
+          0.9880774021148682,
+          0.99903404712677
+        ]
+      },
+      {
+        "n": 32,
+        "rate": 0.03125,
+        "conf_range": [
+          0.9990678429603577,
+          0.9999256730079651
+        ]
+      }
+    ],
+    "ratio_bottom_over_top_quartile": 10.0,
+    "auroc_low_confidence_for_harm": 0.7148148148148148
+  },
+  "controls_vs_transport": {
+    "joined": 53,
+    "transported": 18,
+    "harm_if_transported": 0.16666666666666666,
+    "harm_if_not": 0.05714285714285714
+  },
+  "checks": {
+    "p20a_low_half_repairs_ge_1_5x_high_half": false,
+    "p20b_bottom_quartile_harm_ge_2x_top": true,
+    "p20c_harm_higher_if_carrier_transported": true
+  }
+}

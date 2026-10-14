@@ -1,0 +1,231 @@
+{
+  "rows": 855,
+  "models": [
+    "gpt2",
+    "codi1b",
+    "simcot",
+    "codi3b"
+  ],
+  "accuracy": {
+    "gpt2": 0.3473684210526316,
+    "codi1b": 0.49005847953216375,
+    "simcot": 0.49239766081871345,
+    "codi3b": 0.5555555555555556
+  },
+  "solved_by_others": {
+    "gpt2": {
+      "latent_only": {
+        "n": 95,
+        "codi1b": 0.6631578947368421,
+        "simcot": 0.6631578947368421,
+        "codi3b": 0.6631578947368421,
+        "own_explicit": 1.0
+      },
+      "plan_wrong": {
+        "n": 350,
+        "codi1b": 0.2,
+        "simcot": 0.20857142857142857,
+        "codi3b": 0.3028571428571429,
+        "own_explicit": 0.0
+      },
+      "upstream_arithmetic": {
+        "n": 45,
+        "codi1b": 0.17777777777777778,
+        "simcot": 0.26666666666666666,
+        "codi3b": 0.24444444444444444,
+        "own_explicit": 0.0
+      },
+      "final_step": {
+        "n": 21,
+        "codi1b": 0.3333333333333333,
+        "simcot": 0.2857142857142857,
+        "codi3b": 0.47619047619047616,
+        "own_explicit": 0.0
+      },
+      "unclassified": {
+        "n": 46,
+        "codi1b": 0.32608695652173914,
+        "simcot": 0.2608695652173913,
+        "codi3b": 0.34782608695652173,
+        "own_explicit": 0.0
+      }
+    },
+    "codi1b": {
+      "latent_only": {
+        "n": 96,
+        "gpt2": 0.17708333333333334,
+        "simcot": 0.3854166666666667,
+        "codi3b": 0.4583333333333333,
+        "own_explicit": 1.0
+      },
+      "plan_wrong": {
+        "n": 245,
+        "gpt2": 0.07755102040816327,
+        "simcot": 0.10612244897959183,
+        "codi3b": 0.20816326530612245,
+        "own_explicit": 0.0
+      },
+      "upstream_arithmetic": {
+        "n": 36,
+        "gpt2": 0.027777777777777776,
+        "simcot": 0.1388888888888889,
+        "codi3b": 0.1388888888888889,
+        "own_explicit": 0.0
+      },
+      "final_step": {
+        "n": 39,
+        "gpt2": 0.10256410256410256,
+        "simcot": 0.15384615384615385,
+        "codi3b": 0.41025641025641024,
+        "own_explicit": 0.0
+      },
+      "unclassified": {
+        "n": 14,
+        "gpt2": 0.07142857142857142,
+        "simcot": 0.07142857142857142,
+        "codi3b": 0.14285714285714285,
+        "own_explicit": 0.0
+      }
+    },
+    "simcot": {
+      "latent_only": {
+        "n": 86,
+        "gpt2": 0.11627906976744186,
+        "codi1b": 0.38372093023255816,
+        "codi3b": 0.47674418604651164,
+        "own_explicit": 1.0
+      },
+      "plan_wrong": {
+        "n": 259,
+        "gpt2": 0.10424710424710425,
+        "codi1b": 0.11969111969111969,
+        "codi3b": 0.22393822393822393,
+        "own_explicit": 0.0
+      },
+      "upstream_arithmetic": {
+        "n": 46,
+        "gpt2": 0.06521739130434782,
+        "codi1b": 0.13043478260869565,
+        "codi3b": 0.17391304347826086,
+        "own_explicit": 0.0
+      },
+      "final_step": {
+        "n": 26,
+        "gpt2": 0.07692307692307693,
+        "codi1b": 0.11538461538461539,
+        "codi3b": 0.2692307692307692,
+        "own_explicit": 0.0
+      },
+      "unclassified": {
+        "n": 16,
+        "gpt2": 0.0625,
+        "codi1b": 0.1875,
+        "codi3b": 0.0625,
+        "own_explicit": 0.0
+      }
+    },
+    "codi3b": {
+      "latent_only": {
+        "n": 143,
+        "gpt2": 0.07692307692307693,
+        "codi1b": 0.2517482517482518,
+        "simcot": 0.27972027972027974,
+        "own_explicit": 1.0
+      },
+      "plan_wrong": {
+        "n": 174,
+        "gpt2": 0.08045977011494253,
+        "codi1b": 0.1206896551724138,
+        "simcot": 0.09195402298850575,
+        "own_explicit": 0.0
+      },
+      "upstream_arithmetic": {
+        "n": 29,
+        "gpt2": 0.06896551724137931,
+        "codi1b": 0.06896551724137931,
+        "simcot": 0.13793103448275862,
+        "own_explicit": 0.0
+      },
+      "final_step": {
+        "n": 17,
+        "gpt2": 0.058823529411764705,
+        "codi1b": 0.23529411764705882,
+        "simcot": 0.058823529411764705,
+        "own_explicit": 0.0
+      },
+      "unclassified": {
+        "n": 14,
+        "gpt2": 0.07142857142857142,
+        "codi1b": 0.14285714285714285,
+        "simcot": 0.0,
+        "own_explicit": 0.0
+      }
+    }
+  },
+  "overlap": {
+    "gpt2|codi1b": {
+      "jaccard": 0.6566666666666666,
+      "independence": 0.401080150746313,
+      "shared_failures": 394
+    },
+    "gpt2|simcot": {
+      "jaccard": 0.6505823627287853,
+      "independence": 0.3996316758747698,
+      "shared_failures": 391
+    },
+    "gpt2|codi3b": {
+      "jaccard": 0.5979557069846678,
+      "independence": 0.3594202898550724,
+      "shared_failures": 351
+    },
+    "codi1b|simcot": {
+      "jaccard": 0.69921875,
+      "independence": 0.34117405242451665,
+      "shared_failures": 358
+    },
+    "codi1b|codi3b": {
+      "jaccard": 0.6287425149700598,
+      "independence": 0.31142857142857144,
+      "shared_failures": 315
+    },
+    "simcot|codi3b": {
+      "jaccard": 0.6444444444444445,
+      "independence": 0.3105545617173524,
+      "shared_failures": 319
+    }
+  },
+  "vote": {
+    "majority_of_small": 0.4421052631578947,
+    "best_single_small": 0.49239766081871345,
+    "any_model_right": 0.6865497076023391,
+    "all_models_wrong": 268
+  },
+  "unique_latent_only": {
+    "gpt2": {
+      "n": 95,
+      "share_all_others_right": 0.4631578947368421,
+      "share_no_other_right": 0.1368421052631579
+    },
+    "codi1b": {
+      "n": 96,
+      "share_all_others_right": 0.08333333333333333,
+      "share_no_other_right": 0.3645833333333333
+    },
+    "simcot": {
+      "n": 86,
+      "share_all_others_right": 0.046511627906976744,
+      "share_no_other_right": 0.32558139534883723
+    },
+    "codi3b": {
+      "n": 143,
+      "share_all_others_right": 0.027972027972027972,
+      "share_no_other_right": 0.5804195804195804
+    }
+  },
+  "checks": {
+    "p19a_latent_only_solved_by_others_at_or_above_base": false,
+    "p19a_plan_wrong_solved_by_others_le_0_35": true,
+    "p19b_codi1b_simcot_jaccard_exceeds_independence_by_0_10": true,
+    "p19c_majority_vote_gain_le_2_points": true
+  }
+}
