@@ -72,6 +72,7 @@ Name & Base & Source & Paper & Ours \\
 CODI GPT-2 & GPT-2 (124M) & \texttt{zen-E/CODI-gpt2} & 43.7 & 43.6 \\
 CODI-1B & LLaMA-3.2-1B-Instruct & \texttt{zen-E/CODI-llama3.2-1b-Instruct} & 55.6 & 55.5 \\
 SIM-CoT & LLaMA-3.2-1B-Instruct & \texttt{internlm/SIM\_COT-LLaMA3-CODI-1B} & 56.1 & 55.7 \\
+SIM-CoT-3B & LLaMA-3.2-3B-Instruct & \texttt{internlm/SIM\_COT-LLaMA3-CODI-3B} & 62.3 & 61.9 \\
 Coconut & GPT-2 (124M) & \texttt{UdeSA/coconut-0.2B-gsm8k-aug} (retrain) & 34.6 & 34.6 \\
 \bottomrule
 \end{tabular}
@@ -164,7 +165,7 @@ Every experiment was written into a ledger with its predictions before the run, 
 Table~\ref{tab:transport} gives the central numbers. Swapping the whole K/V tail changes 60--75\% of answers on all chains, yet on short chains no single thought moves more than 10\% of answers to the twin's value. On long chains, one thought (GPT-2 and SIM-CoT: thoughts 1 and 3; CODI-1B: thought 3 alone) transports the value 0.20--0.36 of the time, and the K/V of the following position transport it at the same rate. This holds on the augmented training rows, the original test set and the original train set, with overlapping intervals.
 
 \begin{table}[h]
-\caption{Transport (target rate) under a single-site swap, long chains. Columns are thought states $s_0..s_5$ and K/V positions $k_0..k_5$; the carrier/store pairs are bold. Short-chain transport never exceeds 0.10 at any single site. Pairs: 512 unless stated.}
+\caption{Transport (target rate) under a single-site swap, long chains. Columns are thought states $s_0..s_5$ and K/V positions $k_0..k_5$; the carrier/store pairs are bold. Short-chain transport never exceeds 0.10 at any single site in the 1B-and-smaller models; SIM-CoT-3B's thought 4 transports 0.23 on short chains. Pairs: 512 unless stated.}
 \label{tab:transport}
 \centering
 \scriptsize
@@ -182,22 +183,23 @@ CODI-1B & train-orig & .06 & .02 & .00 & \textbf{.35} & .03 & .00 & .07 & .06 & 
 SIM-CoT & aug-train & .04 & \textbf{.19} & .04 & \textbf{.25} & .04 & .00 & .13 & .04 & \textbf{.18} & .04 & \textbf{.23} & .04 & .73 \\
 SIM-CoT & test (168 pairs) & .03 & \textbf{.22} & .05 & \textbf{.20} & .04 & .00 & .22 & .03 & \textbf{.21} & .05 & \textbf{.20} & .04 & .72 \\
 SIM-CoT & train-orig & .03 & \textbf{.21} & .05 & \textbf{.23} & .05 & .00 & .17 & .03 & \textbf{.22} & .05 & \textbf{.22} & .05 & .66 \\
+SIM-CoT-3B & test (207 pairs) & .06 & .04 & \textbf{.27} & .02 & \textbf{.16} & .00 & .09 & .06 & .04 & \textbf{.28} & .02 & .15 & .68 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The pattern is a ladder: an odd thought computes and projects into the next even position, which stores the result in its K/V, where the answer decode reads it. The pairing is trained, not fixed: (1$\to$2, 3$\to$4) in GPT-2 and SIM-CoT, (3$\to$4) alone in CODI-1B. The sixth thought's state is discarded by the architecture and its K/V transport is at most 0.05 everywhere. On the one-step control SVAMP, no site transports more than 0.045 and the card reports that nothing is monitorable. On ASDiv the short-chain ceiling holds on all three models; its multi-step subset gave 17--30 pairs, too few to decide carriers, though the point estimates (0.12--0.15 at thought 3) point the same way.
+The pattern is a ladder: an odd thought computes and projects into the next even position, which stores the result in its K/V, where the answer decode reads it. The pairing is trained, not fixed: (1$\to$2, 3$\to$4) in GPT-2 and SIM-CoT, (3$\to$4) alone in CODI-1B. The sixth thought's state is discarded by the architecture and its K/V transport is at most 0.05 everywhere. On the one-step control SVAMP, no site transports more than 0.045 and the card reports that nothing is monitorable. On ASDiv the short-chain ceiling holds on all three models; its multi-step subset gave 17--30 pairs, too few to decide carriers, though the point estimates (0.12--0.15 at thought 3) point the same way. At 3B the ladder keeps its shape and flips its parity: SIM-CoT-3B carries at thoughts 2 (0.27 [0.21, 0.32]) and 4 (0.16) and stores at thought 3's K/V (0.28), and thought 4 also transports 0.23 on short chains, so the chain-length gate is a property of the 1B-and-smaller checkpoints, not of the family. Its sixth thought's K/V transport 0.15 on both profiles: at 3B the terminal position is in use.
 
 \subsection{Used is not needed}\label{sec:necessity}
 
-Table~\ref{tab:necessity} gives the masking costs. No single thought costs more than 1.3 points on short chains in any model (K1 holds everywhere). On long chains the carriers cost GPT-2 6--20 points and SIM-CoT 4--12, but CODI-1B only 2--4 points, with upper bounds below 10 on every pool. CODI-1B uses thought 3 (transport 0.30--0.35) and does not need it: the \emph{backup route} regime. The single most necessary site in GPT-2 and SIM-CoT is not a thought but position~0's K/V, which holds the question: hiding it costs 19--38 points (GPT-2) and 33--59 points (SIM-CoT) on long chains, and for SIM-CoT it alone transports 0.44--0.66 of short-chain twins. The last thought costs at most 1.9 points anywhere (K3 holds). GPT-2's carrier cost straddles the 10-point line across pools (6.5 [2.4, 10.6] on the test set, 11.7 [7.7, 16.0] and 12.5 [7.2, 17.9] on the others); we do not read a regime change into overlapping intervals.
+Table~\ref{tab:necessity} gives the masking costs. No single thought costs more than 1.3 points on short chains in any 1B-or-smaller model (K1 holds there); SIM-CoT-3B's thought 2 costs 2.8. On long chains the carriers cost GPT-2 6--20 points and SIM-CoT 4--12, but CODI-1B only 2--4 points, with upper bounds below 10 on every pool. CODI-1B uses thought 3 (transport 0.30--0.35) and does not need it: the \emph{backup route} regime. The single most necessary site in GPT-2 and SIM-CoT is not a thought but position~0's K/V, which holds the question: hiding it costs 19--38 points (GPT-2) and 33--59 points (SIM-CoT) on long chains, and for SIM-CoT it alone transports 0.44--0.66 of short-chain twins. The last thought costs at most 1.9 points in the 1B-and-smaller models (K3 holds there); at 3B it costs 8.4 [5.1, 11.9], as much as a carrier. SIM-CoT-3B is also backup route: its carriers cost 6.5 and 8.9 points, the whole tail 44, and its question register 10.8, a third of the 1B figure. GPT-2's carrier cost straddles the 10-point line across pools (6.5 [2.4, 10.6] on the test set, 11.7 [7.7, 16.0] and 12.5 [7.2, 17.9] on the others); we do not read a regime change into overlapping intervals.
 
 \begin{table}[h]
 \caption{Accuracy drop in points when one thought is removed (larger of mean-ablation and K/V mask), long chains; 95\% bootstrap intervals over rows where available. ``$k_0$'' is the question register.}
 \label{tab:necessity}
 \centering
 \scriptsize
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{2.5pt}
 \begin{tabular}{llcccccc|c|l}
 \toprule
 Model & Pool & $k_0$ & 1 & 2 & 3 & 4 & 5 & all & Regime \\
@@ -211,13 +213,14 @@ CODI-1B & train-orig & 3.2 & 7.2 & 3.2 & 2.3 [0.3, 4.3] & 4.6 & 0.9 & 52.4 & bac
 SIM-CoT & aug-train & 58.6 & 10.6 & 11.4 & 9.1 & 8.4 & 3.0 & 76.0 & backup route \\
 SIM-CoT & test & 32.5 & 9.8 [6.5, 13.3] & 7.0 & 4.3 [2.2, 6.8] & 5.7 & 1.9 & 44.2 & backup route \\
 SIM-CoT & train-orig & 49.0 & 12.3 [8.3, 16.3] & 11.7 & 9.2 [5.7, 13.2] & 11.7 & 1.4 & 68.2 & backup route \\
+SIM-CoT-3B & test & 10.8 & 5.7 [2.7, 8.9] & 6.5 [3.3, 9.8] & 4.1 & 8.9 [5.7, 12.5] & 8.4 [5.1, 11.9] & 44.2 & backup route \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Readable is not faithful}\label{sec:monitors}
 
-Table~\ref{tab:monitors} compares what a probe reads with what the behaviour confirms. In every model the carriers are the only thoughts whose alarms are confirmed (0.17--0.40). Thoughts 4 and 5 are read at 0.4--0.8 by the ridge probe and confirmed at 0.00--0.05. The original check C4 (``the most readable slot is inert and readability anti-correlates with faithfulness'') held for GPT-2 under the ridge probe but not under the MLP, and not for the 1B models: it is a probe-dependent statement and we withdraw it. What holds on every card under both families is C4b: a thought exists that a probe reads at $\geq 0.30$ whose reading the behaviour confirms $\leq 5\%$ of the time, and the last thought is such a slot in every model. Carrier faithfulness moves by at most 0.04 between probe families: faithfulness belongs to the slot, not to the probe.
+Table~\ref{tab:monitors} compares what a probe reads with what the behaviour confirms. In every model the carriers are the only thoughts whose alarms are confirmed (0.17--0.40). In the 1B-and-smaller models thoughts 4 and 5 are read at 0.4--0.8 by the ridge probe and confirmed at 0.00--0.05; at 3B the readable-but-unconfirmed thought is the store, thought 3 (read 0.55 / 0.31, confirmed 0.02 / 0.03). The original check C4 (``the most readable slot is inert and readability anti-correlates with faithfulness'') held for GPT-2 under the ridge probe but not under the MLP, and not for the 1B models: it is a probe-dependent statement and we withdraw it. What holds on every card under both families is C4b: a thought exists that a probe reads at $\geq 0.30$ whose reading the behaviour confirms $\leq 5\%$ of the time, and the last thought is such a slot in every 1B-and-smaller model, the store in the 3B model. Carrier faithfulness moves by at most 0.04 between probe families: faithfulness belongs to the slot, not to the probe.
 
 \begin{table}[h]
 \caption{Monitor readability (ridge / MLP) and faithfulness (ridge / MLP) per thought, long chains, penultimate intermediate as the target. Carriers in bold.}
@@ -236,6 +239,7 @@ CODI-1B & aug-train & .27/.17 & .15/.06 & .36/.24 & \textbf{.79/.75} & .84/.79 &
 CODI-1B & test & .19/.15 & .06/.06 & .16/.08 & \textbf{.59/.52} & .69/.62 & .68/.48 \\
 SIM-CoT & aug-train & .25/.29 & \textbf{.62/.61} & .69/.56 & \textbf{.72/.67} & .74/.62 & .57/.44 \\
 SIM-CoT & test & .10/.12 & \textbf{.44/.38} & .50/.28 & \textbf{.56/.44} & .54/.32 & .32/.19 \\
+SIM-CoT-3B & test & .09/.12 & .25/.21 & \textbf{.54/.51} & .55/.31 & \textbf{.22/.22} & .24/.15 \\
 \midrule
 \multicolumn{8}{l}{\emph{Faithfulness ridge / MLP (alarm confirmed by behaviour)}} \\
 GPT-2 & aug-train & .00/.00 & \textbf{.19/.17} & .00/.00 & \textbf{.40/.36} & .00/.00 & .00/.00 \\
@@ -244,6 +248,7 @@ CODI-1B & aug-train & .02/.01 & .01/.00 & .02/.02 & \textbf{.36/.36} & .05/.05 &
 CODI-1B & test & .04/.05 & .06/.06 & .00/.00 & \textbf{.34/.35} & .02/.02 & .00/.00 \\
 SIM-CoT & aug-train & .02/.02 & \textbf{.21/.20} & .02/.01 & \textbf{.28/.29} & .03/.03 & .00/.00 \\
 SIM-CoT & test & .03/.03 & \textbf{.26/.30} & .03/.01 & \textbf{.26/.28} & .02/.04 & .00/.00 \\
+SIM-CoT-3B & test & .06/.02 & .09/.12 & \textbf{.37/.36} & .02/.03 & \textbf{.20/.23} & .00/.00 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -386,7 +391,7 @@ Switch to the explicit chain's answer when it disagrees & $+5.6$ & $+5.3$ & $+3.
 \end{tabular}
 \end{table}
 
-\paragraph{Why the two families differ.} CODI distils a teacher into thoughts through a projector and drops the chain's last step during training; what emerges is a narrow channel that holds one intermediate at one slot, with the question kept in position~0's memory and a backup route around the thoughts in the larger model. Coconut replaces steps with thoughts by a curriculum, step by step; what emerges is a thought sequence that is the computation, dense and necessary. Step supervision (SIM-CoT) moves CODI part of the way toward the Coconut profile: more necessary thoughts and a heavier reliance on the question register.
+\paragraph{Why the two families differ.} CODI distils a teacher into thoughts through a projector and drops the chain's last step during training; what emerges is a narrow channel that holds one intermediate at one slot, with the question kept in position~0's memory and a backup route around the thoughts in the larger model. Coconut replaces steps with thoughts by a curriculum, step by step; what emerges is a thought sequence that is the computation, dense and necessary. Step supervision (SIM-CoT) moves CODI part of the way toward the Coconut profile: more necessary thoughts and a heavier reliance on the question register. Scale moves it further along the same line: at 3B there are two carriers, the gate is gone, the terminal position is in use and the question register matters a third as much, though the backup route around the thoughts remains.
 
 \paragraph{Limitations.} All results are on grade-school arithmetic; ASDiv transfers only the short-chain and terminal findings because its multi-step subset is small, and we found no further dataset with equation chains and small numbers. The Coconut checkpoint is a third-party retrain at GPT-2 scale. The repair's needed value came from the gold chain or from the model's own chain; a deployable repairer would need a tool that supplies it, and reading that chain directly is already better. Outcomes are first answer tokens for the CODI family, with native decoding for headline conditions. Two probe families were tried, not more.
 
@@ -400,7 +405,7 @@ Hidden thoughts in CODI-style models are optional, narrow channels: they carry a
 
 \section*{Reproducibility statement}
 
-The repository \texttt{github.com/0x0shephard/latent-reasoning} contains the audit driver, every runner, 80 unit tests for the audit code, the pinned Kaggle notebooks, 14 cards, the per-target outcomes of every repair and error-detection run, and the ledger (\texttt{docs/RESEARCH\_CONTEXT\_LEDGER.md}, sections 108--129) with each preregistration and its scoring. Checkpoints are pinned by revision and SHA-256. Each card records the GPU, library versions and dataset hash. Five reruns, on another account and day, reproduced the twin predictions byte for byte.
+The repository \texttt{github.com/0x0shephard/latent-reasoning} contains the audit driver, every runner, 80 unit tests for the audit code, the pinned Kaggle notebooks, 15 cards, the per-target outcomes of every repair and error-detection run, and the ledger (\texttt{docs/RESEARCH\_CONTEXT\_LEDGER.md}, sections 108--130) with each preregistration and its scoring. Checkpoints are pinned by revision and SHA-256. Each card records the GPU, library versions and dataset hash. Five reruns, on another account and day, reproduced the twin predictions byte for byte.
 
 \begin{thebibliography}{30}
 \small
