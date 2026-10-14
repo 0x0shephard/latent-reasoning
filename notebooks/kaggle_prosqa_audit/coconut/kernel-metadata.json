@@ -1,0 +1,14 @@
+{
+  "id": "dannyism11/prosqa-audit-coconut-llama-1b",
+  "title": "ProsQA audit Coconut LLaMA-1B",
+  "code_file": "kaggle_prosqa_audit_coconut.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
