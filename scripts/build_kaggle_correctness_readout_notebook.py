@@ -125,6 +125,12 @@ display(Markdown(markdown(report)))
 print(json.dumps(report["checks"], indent=2))
 print("Reminder: publish this notebook's output as a dataset (Output tab -> New Dataset).")
 ''')
+    md("## Keep the output under Kaggle's 500-file cap")
+    code(r'''
+import shutil
+shutil.rmtree(REPO_DIR, ignore_errors=True)   # the clone (with .git) is not an output; without this the run's own files can be dropped from the saved output
+print("removed", REPO_DIR, "; remaining output files:", sum(len(f) for _, _, f in os.walk("/kaggle/working")))
+''')
     nb["cells"] = cells
     nb["metadata"] = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
                       "language_info": {"name": "python", "version": "3"}, "kaggle": {"accelerator": "gpu", "internet": True}}
