@@ -6903,3 +6903,23 @@ task whose failures are execution, not planning) is the only route left.
 ### Cost
 
 Two kernels on dannyism11, ≈ 1.5 h (audit) + 0.7 h (repair) at 3B.
+
+### §130 addendum: the 3B card (2026-10-14)
+
+Gate 61.94% on GSM8K test (paper 62.3%), on one T4 in float16, 75 minutes of audit.
+
+| slot | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| transport short / long | .00 / .06 | .00 / .04 | .05 / **.27** [.21, .32] | .02 / .02 | **.23** / **.16** | .00 / .00 |
+| K/V transport long | .09 | .06 | .04 | **.28** | .02 | .15 |
+| readability / faithfulness (ridge, long) | .09 / .06 | .25 / .09 | .54 / .37 | .55 / .02 | .22 / .20 | .24 / .00 |
+| masking cost long (pts) | 10.8 | 5.7 | 6.5 | 4.1 | 8.9 | 8.4 |
+
+**P16a scored.** Gate in range: **holds**. A single carrier at slot 3: **wrong**. The 3B
+model carries at the *even* slots 2 and 4 and stores at 3, the parity of the 1B ladder
+flipped; slot 4 also transports 0.23 on short chains, so there is no chain-length gate
+(C1 fails), and the terminal slot's K/V transport 0.15 and cost 8 points, so it is not
+inert (C3 fails). Regime `backup_route`: **holds** (carrier costs 6.5 and 8.9 points; the
+whole tail costs 44). C4b holds under both families at slot 3 (read at 0.55 / 0.31,
+confirmed 0.02 / 0.03). The repair kernel therefore writes slot 2 (store 3) with slot 4
+as the second carrier.

@@ -1,6 +1,6 @@
 {
   "contract": "latent_monitor_audit_card_v1",
-  "cards": 14,
+  "cards": 15,
   "rows": [
     {
       "model": "codi1b",
@@ -401,6 +401,114 @@
         "twins_long": {
           "predictions": "b1fe87e6a80332d61d8e88f3ac7d028a59af46928f979bbc49be2abca8312de3",
           "pairs": "ca9f240141dd00857c20d2ac176048b2f4eea886724aebe681289a6ca9794ce0"
+        }
+      }
+    },
+    {
+      "model": "codi3b",
+      "pool": "gsm8k_test",
+      "pool_hash": "cd309bf1a3820e6fb1cb5ec7a5f9e79a102757c7ed3fb6b56f3c77271f1f2868",
+      "device": "Tesla T4",
+      "dtype": "float16",
+      "gate_accuracy": 0.6194086429112965,
+      "carriers": [
+        2,
+        4
+      ],
+      "placement": [
+        2,
+        4
+      ],
+      "regime": "backup_route",
+      "transport_long": {
+        "0": 0.06038647342995169,
+        "1": 0.043478260869565216,
+        "2": 0.26811594202898553,
+        "3": 0.021739130434782608,
+        "4": 0.16183574879227053,
+        "5": 0.0
+      },
+      "transport_long_ci95": {
+        "0": [
+          0.03140096618357488,
+          0.0918478260869562
+        ],
+        "1": [
+          0.021739130434782608,
+          0.07004830917874397
+        ],
+        "2": [
+          0.21497584541062803,
+          0.32367149758454106
+        ],
+        "3": [
+          0.009601449275362321,
+          0.03864734299516908
+        ],
+        "4": [
+          0.12077294685990338,
+          0.20531400966183574
+        ],
+        "5": [
+          0.0,
+          0.0
+        ]
+      },
+      "mask_cost_long": {
+        "0": 0.10840108401084014,
+        "1": 0.05691056910569103,
+        "2": 0.06504065040650409,
+        "3": 0.04065040650406504,
+        "4": 0.08943089430894313,
+        "5": 0.0840108401084011
+      },
+      "mask_cost_long_ci95": {
+        "0": [
+          0.07046070460704607,
+          0.14634146341463414
+        ],
+        "1": [
+          0.02710027100271003,
+          0.08943089430894309
+        ],
+        "2": [
+          0.032520325203252036,
+          0.0975609756097561
+        ],
+        "3": [
+          0.016192411924119247,
+          0.06775067750677506
+        ],
+        "4": [
+          0.056910569105691054,
+          0.12466124661246612
+        ],
+        "5": [
+          0.051490514905149054,
+          0.11924119241192412
+        ]
+      },
+      "register_cost_long": 0.10840108401084014,
+      "checks": {
+        "c1_no_single_site_transport_on_short_chains": false,
+        "c2_chain_length_gate": false,
+        "c3_terminal_inert_unfaithful_unnecessary": false,
+        "c4_readability_dissociated_from_faithfulness": false,
+        "c4_mlp_readability_dissociated_from_faithfulness": false,
+        "c4_families_agree": true,
+        "c4b_readable_unfaithful_slot_exists": true,
+        "c4b_mlp_readable_unfaithful_slot_exists": true,
+        "c4b_both_families": true,
+        "c5_carriers_necessary": false
+      },
+      "fingerprints": {
+        "twins_standard": {
+          "predictions": "bd56dd0c15f41fd37258d6f5077c0db2b4fbd7497a8287321a4a3b0bb42df70d",
+          "pairs": "6fae56b212beb21bb3ffe71d861054a2419b63a59de943e8ef18cd791055dcb2"
+        },
+        "twins_long": {
+          "predictions": "dea50f6512d32c8ac781024b7d00a115e35b1c7b322ceb4ec20899de8bf51a7b",
+          "pairs": "01a4e39a10c78d4c61869a71742a98448c50c8cbaf19b2f73d38b4b8524b0685"
         }
       }
     },

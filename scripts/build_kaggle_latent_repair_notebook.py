@@ -18,7 +18,8 @@ MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "carrier": 3, "store": 4, "extra": []},
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "float16", "carrier": 3, "store": 4, "extra": []},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "float16", "carrier": 3, "store": 4, "extra": [1]},
-    "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "carrier": 3, "store": 4, "extra": []},
+    # the 3B card (ledger §130) finds carriers at the even slots 2 and 4 with the store at 3
+    "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "carrier": 2, "store": 3, "extra": [4]},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_latent_repair_runner.py", "tests/test_chain_pools.py"]
 
