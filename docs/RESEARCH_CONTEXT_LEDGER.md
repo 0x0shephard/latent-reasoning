@@ -7573,3 +7573,47 @@ early-stopping result, and it places ProsQA outside the set of tasks where a lat
 could mean anything: there is nothing in the thoughts to monitor, and nothing in them to
 repair. The paper gains its third row in the regime table and a clear statement that the
 GSM8K findings are properties of tasks where the thoughts are used at all.
+
+### §134 addendum: the 8B card (2026-10-15)
+
+`docs/latent_monitor_audit/codi8b_gsm8k_test.card.*`. One kernel on both T4s, float16,
+batch 16, 3 h 55 min of audit after a 16-minute gate (a first version passed the gate and
+failed where the K/V recorder stacked per-layer tensors from two devices; fixed in one line).
+Gate 62.47% on GSM8K test (paper 64.1, floor 61.1). 206 long-profile pairs; 512 masking rows.
+
+| slot | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| transport short / long | .00 / .04 | .00 / .03 | .03 / **.28** [.23, .34] | .01 / .14 | **.51** / .11 | .00 / .00 |
+| K/V transport short / long | .00 / .01 | .00 / .03 | .00 / .02 | .03 / **.29** | .02 / .14 | **.51** / .11 |
+| readability / faithfulness (ridge) | .13 / .02 | .26 / .01 | .53 / .36 | .49 / .16 | .24 / .06 | .14 / .00 |
+| mask cost short / long (pts) | 2.8 / 4.6 | 1.4 / 3.3 | 1.4 / 4.6 | 0.7 / 6.8 | **13.3 / 12.2** | 3.5 / 9.8 |
+
+Register: transport 0.00 / 0.01, mask cost 4.6 [1.9, 7.3] on long chains. Tails: kv_all
+transport 0.72, mask_all cost 38.8, mean_all 45.0. Spearman of readability against
+faithfulness 0.71 (ridge) / 0.75 (MLP). Card verdict: carrier 2, store 3, inert 0 and 1,
+regime `backup_route`, C1–C5 and C4b all **false**, register check false.
+
+**P24a** (gate 61–67): **holds** (62.5). **P24b**: carrier at 2 and store at 3: holds; slot 4 as
+a second long-chain carrier: **wrong** (0.11, below the 0.15 line) but slot 4 is the
+*short-chain* carrier (0.51, with slot 5's K/V storing it at 0.51), so the gate is not merely
+gone, it has reversed: short chains are carried at the pair 4→5 and long chains at 2→3; no
+gate: **holds**; terminal K/V in use: **holds** (0.51 short, 0.11 long). **P24c** (backup
+route; no carrier ≥ 10 points): **holds** for the card's carrier (4.6), with the note that
+slot 4, which the card does not call a carrier, is the most necessary thought (13.3 / 12.2
+points). **P24d** (C4b under both families): **wrong**. At 8B there is no slot read at ≥ 0.30
+and confirmed ≤ 0.05; the dead slots 0 and 1 read at 0.13–0.26, and readability correlates
+with faithfulness at 0.71–0.75. **P24e** (register < 15): **holds** (4.6; 32.5 at 1B, 10.8
+at 3B).
+
+**Reading, across scale.** The three SIM-CoT cards are a trajectory. At 1B one carrier, an
+inert terminal, a question register that costs 33–59 points and a last thought that reads
+well and is never used. At 3B two carriers at the even slots, the terminal in use, the
+register at 11 points, the stale copy at the store. At 8B two carrier *pairs* specialised by
+chain length (4→5 for short chains, 2→3 for long), the register at 5 points, the most
+necessary site a thought rather than the register for the first time, and no stale copy at
+all: readability tracks faithfulness. The larger the model, the more the thoughts do the
+work and the more honestly a probe on them reads. The two findings that defined the 1B
+picture, the chain-length gate and the readable-but-unfaithful slot, are properties of the
+small checkpoints; the two that survive every scale are that the carriers are sufficient but
+not necessary (backup route at 1B, 3B and 8B) and that the computation lives at one or two
+trained slots. The paper's C4b sentence is amended to "on every card up to 3B".

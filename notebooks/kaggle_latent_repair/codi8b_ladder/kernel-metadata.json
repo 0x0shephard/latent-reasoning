@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/ladder-repair-sim-cot-8b",
+  "title": "Ladder repair SIM-CoT 8B",
+  "code_file": "kaggle_latent_repair_codi8b_ladder.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

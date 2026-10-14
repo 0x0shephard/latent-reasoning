@@ -12,7 +12,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "7457e895e1f65615dcb51d7903eb4ef5c55a0f94"   # pinned after the tests pass
+RUN_COMMIT = "6a7163552573a8c077b05be881b7668ee3b025c2"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "carrier": 3, "store": 4, "extra": []},
@@ -20,16 +20,18 @@ MODELS = {
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "float16", "carrier": 3, "store": 4, "extra": [1]},
     # the 3B card (ledger §130) finds carriers at the even slots 2 and 4 with the store at 3
     "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "carrier": 2, "store": 3, "extra": [4]},
+    # the 8B card (ledger §134): long-chain carrier 2, store 3, the short-chain carrier 4; two T4s, batch 16
+    "codi8b": {"config": "configs/official_simcot_codi_llama8b.yaml", "title": "SIM-CoT CODI-8B", "precision": "float16", "carrier": 2, "store": 3, "extra": [4], "batch_size": "16"},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_latent_repair_runner.py", "tests/test_chain_pools.py"]
 
 
 def title(model: str, source: str = "gold") -> str:
     if source == "writer":   # Kaggle slugs are capped at 50 characters; SIM-CoT's full title would exceed it
-        short = {"simcot": "SIM-CoT 1B", "codi3b": "SIM-CoT 3B"}.get(model, MODELS[model]["title"])
+        short = {"simcot": "SIM-CoT 1B", "codi3b": "SIM-CoT 3B", "codi8b": "SIM-CoT 8B"}.get(model, MODELS[model]["title"])
         return f"Latent repair {short} with a learned writer"
     if source == "ladder":
-        short = {"simcot": "SIM-CoT 1B", "codi1b": "CODI 1B", "gpt2": "CODI GPT-2", "codi3b": "SIM-CoT 3B"}[model]
+        short = {"simcot": "SIM-CoT 1B", "codi1b": "CODI 1B", "gpt2": "CODI GPT-2", "codi3b": "SIM-CoT 3B", "codi8b": "SIM-CoT 8B"}[model]
         return f"Ladder repair {short}"
     return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 
@@ -65,6 +67,7 @@ REPO_DIR = "/kaggle/working/latent-reasoning"
 CONFIG = "{spec['config']}"
 MODEL = "{model}"
 PRECISION = "{spec['precision']}"
+BATCH_SIZE = "{spec.get("batch_size", "32")}"
 OUTPUT_ROOT = "/kaggle/working/repair_{model}"
 CARRIER, STORE, EXTRA = "{spec['carrier']}", "{spec['store']}", {json.dumps([str(c) for c in spec['extra']])}
 V_SOURCE = "{source}"
@@ -113,7 +116,7 @@ def run_with_retry(command, attempts=3, wait=60):
     code(r'''
 def repair(out, smoke, source):
     cmd = [sys.executable, "-u", "scripts/run_codi_latent_repair.py", "--config", CONFIG, "--model-key", MODEL, "--output-dir", out,
-           "--carrier", CARRIER, "--store", STORE, "--batch-size", "32", "--precision", PRECISION, "--device", "cuda", "--v-source", source]
+           "--carrier", CARRIER, "--store", STORE, "--batch-size", BATCH_SIZE, "--precision", PRECISION, "--device", "cuda", "--v-source", source]
     if EXTRA:
         cmd += ["--extra-carriers", *EXTRA]
     if WRITER:
