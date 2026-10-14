@@ -7384,3 +7384,47 @@ holds a copy of the value the carrier computed, carried forward in the residual 
 the carrier handed it to the K/V cache, where it is as readable as at the source and no
 longer used. Readability outlives use: that is the mechanism behind C4b, and it is why a
 probe placed by readability lands on a stale copy.
+
+### §133 addendum E2: gating the write by confidence, and where the write has no region (2026-10-14)
+
+Same records as B (calculator value, disagreement trigger, one-slot donor), scaled to the 838
+long-chain problems. Two sources of harm are now separated. (1) The write itself knocks over
+loosely held correct answers: with the *gold* value, harm is 19–31% in the bottom confidence
+quartile and 0–3% in the top (B). (2) Under a deployable value, the chain that disagrees with
+a *correct* latent answer is itself wrong, so the value written is wrong: among written
+controls, harm is 22–56% at every confidence. The second source dominates in practice.
+
+**A confidence floor on the write (write only when latent confidence ≥ τ and the chain disagrees):**
+
+| model | τ = 0: lost correct (of all) / repairs / net | τ = 0.5 | τ = 0.85 |
+|---|---|---|---|
+| GPT-2 | 10.2% / 28 / −0.1 | 6.2% / 15 / −0.3 | 4.7% / 4 / −1.2 |
+| CODI-1B | 3.9% / 45 / +3.4 | 3.1% / 23 / +1.2 | 1.6% / 14 / +0.9 |
+| SIM-CoT | 3.1% / 22 / +1.1 | 2.3% / 8 / −0.2 | 1.6% / 1 / −0.7 |
+| SIM-CoT-3B | 3.9% / 22 / +0.4 | 2.3% / 11 / −0.0 | 0.0% / 5 / +0.6 |
+
+The floor removes harm (to zero at 3B with τ = 0.85) but removes most repairs with it, since
+under the disagreement trigger the repairs' mass sits at low confidence even though their
+*rate* is higher at high confidence (B). Net gain improves only at 3B, by 0.2 points.
+
+**The three policies within the disagreeing problems, by confidence half (net points):**
+
+| model | low confidence (< 0.5): share / write / switch | high confidence (≥ 0.5): share / write / switch |
+|---|---|---|
+| GPT-2 | 46% / +0.2 / **+3.4** | 15% / −0.3 / +2.1 |
+| CODI-1B | 27% / +2.2 / **+4.7** | 19% / **+1.2** / +0.5 |
+| SIM-CoT | 31% / +1.3 / **+3.4** | 17% / −0.2 / −0.2 |
+| SIM-CoT-3B | 24% / +0.4 / **+8.0** | 21% / −0.0 / +1.7 |
+
+**Reading.** Yes, the harm is predictable, and the rule that avoids it is the same rule the
+cascade already uses. Where the latent answer is held loosely (low confidence), the write
+breaks it and the chain is usually right, so switch; where it is held firmly (high
+confidence), the write rarely takes and the chain that disagrees is usually the wrong party,
+so leave the answer alone. The write beats both alternatives in exactly one cell, CODI-1B at
+high confidence (+1.2 against +0.5 for switching), worth 0.7 points. The design rule is
+therefore: route on confidence, never write below the threshold, and above it do nothing.
+Harm from the write is avoided not by making the write safer but by not writing where it
+harms, and that region is where switching was better anyway. P23 (top-quartile harm ≤ 3%)
+holds, and the question of §133 E is closed: the correct answers a write breaks are the
+loosely held ones, they are identifiable from confidence alone, and leaving them alone costs
+nothing because the write had nothing to gain there.
