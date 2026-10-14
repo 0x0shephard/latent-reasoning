@@ -7029,3 +7029,50 @@ the wrong problems) and the disagreement trigger from §126–§129 as reference
 ### Cost
 
 No GPU for three models; one ≈ 15-minute kernel for the 3B readout.
+
+### §131 addendum: the cascade scored on four models (2026-10-14)
+
+Script `scripts/analyze_latent_explicit_cascade.py` (tests `tests/test_latent_explicit_cascade.py`);
+reports in `docs/latent_monitor_audit/cascade/`. The 3B readout came from one kernel on
+dannyism11 (`error-detection-from-carriers-sim-cot-codi-3b`, 5 minutes of recording; filed
+under `docs/latent_monitor_audit/error_detection/codi3b.*`). Net points on the 838 ≥3-step
+GSM8K test problems, probability gate, 95% row bootstrap at 25% and 50%:
+
+| routed | GPT-2 | CODI-1B | SIM-CoT | SIM-CoT-3B |
+|---|---|---|---|---|
+| 10% | +0.8 | +0.8 | +0.5 | +2.7 |
+| 25% | +1.5 [−0.2, +3.2] | +3.7 [+1.9, +5.1] | +1.9 [−0.3, +4.3] | +7.5 [+5.1, +9.9] |
+| 50% | +3.1 [+0.1, +5.7] | +7.6 [+4.5, +9.7] | +4.9 [+1.6, +7.8] | +11.1 [+7.5, +14.3] |
+| 100% (full switch) | +5.6 | +5.3 | +3.2 | +9.7 |
+| peak (at % routed) | +7.1 (74%) | +7.6 (50%) | +5.6 (64%) | +11.3 (52%) |
+| oracle: route exactly the wrong problems | +12.0 (64%) | +11.5 (50%) | +10.3 (50%) | +17.2 (44%) |
+| half of the full-switch gain by | 49% | 19% | 23% | 16% |
+| best gated thought write (§129–§130) | +1.0 | +3.4 | +1.1 | +0.9 |
+
+Margin gate: within 1.3 points of the probability gate everywhere (CODI-1B 10%: +2.1 vs
++0.8; SIM-CoT 25%: +3.2 vs +1.9; 3B 10%: +3.9 vs +2.7, 25%: +6.2 vs +7.5); neither gate is
+uniformly better. Native answers differing between the readout and repair runs: GPT-2 39
+(batched float32 decoding is not bit-stable on GPT-2), CODI-1B 4, SIM-CoT 6, 3B 6.
+
+**P17a scored:** at CODI-1B 25% routed captures 70% of the full-switch gain: **holds**; at
+50% routed the cascade is not within a point of the full switch but 2.3 points *above* it:
+**holds in the strong form**. The chain is wrong on some problems the confident latent pass
+had right, and the gate keeps it away from them.
+**P17b scored:** at 3B 25% routed captures 77% of +9.7: **holds**.
+**P17c scored:** probability and margin within 0.5 points: **wrong** (up to 1.3 apart).
+**P17d scored:** the cascade at 25% beats each model's best gated thought write: **holds**
+on all four by point estimate (GPT-2's interval includes zero).
+
+**3B error detection (P10 re-scored at 3B):** confidence 0.915 [0.899, 0.929], carriers
+0.793, weak slots 0.688, raw states 0.844, carriers + confidence 0.919. Carriers do not
+beat confidence (P10 fails as at 1B); the two carriers are the best single slots (entropy
+AUROC 0.78 and 0.76 against 0.55–0.66 elsewhere), so the placement check holds at 3B too.
+
+**Reading.** This is the one accuracy result in the line that is both large and cheap. The
+model's own first-token confidence, which §125 showed is a better error detector than
+anything in the thoughts, is also a good router: at 3B, sending the least-confident quarter
+of problems to the explicit chain gains 7.5 points, eight times the best thought write, and
+sending half gains more than running the chain on everything. The headroom above it (the
+oracle, +17) is the error-detection problem, which the thoughts do not solve. Costs are
+counted in problems routed, not tokens, and the chain is the model's own teacher-mode chain
+with a calculator correction.
