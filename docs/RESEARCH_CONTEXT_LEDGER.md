@@ -6981,3 +6981,51 @@ closed: a stronger CODI does not make repair a product. The durable 3B results a
 card (two carriers, no gate, terminal in use, backup route) and the shift in the failure
 mix. Option 2 (a task whose failures are execution rather than planning) remains the only
 route to a higher repair ceiling and needs training, so it is out of scope for this line.
+
+## 131. Preregistered: Build 6, a confidence-gated cascade from latent to explicit reasoning
+
+Designed 2026-10-14 after §130. The one policy that raised accuracy on every CODI model
+was switching to the model's own explicit chain when it disagrees with the latent answer
+(+5.6 / +5.3 / +3.2 / +9.7 points, GPT-2 / CODI-1B / SIM-CoT / SIM-CoT-3B), but it runs the
+chain on every problem. The question: how much of that gain survives when the chain is run
+only on the problems the latent pass is unsure about? No training; no new decoding for the
+three 1B-and-smaller models.
+
+### Data (already on disk)
+
+- Confidence: `outputs/kaggle_runs/readout/<model>/readout_<model>/readout_states.pt`
+  (§125 Build 2): per GSM8K test question, native answer, correctness, first-token
+  probability and margin under the forced cue.
+- Explicit chain: `docs/latent_monitor_audit/latent_repair_ladder/<model>_tool.targets.jsonl`
+  (§129): per wrong ≥3-step test problem (all of them; GPT-2 a 512-of-540 sample) and per
+  control (128 of the correct ones), the model's own teacher-mode chain, calculator-corrected,
+  with its answer. Joined by question text.
+- SIM-CoT-3B: no readout run exists; one kernel (`dannyism11`, the §125 recorder with the
+  3B config and card, inert set overridden to the weak slots 0 and 1 because the 3B card has
+  no inert slot) records it.
+
+### Procedure
+
+On the 838 ≥3-step test problems (wrong rows weighted to their full count, controls weighted
+to the 420–480 correct rows they sample), for a threshold τ on the latent first-token
+probability: route a problem to the explicit chain when its probability is below τ; the
+final answer is the chain's answer when the chain has one, else the latent answer. Sweep τ
+over every observed value to get net accuracy change against the fraction of problems routed.
+Report the gain at 10 / 25 / 50 / 100% routed, the routed fraction that captures half and
+90% of the full-switch gain, the same curve under the margin gate, the oracle (route exactly
+the wrong problems) and the disagreement trigger from §126–§129 as reference points, with
+95% bootstrap intervals over rows.
+
+### Predictions, before the run
+
+- P17a (the gate works): at CODI-1B, routing 25% of problems captures ≥ 50% of the
+  full-switch gain (≥ +2.7 of +5.3); at 50% routed it is within 1 point of the full switch.
+- P17b (it scales): at SIM-CoT-3B, routing 25% captures ≥ 50% of +9.7.
+- P17c (which gate): probability and margin gates agree within 0.5 points at every routed
+  fraction.
+- P17d (against the thought write): at 25% routed the cascade beats the best gated thought
+  repair (+3.4 at CODI-1B) on every model.
+
+### Cost
+
+No GPU for three models; one ≈ 15-minute kernel for the 3B readout.

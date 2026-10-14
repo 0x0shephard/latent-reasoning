@@ -14,12 +14,14 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "24ecfad49f2196e5cf7c07ad4195c31f70f8e674"   # pinned after the tests pass
+RUN_COMMIT = "8efb949931390a8dc888bc1d8f92cc1f5b60d02b"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32"},
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "float16"},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "float16"},
+    # the 3B card has no inert slot; its weak slots 0 and 1 (transport <= 0.06) stand in for the inert feature set (ledger §131)
+    "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "inert": "0,1"},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_correctness_readout.py", "tests/test_monitor_faithfulness.py"]
 
@@ -60,6 +62,7 @@ MODEL = "{model}"
 PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/readout_{model}"
 CARD = "docs/latent_monitor_audit/{model}_gsm8k_test.card.json"
+INERT_OVERRIDE = {json.dumps(spec.get("inert"))}
 RUN_SMOKE = True
 
 import glob, json, os, pathlib, subprocess, sys, time
@@ -117,7 +120,7 @@ print("native accuracy", summary["native_accuracy"], "published", summary["publi
     md("## Step 2: the analysis, slots chosen by the card")
     code(r'''
 run_with_retry([sys.executable, "-u", "scripts/analyze_correctness_readout.py", "--config", CONFIG, "--card", CARD, OUTPUT_ROOT,
-                "--output", f"{OUTPUT_ROOT}/analysis.json"])
+                "--output", f"{OUTPUT_ROOT}/analysis.json", *(["--inert", INERT_OVERRIDE] if INERT_OVERRIDE else [])])
 report = json.loads(open(f"{OUTPUT_ROOT}/analysis.json").read())
 from scripts.analyze_correctness_readout import markdown
 from IPython.display import Markdown, display
