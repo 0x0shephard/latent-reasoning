@@ -7511,3 +7511,35 @@ the paper lacks and the monitor layer is redesigned with twins that change an in
 ### Cost
 
 Two kernels on dannyism11, ≈ 30 minutes each at 1B.
+
+### §135 addendum A: Coconut on ProsQA, the third profile (2026-10-14)
+
+`docs/latent_monitor_audit/prosqa/coconut_*`; kernel 24 minutes; 500 test rows, sha
+82ddc0af; accuracy 97.6% (published 97.6%). The model answers in the training format
+(`### Sally is a sterpus.`); 12 of 500 wrong.
+
+**Twins.** 335 of 500 rows twin (the last hop rewritten, reachability checked). The model
+answers the *twin* question correctly in only 70 of 335 pairs: on 265 of them it gives the
+original option although the edited premise makes it unreachable. On the 70 gated pairs,
+every intervention returns the model's own answer on all 140 rows: transport 0.000 at every
+state and K/V site, 0.000 for the whole state tail and the whole K/V tail.
+**Masking.** Mean state, mean K/V and hiding, per slot and all six at once: accuracy drop
+0.000 [0.000, 0.000] on all 500 rows. The six thoughts can be removed entirely at no cost.
+**Readability.** The subject's name reads at 0.99 from every slot (17 classes); the two
+option names at 0.25–0.33 (38 classes, chance 0.03); the gold option at 0.63–0.66; the hop
+count at 0.27–0.31 (4 classes). Nothing is slot-specific.
+
+**P25a holds** (no slot costs anything; all six cost nothing). **P25b holds** (no site
+transports; tail swap 0.000; regime `no_transport`). **P25c wrong as stated**: the subject is
+read at 0.99 but the option names are not (0.25–0.33), though far above chance; the names
+that matter are spread evenly. **P25d holds** (97.6 = 97.6).
+
+**Reading.** On ProsQA the Coconut thoughts are not a computation at all: no swap of any
+thought, nor of all six, nor of their cache, moves the answer, and removing them costs
+nothing. The answer is fixed before the first thought, in the question's own positions,
+which is why the twin swap of the *thoughts* cannot carry it and why the model fails 79% of
+the edited twins: it is not following the path whose last hop was changed. This is the
+audit's third profile, and the one Dilgren and Wiegreffe's early-stopping result predicts.
+A sanity check records that the states are non-degenerate (row standard deviation 0.66 per
+slot) and that the same intervention code moves 45–49 points of accuracy on the GSM8K
+Coconut (§127), so the zeros are the model's, not the instrument's.
