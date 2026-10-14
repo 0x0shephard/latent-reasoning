@@ -6781,3 +6781,35 @@ is barely held anywhere in GPT-2 (≤ 0.07).
 ### Cost
 
 Three kernels on dannyism11, ≈ 15–25 min each (both value sources, taxonomy, ladder).
+
+### §128 addendum: Build 4 scored, the learned writer on three models (2026-10-14)
+
+Three kernels (rerun once: the first runs lost their result files to Kaggle's 500-file
+output cap, which the cloned repository had grown past; every notebook now removes the
+clone before the snapshot). Primary stratum = wrong targets whose carrier reads a value
+other than v* and that have a single-token value. Files: `docs/latent_monitor_audit/latent_repair_writer/`.
+
+| model | value | coverage (writer / donor) | donor | centroid | writer abs | writer res | writer MLP | writer control | harm res |
+|---|---|---|---|---|---|---|---|---|---|
+| CODI-1B | gold | 0.86 / 0.73 | 21.4 | 22.5 | 20.7 | **23.2** [18.6, 28.2] | 22.9 | 3.9 | 7.4 |
+| CODI-1B | tool | 0.79 / 0.73 | 17.0 | 15.2 | 14.3 | 17.0 | 15.7 | 2.6 | 5.0 |
+| GPT-2 | gold | 0.87 / 0.80 | 14.2 | 19.0 | 18.7 | 17.9 | **19.0** | 2.9 | 15.2 |
+| GPT-2 | tool | 0.77 / 0.80 | 8.4 | 11.3 | 10.7 | 11.0 | 11.3 | 2.6 | 13.8 |
+| SIM-CoT | gold | 0.85 / 0.80 | 14.5 | 12.4 | 10.7 | 13.8 | 12.4 | 1.0 | 2.5 |
+| SIM-CoT | tool | 0.79 / 0.80 | 7.5 | 7.9 | 7.5 | 7.5 | 7.9 | 0.8 | 5.1 |
+
+**P14 scored.** (a) coverage ≥ 0.90: **miss** (0.85–0.87; values of 1,000 and above have no
+single token). (b) ≥ 0.30 at CODI-1B: **wrong** (23.2, intervals overlapping the donor's);
+GPT-2 writer ≥ donor **holds** (19.0 vs 14.2), SIM-CoT **does not** (13.8 vs 14.5). (c) control
+≤ 0.05: **holds** everywhere (0.8–3.9). (d) residual ≥ absolute: **holds** at CODI-1B and
+SIM-CoT, not at GPT-2. (e) harm ≤ 0.05 at 1B: residual 7.4 / 2.5 (gold), 5.0 / 5.1 (tool):
+**borderline**. (f) gated policy ≥ +5 at CODI-1B: **wrong**; with the writer the gated policy
+gives +2.2 to +2.8 (donor +3.4) against +5.3 for switching to the explicit chain.
+
+**Reading.** Every way of putting the right value into the carrier (a borrowed vector, an
+average, a fitted map, with or without the problem's own context) lands at 20–24% on
+CODI-1B and 18–19% on GPT-2. The writer is a working writer (coverage up, context kept,
+control at 1–4%), so the limit is not the write but what the slot controls. §129's
+diagnosis locates the rest: half of the failures are plan errors no value can fix, a tenth
+are arithmetic done after the thoughts, and the one-slot write already repairs 32–40% of
+the latent-only failures it can reach.
