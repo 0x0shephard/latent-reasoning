@@ -127,10 +127,9 @@ def evaluate_official_codi(
             repo_id=str(cfg.checkpoint.repo_id),
             revision=str(cfg.checkpoint.revision),
             filename=str(cfg.checkpoint.filename),
-            expected_sha256=str(cfg.checkpoint.sha256,
-            shard_sha256=checkpoint_shard_hashes(cfg),
-        ),
+            expected_sha256=str(cfg.checkpoint.sha256),
             token=token,
+            shard_sha256=checkpoint_shard_hashes(cfg),
         )
     else:
         checkpoint = Path(checkpoint_path)

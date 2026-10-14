@@ -205,3 +205,22 @@ def test_sharded_safetensors_checkpoint_loads_and_hashes(tmp_path):
         class checkpoint:
             sha256 = "x"
     assert checkpoint_shard_hashes(_Single) is None
+
+
+def test_evaluator_passes_shard_hashes_to_the_download(monkeypatch):
+    """Regression for the §130 kernel failure: the evaluator's download call must be well formed."""
+    import src.eval.official_codi as ev
+    from src.utils.config import load_config
+
+    seen = {}
+
+    def fake_download(**kwargs):
+        seen.update(kwargs)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(ev, "download_official_checkpoint", fake_download)
+    cfg = load_config("configs/official_simcot_codi_llama3b.yaml")
+    with pytest.raises(RuntimeError, match="stop here"):
+        ev.evaluate_official_codi(cfg, limit=1, device_name="cpu")
+    assert seen["filename"] == "model.safetensors.index.json" and seen["expected_sha256"] == str(cfg.checkpoint.sha256)
+    assert set(seen["shard_sha256"]) == {"model-00001-of-00003.safetensors", "model-00002-of-00003.safetensors", "model-00003-of-00003.safetensors"}
