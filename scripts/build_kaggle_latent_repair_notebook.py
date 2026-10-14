@@ -23,6 +23,8 @@ TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "t
 
 
 def title(model: str, source: str = "gold") -> str:
+    if source == "writer":
+        return f"Latent repair {MODELS[model]['title']} with a learned writer"
     return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 
 
@@ -33,7 +35,7 @@ def slug(model: str, source: str = "gold") -> str:
 
 def build(model: str, source: str = "gold") -> Path:
     spec = MODELS[model]
-    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / (model if source == "gold" else f"{model}_tool")
+    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / (model if source == "gold" else f"{model}_{source}" if source == "writer" else f"{model}_tool")
     out_dir.mkdir(parents=True, exist_ok=True)
     nb = nbf.v4.new_notebook()
     cells = []
@@ -60,6 +62,7 @@ PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/repair_{model}"
 CARRIER, STORE, EXTRA = "{spec['carrier']}", "{spec['store']}", {json.dumps([str(c) for c in spec['extra']])}
 V_SOURCE = "{source}"
+WRITER = {str(source == "writer")}
 RUN_SMOKE = True
 
 import glob, json, os, pathlib, subprocess, sys, time
@@ -101,24 +104,33 @@ def run_with_retry(command, attempts=3, wait=60):
 ''')
     md("## The repair run (smoke first, then full)")
     code(r'''
-def repair(out, smoke):
+def repair(out, smoke, source):
     cmd = [sys.executable, "-u", "scripts/run_codi_latent_repair.py", "--config", CONFIG, "--model-key", MODEL, "--output-dir", out,
-           "--carrier", CARRIER, "--store", STORE, "--batch-size", "32", "--precision", PRECISION, "--device", "cuda", "--v-source", V_SOURCE]
+           "--carrier", CARRIER, "--store", STORE, "--batch-size", "32", "--precision", PRECISION, "--device", "cuda", "--v-source", source]
     if EXTRA:
         cmd += ["--extra-carriers", *EXTRA]
+    if WRITER:
+        cmd.append("--writer")
     if smoke:
         cmd.append("--smoke")
     run_with_retry(cmd)
     return json.loads(open(pathlib.Path(out) / "summary.json").read())
 
+sources = ["gold", "tool"] if WRITER else [V_SOURCE]
 if RUN_SMOKE:
-    repair(OUTPUT_ROOT + "_smoke", True)
-summary = repair(OUTPUT_ROOT, False)
+    repair(OUTPUT_ROOT + "_smoke", True, sources[0])
+summaries = {src: repair(OUTPUT_ROOT + ("" if len(sources) == 1 else "_" + src), False, src) for src in sources}
+summary = summaries[sources[0]]
 import pandas as pd
 from IPython.display import display
-print(json.dumps(summary["report"]["targets"], indent=2)); print(json.dumps(summary["checks"], indent=2))
-if "tool" in summary["report"]:
-    print("tool:", json.dumps(summary["report"]["tool"], indent=2))
+for src, smry in summaries.items():
+    print("=== value source:", src)
+    print(json.dumps(smry["report"]["targets"], indent=2)); print(json.dumps(smry["checks"], indent=2))
+    if "tool" in smry["report"]:
+        print("tool:", json.dumps(smry["report"]["tool"], indent=2))
+    if smry["report"].get("writer"):
+        print("writer coverage:", smry["report"]["writer"]["coverage"])
+        display(pd.DataFrame({k: {"rate": v["rate"], "ci95": v["ci95"], "n": v["n"]} for k, v in smry["report"]["writer"]["primary_with_value"].items()}).T)
 for part in ("primary", "with_donor", "carrier_already_right"):
     print("--- repair rate,", part)
     display(pd.DataFrame({k: {"rate": v["rate"], "ci95": v["ci95"], "n": v["n"]} for k, v in summary["report"]["repair"][part].items()}).T)
@@ -128,7 +140,7 @@ print("Reminder: publish this notebook's output as a dataset (Output tab -> New 
     nb["cells"] = cells
     nb["metadata"] = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
                       "language_info": {"name": "python", "version": "3"}, "kaggle": {"accelerator": "gpu", "internet": True}}
-    name = f"kaggle_latent_repair_{model}{'_tool' if source == 'tool' else ''}.ipynb"
+    name = f"kaggle_latent_repair_{model}{'' if source == 'gold' else '_' + source}.ipynb"
     nbf.write(nb, out_dir / name)
     (out_dir / "kernel-metadata.json").write_text(json.dumps({
         "id": f"{KAGGLE_USER}/{slug(model, source)}", "title": title(model, source), "code_file": name, "language": "python", "kernel_type": "notebook",
@@ -139,10 +151,10 @@ print("Reminder: publish this notebook's output as a dataset (Output tab -> New 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", choices=sorted(MODELS) + ["all"], default="all")
-    parser.add_argument("--source", choices=("gold", "tool", "all"), default="all")
+    parser.add_argument("--source", choices=("gold", "tool", "writer", "all"), default="all")
     args = parser.parse_args()
     for model in (sorted(MODELS) if args.model == "all" else [args.model]):
-        for source in (("gold", "tool") if args.source == "all" else [args.source]):
+        for source in (("gold", "tool", "writer") if args.source == "all" else [args.source]):
             print(build(model, source))
     return 0
 

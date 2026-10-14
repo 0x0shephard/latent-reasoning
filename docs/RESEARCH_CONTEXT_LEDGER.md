@@ -6666,3 +6666,57 @@ same task, opposite monitoring profile: on Coconut a monitor at any even thought
 used value and a mask anywhere is felt; on CODI the thoughts are optional and the carrier
 is a narrow, writable channel. The audit distinguishes the two with one run each.
 Caveats: a third-party retrain (official recipe, matched accuracy) and GPT-2 only.
+
+## 128. Preregistered: Build 4, a learned writer for the carrier thought
+
+Designed 2026-10-14 after §127. No model training; the only training is of a small
+map from a number to a carrier vector, fitted on recorded bank states.
+
+### Why
+
+§126–§127 wrote a value into the carrier by borrowing a whole vector from a bank problem
+whose carrier read that value. That writer is bounded by donor coverage (73–80% of wrong
+targets had one), by the donor's foreign context (harm 5–19%), and by the single-slot
+transport ceiling. The centroid of same-value vectors repaired as well as a retrieved one,
+which says the carrier's code for a value is close to a function of the value. If so, a
+map from a value to a vector can be fitted and used for every target, with no donor.
+
+### The writer
+
+Input: the tied embedding of the value's numeric token (the same token set the probes
+use; integers below 1,000 are single tokens in both tokenizers). Output: a carrier vector.
+Two fits on the 2,048 bank rows, each labelled by the model's own carrier readout:
+ridge (closed form, as the probe but inverted) and a two-layer MLP (hidden 256, seeded).
+Two ways to use it: **absolute**, replace the target's carrier state by the writer's
+vector for v*; **residual**, keep the target's own state and move it by
+writer(v*) − writer(own reading), so the problem's context stays and only the value
+direction moves. Targets whose v* is not a single numeric token get no write and count
+against coverage.
+
+### Protocol
+
+§126's targets, strata, controls and bootstraps; carrier 3 (store untouched, since K/V
+writing lowered repair). Conditions added beside the donor ones: `writer_abs`,
+`writer_res`, `writer_mlp_abs`, and the writer's own control `writer_abs_random_diff`
+(write a random other value). Harm: `writer_abs` with the control's own value. Both value
+sources (gold chain; explicit chain + calculator) in one kernel per model. Net-accuracy
+policies as §127 B, recomputed with the writer.
+
+### Predictions, before the run
+
+- P14a (coverage): the writer has a value for ≥ 0.90 of wrong targets (donor: 0.73–0.80).
+- P14b (repair): at CODI-1B, `writer_abs` or `writer_res` repairs ≥ 0.30 of the primary
+  stratum with gold v* (donor: 0.226); at GPT-2 and SIM-CoT the better writer ≥ the donor.
+- P14c (it is the value): `writer_abs_random_diff` ≤ 0.05.
+- P14d (context helps): `writer_res` ≥ `writer_abs` at every model.
+- P14e (harm): `writer_res` harms ≤ 0.05 of correct controls at the 1B models.
+- P14f (accuracy): with the calculator value and the disagreement trigger, the gated
+  policy gains ≥ 5 points on CODI-1B's long-chain test problems (donor: +3.4), level
+  with switching to the explicit chain (+5.3).
+
+If P14b fails (no writer beats the borrowed vector), the carrier's code is not a simple
+function of the value, which is itself a finding about the representation.
+
+### Cost
+
+Three kernels on dannyism11, ≈ 10–20 min each.

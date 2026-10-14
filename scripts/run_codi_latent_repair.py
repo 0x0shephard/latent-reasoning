@@ -195,6 +195,65 @@ def explicit_chains(model, tokenizer, questions: list[str], *, batch_size: int, 
     return outs
 
 
+# ----------------------------------------------------------------------------- the learned writer (ledger §128)
+WRITER_RIDGE = 1.0
+WRITER_MLP_HIDDEN = 256
+WRITER_MLP_STEPS = 400
+WRITER_SEED = 20_261_016
+
+
+def value_token_embeddings(values: list[str | None], readout: torch.Tensor, vocab_ids: torch.Tensor, strings: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
+    """Tied embedding of each value's numeric token, and a mask of values that have one."""
+    index = {s: i for i, s in enumerate(strings)}
+    emb = torch.zeros(len(values), readout.shape[1]); ok = torch.zeros(len(values), dtype=torch.bool)
+    for i, v in enumerate(values):
+        j = index.get(v) if v is not None else None
+        if j is not None:
+            emb[i] = readout[vocab_ids[j]].float(); ok[i] = True
+    return emb, ok
+
+
+class Writer:
+    """Maps a value's token embedding to a carrier vector: ridge (closed form) or a small MLP."""
+
+    def __init__(self, kind: str = "ridge"):
+        self.kind = kind; self.w = None; self.model = None; self.mean = None; self.std = None
+
+    def fit(self, emb: torch.Tensor, states: torch.Tensor, *, seed: int = WRITER_SEED) -> "Writer":
+        x, y = emb.float(), states.float()
+        if self.kind == "ridge":
+            xb = torch.cat([x, torch.ones(x.shape[0], 1)], 1)
+            self.w = torch.linalg.solve(xb.T @ xb + WRITER_RIDGE * torch.eye(xb.shape[1]), xb.T @ y)
+        else:
+            torch.manual_seed(seed)
+            self.mean, self.std = x.mean(0, keepdim=True), x.std(0, keepdim=True).clamp_min(1e-6)
+            self.model = torch.nn.Sequential(torch.nn.Linear(x.shape[1], WRITER_MLP_HIDDEN), torch.nn.GELU(), torch.nn.Linear(WRITER_MLP_HIDDEN, y.shape[1]))
+            opt = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=1e-2)
+            xs = (x - self.mean) / self.std
+            for _ in range(WRITER_MLP_STEPS):
+                opt.zero_grad(); torch.nn.functional.mse_loss(self.model(xs), y).backward(); opt.step()
+        return self
+
+    def __call__(self, emb: torch.Tensor) -> torch.Tensor:
+        x = emb.float()
+        if self.kind == "ridge":
+            return torch.cat([x, torch.ones(x.shape[0], 1)], 1) @ self.w
+        with torch.no_grad():
+            return self.model((x - self.mean) / self.std)
+
+
+def written_states(writer: Writer, values: list[str | None], own: torch.Tensor, readout, vocab_ids, strings, *, residual_from: list[str] | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    """Absolute: the writer's vector for each value.  Residual: own + writer(value) − writer(own reading).
+    Rows without a single-token value keep their own state; the mask says which were written."""
+    emb, ok = value_token_embeddings(values, readout, vocab_ids, strings)
+    out = own.clone().float(); target = writer(emb)
+    if residual_from is not None:
+        emb_old, ok_old = value_token_embeddings(residual_from, readout, vocab_ids, strings)
+        target = own.float() + target - writer(emb_old); ok = ok & ok_old
+    out[ok] = target[ok].to(out.dtype)
+    return out.to(own.dtype), ok
+
+
 def _number_text(value):
     return None if value is None else (str(int(round(value))) if abs(value - round(value)) < 1e-6 else str(value))
 
@@ -313,6 +372,26 @@ def run(args):
     run_condition("kv_store_nearest", edits=[CacheEdit(store, all_layers, True, True)], donor=near_t)
     run_condition("state_kv_nearest", hidden={carrier: donor_states(donors["nearest"])}, edits=[CacheEdit(store, all_layers, True, True)], donor=near_t)
     run_condition("kv_tail_nearest", edits=[CacheEdit(s, all_layers, True, True) for s in range(latent_positions)], donor=near_t)
+    if args.writer:
+        bank_emb, bank_ok = value_token_embeddings(bank_values[carrier], readout, vocab_ids, strings)
+        writers = {"ridge": Writer("ridge").fit(bank_emb[bank_ok], bank_traj.states[bank_ok, carrier]),
+                   "mlp": Writer("mlp").fit(bank_emb[bank_ok], bank_traj.states[bank_ok, carrier])}
+        own = t_traj.states[:, carrier]
+        abs_states, has_value = written_states(writers["ridge"], t_values, own, readout, vocab_ids, strings)
+        res_states, has_res = written_states(writers["ridge"], t_values, own, readout, vocab_ids, strings, residual_from=own_read[carrier])
+        mlp_states, _ = written_states(writers["mlp"], t_values, own, readout, vocab_ids, strings)
+        rng_w = random.Random(WRITER_SEED)
+        pool_values = sorted(set(v for v in bank_values[carrier]))
+        wrong_values = [rng_w.choice([v for v in pool_values if v != tv] or [tv]) for tv in t_values]
+        diff_states, _ = written_states(writers["ridge"], wrong_values, own, readout, vocab_ids, strings)
+        writer_coverage = {"has_value": int(has_value[[not c for c in is_control]].sum()), "has_residual": int(has_res[[not c for c in is_control]].sum()),
+                           "wrong_targets": len(wrong_idx), "bank_rows_fitted": int(bank_ok.sum())}
+        print("writer coverage", writer_coverage)
+        run_condition("writer_abs", hidden={carrier: abs_states})
+        run_condition("writer_res", hidden={carrier: res_states})
+        run_condition("writer_mlp_abs", hidden={carrier: mlp_states})
+        run_condition("writer_abs_random_diff", hidden={carrier: diff_states})
+        has_donor_backup = list(has_donor)
     extra_donors = {}
     for c in extra:
         d = choose_donors(bank_values[c], bank_traj.states[:, c], t_values, t_traj.states[:, c], seed=SEED + c)
@@ -326,7 +405,16 @@ def run(args):
     # ---- rates
     def rates(mask_fn, kind="repaired"):
         return {name: rate([r == kind for r, m in zip(res, (mask_fn(t) for t in range(len(sel)))) if m]) for name, res in results.items()}
+    writer_block = {}
+    if args.writer:
+        hv = has_value.tolist()
+        wmask = lambda t: not is_control[t] and hv[t] and carrier_wrong[t]
+        writer_block = {"coverage": writer_coverage,
+                        "primary_with_value": {n: rate([r == "repaired" for t, r in enumerate(res) if wmask(t)]) for n, res in results.items()},
+                        "all_wrong_with_value": {n: rate([r == "repaired" for t, r in enumerate(res) if not is_control[t] and hv[t]]) for n, res in results.items()},
+                        "harm_with_value": {n: rate([r != "kept" for t, r in enumerate(res) if is_control[t] and hv[t]]) for n, res in results.items()}}
     report = {
+        "writer": writer_block,
         "targets": {"eligible": len(rows), "wrong_total": sum(1 for c in correct if not c), "wrong_used": len(wrong_idx), "controls": len(control_idx),
                     "native_accuracy": sum(correct) / len(correct), "with_donor": sum(h for h, c in zip(has_donor, is_control) if not c),
                     "carrier_reads_wrong": sum(cw for cw, c in zip(carrier_wrong, is_control) if not c),
@@ -352,6 +440,7 @@ def run(args):
     summary = {"schema_version": 1, "contract": CONTRACT + ("_tool" if args.v_source == "tool" else "") + ("_smoke" if smoke else ""), "smoke": smoke,
                "created_at_utc": datetime.now(timezone.utc).isoformat(), "v_source": args.v_source,
                "checkpoint_sha256": load_report.checkpoint_sha256, "model_key": args.model_key, "carrier": carrier, "store": store, "extra_carriers": extra,
+               "writer": bool(args.writer),
                "preregistration": {"bank_rows": len(bank_rows), "max_targets": args.max_targets, "controls": args.controls, "min_steps": MIN_STEPS, "seed": SEED,
                                    "conditions": list(results), "r1_min": R1_MIN, "r2_ratio": R2_RATIO, "r5_max_harm": R5_MAX_HARM},
                "report": report, "checks": checks, "seconds": time.perf_counter() - started,
@@ -373,6 +462,7 @@ def main():
     parser.add_argument("--store", type=int, default=4)
     parser.add_argument("--extra-carriers", nargs="*", default=[])
     parser.add_argument("--v-source", choices=("gold", "tool"), default="gold", help="where v* comes from: the gold chain, or the model's own explicit chain re-evaluated by a calculator (ledger §127 B)")
+    parser.add_argument("--writer", action="store_true", help="also fit the learned writer (ledger §128) and run its conditions")
     parser.add_argument("--bank-rows", type=int, default=BANK_ROWS)
     parser.add_argument("--max-targets", type=int, default=MAX_TARGETS)
     parser.add_argument("--controls", type=int, default=CONTROLS)

@@ -14,6 +14,9 @@ from scripts.run_codi_latent_repair import (  # noqa: E402
     recompute_chain,
     tool_value,
     top1_numbers,
+    Writer,
+    value_token_embeddings,
+    written_states,
 )
 
 
@@ -61,3 +64,26 @@ def test_tool_recomputes_and_propagates():
     stated, corrected = recompute_chain("<<16-3=12>> <<12*2=24>>")           # first wrong; the reference 12 is corrected to 13
     assert corrected == [13.0, 26.0] and tool_value("<<16-3=12>> <<12*2=24>>") == "26"
     assert tool_value("<<5/2=2>>") is None and tool_value("no chain here") is None and recompute_chain("<<2/0=1>>") is None
+
+
+def test_writer_recovers_a_linear_code_and_residual_keeps_context():
+    g = torch.Generator().manual_seed(0)
+    readout = torch.randn(60, 8, generator=g); vocab_ids = torch.arange(50); strings = [str(i) for i in range(50)]
+    A = torch.randn(8, 16, generator=g)
+    values = [str(int(i)) for i in torch.randint(0, 50, (400,), generator=g)]
+    emb, ok = value_token_embeddings(values, readout, vocab_ids, strings)
+    assert bool(ok.all())
+    states = emb @ A + 0.01 * torch.randn(400, 16, generator=g)
+    w = Writer("ridge").fit(emb, states)
+    pred = w(emb)
+    assert torch.nn.functional.mse_loss(pred, states) < 0.01
+    own = torch.randn(3, 16, generator=g)
+    written, mask = written_states(w, ["7", "999", "3"], own, readout, vocab_ids, strings)
+    assert mask.tolist() == [True, False, True] and torch.equal(written[1], own[1]) and not torch.equal(written[0], own[0])
+    res, mask_res = written_states(w, ["7", "3", "3"], own, readout, vocab_ids, strings, residual_from=["5", "999", "3"])
+    assert mask_res.tolist() == [True, False, True]
+    assert torch.allclose(res[2], own[2], atol=1e-5)                  # same value in and out: no move
+    e7, _ = value_token_embeddings(["7"], readout, vocab_ids, strings); e5, _ = value_token_embeddings(["5"], readout, vocab_ids, strings)
+    assert torch.allclose(res[0], own[0] + w(e7)[0] - w(e5)[0], atol=1e-5)
+    m = Writer("mlp").fit(emb, states)
+    assert m(emb).shape == states.shape
