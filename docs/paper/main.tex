@@ -388,10 +388,11 @@ Table~\ref{tab:prosqa} is the audit's third profile. No single thought, no tail 
 \caption{ProsQA, 500 test problems, native decoding. Transport is the maximum over the six state and six K/V sites and over the two tails; mask cost is the maximum over slots and over all six removed at once; twin pass is the share of last-hop twins the model answers correctly.}
 \label{tab:prosqa}
 \centering
-\small
+\scriptsize
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{lcccccc}
 \toprule
-Model & Accuracy & Gated pairs & Max site transport & Tail transport & Max mask cost & Twin pass \\
+Model & Accuracy & Gated pairs & Max site transport & Tail transport & Max mask cost (pts) & Twin pass \\
 \midrule
 Coconut LLaMA-1B & 97.6 & 70 & 0.000 & 0.000 & 0.0 & 21\% \\
 CODI LLaMA-1B & 99.0 & 108 & 0.000 & 0.005 & 0.0 & 32\% \\
