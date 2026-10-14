@@ -7076,3 +7076,52 @@ sending half gains more than running the chain on everything. The headroom above
 oracle, +17) is the error-detection problem, which the thoughts do not solve. Costs are
 counted in problems routed, not tokens, and the chain is the model's own teacher-mode chain
 with a calculator correction.
+
+## 132. Preregistered: the plan oracle, a go/no-go for "put the plan in a thought"
+
+Designed 2026-10-14 after §131. The proposal: train a CODI variant whose early thought holds the
+operator sequence (the plan), since plan errors are 48–68% of failures (§129–§130). Before any
+training, two facts from the data argue against it and one cheap test decides. (1) A plan-wrong
+failure is one where the model's *own explicit chain* is wrong, so the model cannot plan these
+problems even when writing; the chain is two to three steps shorter than the gold chain in about
+70% of them (CODI-1B 245 cases: 179 shorter, 37 equal, 29 longer; 3B 174: 136 / 24 / 14). A plan
+thought can be supervised only from gold plans, which the model already sees in training. (2)
+SIM-CoT's step-level supervision, which includes each step's operator, adds 0.5 points over CODI
+at 1B (§122). So the realistic ceiling of a plan thought is the latent–explicit gap (5 points at
+1B, 10 at 3B), which the cascade (§131) already captures without training.
+
+The test: give the model the gold plan at inference and measure what it can do with a plan it
+did not produce. If a perfect plan channel does not rescue the plan-wrong failures, no training
+that fills such a channel can. Contract `official_codi_plan_oracle_v1`, no training.
+
+### Design
+
+- Pool: GSM8K test chain rows with ≥ 3 steps (`gsm8k_chain_row`; ≈ 855 rows). Plan = the
+  first operator of each gold equation, as words (add / subtract / multiply / divide).
+- Arms, appended to the question: `none`; `gold` ("Hint: solve in k steps: add, then multiply,
+  then subtract."); `wrong` (same length, every operator replaced by a different one, a
+  deterministic cycle; controls for the disturbance of a hint and for step count); `length`
+  ("Hint: solve in k steps."; separates knowing *how many* steps from knowing *which*).
+- Modes: latent (native decoding through the six thoughts) and explicit (teacher-mode chain,
+  `explicit_chains`), both for every arm.
+- Failure classes from the `none` arm's explicit chain and a calculator (`classify_failure`,
+  §129; final-step and upstream arithmetic merged, since no carrier read is taken).
+- Reported per arm and mode: accuracy on all rows; recovery on each class of latent failure;
+  harm on latent-correct rows; net points; 95% row bootstrap. Models: CODI-1B, SIM-CoT,
+  SIM-CoT-3B (one kernel each on dannyism11, ≈ 10–25 minutes).
+
+### Predictions, before the run
+
+- P18a (the model cannot execute a plan it could not make): in latent mode the gold hint
+  recovers ≤ 0.15 of plan-wrong failures at CODI-1B and at 3B; the wrong-plan control ≤ 0.05.
+- P18b (writing can follow a plan better than thinking can): in explicit mode the gold hint
+  recovers ≥ 0.25 of plan-wrong failures, more than latent mode at every model.
+- P18c (the live ingredient is the step count): the length-only hint obtains at least half
+  the gold hint's plan-wrong recovery in explicit mode.
+- P18d (ceiling): net latent accuracy change from the gold hint ≤ +3 points at every model.
+
+### Decision rule
+
+If P18a fails in the strong form (latent gold-hint recovery ≥ 0.30 of plan-wrong failures
+*and* net latent gain ≥ +5 at 1B or 3B), a plan channel has a ceiling worth training for and
+§133 preregisters the training. Otherwise the proposal is closed with this measurement.
