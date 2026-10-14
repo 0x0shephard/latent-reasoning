@@ -6813,3 +6813,51 @@ control at 1–4%), so the limit is not the write but what the slot controls. §
 diagnosis locates the rest: half of the failures are plan errors no value can fix, a tenth
 are arithmetic done after the thoughts, and the one-slot write already repairs 32–40% of
 the latent-only failures it can reach.
+
+### §129 addendum: Build 5 scored, taxonomy and ladder writes on three models (2026-10-14)
+
+Three kernels; both value sources; the taxonomy uses the calculator run. Files:
+`docs/latent_monitor_audit/latent_repair_ladder/`.
+
+**Failure classes (share of wrong multi-step answers):**
+
+| model | plan wrong | latent-only | upstream arithmetic | final step |
+|---|---|---|---|---|
+| GPT-2 (512) | 68% | 19% | 9% | 4% |
+| CODI-1B (422) | 58% | 23% | 9% | 9% |
+| SIM-CoT (418) | 62% | 21% | 11% | 6% |
+
+**Repair on latent-only failures with at least one mismatched slot (touched), %:**
+
+| model | n | one-slot donor | one-slot writer | ladder writer | ladder donor | ladder random control |
+|---|---|---|---|---|---|---|
+| GPT-2 | 70 | 24.3 | 28.6 | 30.0 | 27.1 | 4.3 |
+| CODI-1B | 81 | **38.3** | 32.1 | 33.3 | 30.9 | 9.9 |
+| SIM-CoT | 45 | **20.0** | 15.6 | 15.6 | 17.8 | 2.2 |
+
+Plan-wrong and final-step failures: ≤ 2.6% under every write at every model; upstream
+arithmetic: ladder 0–14%, no better than one slot (GPT-2 and SIM-CoT never store step 1 in
+a thought that the map can find). Harm on touched correct controls: ladder 14–23% against
+8–19% for one slot; the trigger "a mapped slot's reading differs from the corrected value"
+fires on 33–59% of correct problems because the readout is right only 60–75% of the time
+even when the model is.
+
+**Net accuracy, gated policy (points on the 838 long-chain test problems):** ladder writer
++0.4 / +1.7 / −0.9, ladder donor +0.8 / +1.3 / 0.0, one-slot donor −0.1 / +3.4 / +1.1,
+switch to the explicit chain +5.6 / +5.3 / +3.2 (GPT-2 / CODI-1B / SIM-CoT).
+
+**P15 scored.** (a) classes within 10 points across models: **holds**. (b) ladder ≥ 0.45 at
+CODI-1B and ≥ 0.40 elsewhere: **wrong**; the ladder is level with or below the one-slot
+write everywhere. (c) plan-wrong and final-step ≤ 0.05: **holds**; ladder control ≤ 0.05:
+**fails at CODI-1B** (9.9%, multi-slot disturbance alone shakes some answers loose). (d)
+gated gain ≥ +4.5 at CODI-1B: **wrong** (+1.7). (e) harm ≤ 0.08 at 1B: **wrong** (17–23%).
+
+**Reading, and the end of this line.** Writing more slots does not reach more failures; it
+disturbs more. The single carrier was already the best write point, its one-slot repair
+already reaches about a third of the only failures a value can fix, and those are a fifth
+of all failures. The ceiling of thought correction on these models is therefore fixed by
+the failure mix, not by the writer: at most +3 to +4 points, obtained by the simplest
+method (one borrowed vector into the carrier, applied only when the explicit chain
+disagrees), and always below reading that chain. The taxonomy is the durable result: it
+is stable across three models, computable at inference, and tells a practitioner what
+share of a latent reasoner's errors live in the thoughts at all (19–23%).
