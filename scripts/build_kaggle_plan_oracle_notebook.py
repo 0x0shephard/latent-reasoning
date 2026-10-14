@@ -15,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "29453c304aea2ac165cab4bf556c67075ae56889"   # pinned after the tests pass
+RUN_COMMIT = "739d3b8590ef9e9b15d4adfc11a71d17d5033a91"   # pinned after the tests pass
 KAGGLE_USER = "dannyism11"
 MODELS = {
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "float16"},
