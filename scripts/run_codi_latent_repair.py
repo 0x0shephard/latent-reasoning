@@ -254,6 +254,65 @@ def written_states(writer: Writer, values: list[str | None], own: torch.Tensor, 
     return out.to(own.dtype), ok
 
 
+# ----------------------------------------------------------------------------- ladder writes and the failure taxonomy (ledger §129)
+LADDER_MIN_MAP = 0.40
+LADDER_MIN_ROWS = 30
+SLOTS6 = (0, 1, 2, 3, 4, 5)
+
+
+def chain_intermediates(cot: str) -> list[str | None]:
+    """All step results but the last (the answer), as integer strings or None."""
+    out = []
+    for e in parse_chain(str(cot))[:-1]:
+        r = e["result"]; out.append(str(int(round(r))) if abs(r - round(r)) < 1e-6 and r >= 0 else None)
+    return out
+
+
+def slot_step_map(bank_rows: list[dict], readings: dict[int, list[str]], correct: list[bool], *, min_map: float = LADDER_MIN_MAP,
+                  min_rows: int = LADDER_MIN_ROWS) -> dict[int, dict[int, list[int]]]:
+    """``{k: {step i (1-based): [slots]}}``: slots whose top-1 reading equals step i's result in at
+    least ``min_map`` of the correctly answered bank rows with k steps."""
+    by_k: dict[int, list[int]] = {}
+    for idx, (row, ok) in enumerate(zip(bank_rows, correct)):
+        if ok:
+            by_k.setdefault(len(parse_chain(str(row["cot"]))), []).append(idx)
+    out: dict[int, dict[int, list[int]]] = {}
+    for k, rows in by_k.items():
+        if len(rows) < min_rows or k < 2:
+            continue
+        inter = {idx: chain_intermediates(bank_rows[idx]["cot"]) for idx in rows}
+        out[k] = {}
+        for i in range(1, k):
+            slots = [s for s in SLOTS6 if sum(1 for idx in rows if inter[idx][i - 1] is not None and readings[s][idx] == inter[idx][i - 1]) / len(rows) >= min_map]
+            if slots:
+                out[k][i] = slots
+    return out
+
+
+def ladder_plan(k: int, corrections: list[str | None], readings: dict[int, str], smap: dict[int, dict[int, list[int]]]) -> dict[int, str]:
+    """``{slot: value}`` to write: every slot mapped to step i whose reading differs from the corrected value c_i."""
+    plan: dict[int, str] = {}
+    for i, c in enumerate(corrections, start=1):
+        if c is None:
+            continue
+        for s in smap.get(k, {}).get(i, []):
+            if readings.get(s) != c:
+                plan[s] = c
+    return plan
+
+
+def classify_failure(*, explicit_answer: float | None, gold: float, corrected: list[float] | None, gold_v_star: str | None, carrier_read: str) -> str:
+    """plan_wrong / final_step / upstream_arithmetic / latent_only / no_chain, from the explicit chain and the calculator."""
+    if explicit_answer is not None and abs(explicit_answer - gold) < 1e-6:
+        return "latent_only"
+    if corrected is None or gold_v_star is None:
+        return "no_chain"
+    plan_right = abs(corrected[-1] - float(gold_v_star)) < 1e-6
+    if not plan_right:
+        return "plan_wrong"
+    return "final_step" if carrier_read == gold_v_star else "upstream_arithmetic"
+
+
 def _number_text(value):
     return None if value is None else (str(int(round(value))) if abs(value - round(value)) < 1e-6 else str(value))
 
@@ -287,8 +346,10 @@ def run(args):
     bank_rows, bank_meta = pool_rows(DEFAULT_POOL, data_cfg=data_cfg, tokenizer=tokenizer, bot_token_id=model.bot_id, seed=DATA_SEED)
     bank_rows = bank_rows[:SMOKE["bank"] if smoke else args.bank_rows]
     bank_traj, bank_out = record_native_trajectory(model, tokenizer, [r["question"] for r in bank_rows], latent_iterations=latent_positions, batch_size=bs, device=device)
-    bank_values = {c: top1_numbers(bank_traj.states[:, c], readout, vocab_ids, strings) for c in [carrier] + extra}
-    print(f"bank {len(bank_rows)} rows; distinct carrier values {len(set(bank_values[carrier]))}")
+    read_slots = list(SLOTS6) if args.ladder else [carrier] + extra
+    bank_values = {c: top1_numbers(bank_traj.states[:, c], readout, vocab_ids, strings) for c in read_slots}
+    bank_correct = [extract_official_answer_number(o) is not None and abs(extract_official_answer_number(o) - float(r["gold"])) < 1e-6 for o, r in zip(bank_out, bank_rows)]
+    print(f"bank {len(bank_rows)} rows; distinct carrier values {len(set(bank_values[carrier]))}; bank native accuracy {sum(bank_correct)/len(bank_correct):.3f}")
 
     # ---- targets
     raw = load_raw_eval_rows(dict(data_cfg.eval.gsm8k))
@@ -327,7 +388,7 @@ def run(args):
         t_values = [v if v is not None else "__none__" for v in tool_v]
     else:
         t_values = gold_values
-    own_read = {c: top1_numbers(t_traj.states[:, c], readout, vocab_ids, strings) for c in [carrier] + extra}
+    own_read = {c: top1_numbers(t_traj.states[:, c], readout, vocab_ids, strings) for c in read_slots}
     print(f"targets: {len(rows)} eligible, {sum(1 for c in correct if not c)} wrong ({len(wrong_idx)} used), {len(control_idx)} correct controls; native accuracy {sum(correct)/len(correct):.3f}")
 
     # ---- donors
@@ -392,6 +453,62 @@ def run(args):
         run_condition("writer_mlp_abs", hidden={carrier: mlp_states})
         run_condition("writer_abs_random_diff", hidden={carrier: diff_states})
         has_donor_backup = list(has_donor)
+    taxonomy = None
+    if args.ladder:
+        smap = slot_step_map(bank_rows, bank_values, bank_correct)
+        print("slot-to-step map", {k: v for k, v in sorted(smap.items())})
+        if args.v_source == "tool":
+            corr_lists = []
+            for ch in tool["chains"]:
+                rc = recompute_chain(ch)
+                corr_lists.append(None if rc is None else [str(int(round(v))) if abs(v - round(v)) < 1e-6 and v >= 0 else None for v in rc[1]])
+            explicit_nums = tool["explicit_numbers"]
+        else:
+            corr_lists = [chain_intermediates(r["cot"]) for r in t_rows]
+            explicit_nums = [None] * len(t_rows)
+        plans = []
+        for t in range(len(sel)):
+            corr = corr_lists[t] or []
+            plans.append(ladder_plan(t_rows[t]["steps"], corr, {s: own_read[s][t] for s in SLOTS6}, smap))
+        ladder_touched = [len(p) > 0 for p in plans]
+        # per-slot writers (residual ridge) and per-slot donor indexes
+        slot_writers = {}
+        for s in SLOTS6:
+            e, ok = value_token_embeddings(bank_values[s], readout, vocab_ids, strings)
+            slot_writers[s] = Writer("ridge").fit(e[ok], bank_traj.states[ok, s]) if int(ok.sum()) >= 50 else None
+        rng_l = random.Random(WRITER_SEED + 1)
+        all_values = sorted(set(v for s in SLOTS6 for v in bank_values[s]))
+
+        def ladder_states(kind: str) -> dict[int, torch.Tensor]:
+            hidden = {s: t_traj.states[:, s].clone() for s in SLOTS6}
+            for t, plan in enumerate(plans):
+                for s, value in plan.items():
+                    v = value if kind != "random" else rng_l.choice([x for x in all_values if x != value] or [value])
+                    if kind in ("writer", "random"):
+                        w = slot_writers.get(s)
+                        if w is None:
+                            continue
+                        new, ok = written_states(w, [v], t_traj.states[t:t + 1, s], readout, vocab_ids, strings, residual_from=[own_read[s][t]])
+                        if bool(ok[0]):
+                            hidden[s][t] = new[0]
+                    else:   # donor: nearest bank row whose reading at slot s equals v
+                        cands = [i for i, bv in enumerate(bank_values[s]) if bv == v]
+                        if cands:
+                            q = t_traj.states[t, s].float(); q = q / q.norm().clamp_min(1e-6)
+                            b = bank_traj.states[cands, s].float(); b = b / b.norm(dim=1, keepdim=True).clamp_min(1e-6)
+                            hidden[s][t] = bank_traj.states[cands[int((b @ q).argmax())], s]
+            return {s: h for s, h in hidden.items() if any(s in p for p in plans)}
+
+        run_condition("ladder_writer", hidden=ladder_states("writer"))
+        run_condition("ladder_donor", hidden=ladder_states("donor"))
+        run_condition("ladder_random", hidden=ladder_states("random"))
+        taxonomy = []
+        for t in range(len(sel)):
+            corr = corr_lists[t]
+            rc_float = None if corr is None else [float(c) if c is not None else float("nan") for c in corr]
+            taxonomy.append(classify_failure(explicit_answer=explicit_nums[t], gold=gold[t], corrected=rc_float if rc_float else None,
+                                             gold_v_star=gold_values[t], carrier_read=own_read[carrier][t]) if not is_control[t] else "control")
+        print("taxonomy", {c: taxonomy.count(c) for c in sorted(set(taxonomy))}, "ladder touched", sum(ladder_touched))
     extra_donors = {}
     for c in extra:
         d = choose_donors(bank_values[c], bank_traj.states[:, c], t_values, t_traj.states[:, c], seed=SEED + c)
@@ -413,7 +530,21 @@ def run(args):
                         "primary_with_value": {n: rate([r == "repaired" for t, r in enumerate(res) if wmask(t)]) for n, res in results.items()},
                         "all_wrong_with_value": {n: rate([r == "repaired" for t, r in enumerate(res) if not is_control[t] and hv[t]]) for n, res in results.items()},
                         "harm_with_value": {n: rate([r != "kept" for t, r in enumerate(res) if is_control[t] and hv[t]]) for n, res in results.items()}}
+    ladder_block = {}
+    if args.ladder:
+        classes = sorted(set(taxonomy) - {"control"})
+        ladder_block = {"slot_step_map": {str(k): {str(i): v for i, v in m.items()} for k, m in smap.items()},
+                        "touched_wrong": sum(1 for t in range(len(sel)) if not is_control[t] and ladder_touched[t]),
+                        "touched_controls": sum(1 for t in range(len(sel)) if is_control[t] and ladder_touched[t]),
+                        "plan_sizes": {str(n): sum(1 for t in range(len(sel)) if not is_control[t] and len(plans[t]) == n) for n in range(0, 7)},
+                        "by_class": {c: {"n": taxonomy.count(c),
+                                         "repair": {name: rate([r == "repaired" for t, r in enumerate(res) if taxonomy[t] == c]) for name, res in results.items()},
+                                         "repair_touched": {name: rate([r == "repaired" for t, r in enumerate(res) if taxonomy[t] == c and ladder_touched[t]]) for name, res in results.items()}}
+                                     for c in classes},
+                        "harm_touched": {name: rate([r != "kept" for t, r in enumerate(res) if is_control[t] and ladder_touched[t]]) for name, res in results.items()},
+                        "harm_all_controls": {name: rate([r != "kept" for t, r in enumerate(res) if is_control[t]]) for name, res in results.items()}}
     report = {
+        "ladder": ladder_block,
         "writer": writer_block,
         "targets": {"eligible": len(rows), "wrong_total": sum(1 for c in correct if not c), "wrong_used": len(wrong_idx), "controls": len(control_idx),
                     "native_accuracy": sum(correct) / len(correct), "with_donor": sum(h for h, c in zip(has_donor, is_control) if not c),
@@ -432,6 +563,8 @@ def run(args):
     with (out / "targets.jsonl").open("w") as handle:
         for t in range(len(sel)):
             handle.write(json.dumps({"question": t_rows[t]["question"], "gold": gold[t], "v_star": t_values[t], "gold_v_star": gold_values[t],
+                                     "failure_class": None if taxonomy is None else taxonomy[t], "ladder_plan": None if not args.ladder else {str(k): v for k, v in plans[t].items()},
+                                     "readings": {str(c): own_read[c][t] for c in read_slots},
                                      "tool_chain": None if tool is None else tool["chains"][t], "steps": t_rows[t]["steps"], "control": is_control[t],
                                      "native": t_native[t], "carrier_read": own_read[carrier][t], "has_donor": has_donor[t],
                                      "nearest_donor": donors["nearest"][t], "outcomes": {k: v[t] for k, v in results.items()},
@@ -440,7 +573,7 @@ def run(args):
     summary = {"schema_version": 1, "contract": CONTRACT + ("_tool" if args.v_source == "tool" else "") + ("_smoke" if smoke else ""), "smoke": smoke,
                "created_at_utc": datetime.now(timezone.utc).isoformat(), "v_source": args.v_source,
                "checkpoint_sha256": load_report.checkpoint_sha256, "model_key": args.model_key, "carrier": carrier, "store": store, "extra_carriers": extra,
-               "writer": bool(args.writer),
+               "writer": bool(args.writer), "ladder": bool(args.ladder),
                "preregistration": {"bank_rows": len(bank_rows), "max_targets": args.max_targets, "controls": args.controls, "min_steps": MIN_STEPS, "seed": SEED,
                                    "conditions": list(results), "r1_min": R1_MIN, "r2_ratio": R2_RATIO, "r5_max_harm": R5_MAX_HARM},
                "report": report, "checks": checks, "seconds": time.perf_counter() - started,
@@ -463,6 +596,7 @@ def main():
     parser.add_argument("--extra-carriers", nargs="*", default=[])
     parser.add_argument("--v-source", choices=("gold", "tool"), default="gold", help="where v* comes from: the gold chain, or the model's own explicit chain re-evaluated by a calculator (ledger §127 B)")
     parser.add_argument("--writer", action="store_true", help="also fit the learned writer (ledger §128) and run its conditions")
+    parser.add_argument("--ladder", action="store_true", help="also run the failure taxonomy and ladder writes (ledger §129)")
     parser.add_argument("--bank-rows", type=int, default=BANK_ROWS)
     parser.add_argument("--max-targets", type=int, default=MAX_TARGETS)
     parser.add_argument("--controls", type=int, default=CONTROLS)

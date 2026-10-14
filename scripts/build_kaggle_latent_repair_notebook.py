@@ -26,6 +26,9 @@ def title(model: str, source: str = "gold") -> str:
     if source == "writer":   # Kaggle slugs are capped at 50 characters; SIM-CoT's full title would exceed it
         short = {"simcot": "SIM-CoT 1B"}.get(model, MODELS[model]["title"])
         return f"Latent repair {short} with a learned writer"
+    if source == "ladder":
+        short = {"simcot": "SIM-CoT 1B", "codi1b": "CODI 1B", "gpt2": "CODI GPT-2"}[model]
+        return f"Ladder repair {short}"
     return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 
 
@@ -36,7 +39,7 @@ def slug(model: str, source: str = "gold") -> str:
 
 def build(model: str, source: str = "gold") -> Path:
     spec = MODELS[model]
-    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / (model if source == "gold" else f"{model}_{source}" if source == "writer" else f"{model}_tool")
+    out_dir = ROOT / "notebooks" / "kaggle_latent_repair" / (model if source == "gold" else f"{model}_{source}" if source in ("writer", "ladder") else f"{model}_tool")
     out_dir.mkdir(parents=True, exist_ok=True)
     nb = nbf.v4.new_notebook()
     cells = []
@@ -63,7 +66,8 @@ PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/repair_{model}"
 CARRIER, STORE, EXTRA = "{spec['carrier']}", "{spec['store']}", {json.dumps([str(c) for c in spec['extra']])}
 V_SOURCE = "{source}"
-WRITER = {str(source == "writer")}
+WRITER = {str(source in ("writer", "ladder"))}
+LADDER = {str(source == "ladder")}
 RUN_SMOKE = True
 
 import glob, json, os, pathlib, subprocess, sys, time
@@ -112,6 +116,8 @@ def repair(out, smoke, source):
         cmd += ["--extra-carriers", *EXTRA]
     if WRITER:
         cmd.append("--writer")
+    if LADDER:
+        cmd.append("--ladder")
     if smoke:
         cmd.append("--smoke")
     run_with_retry(cmd)
@@ -132,6 +138,13 @@ for src, smry in summaries.items():
     if smry["report"].get("writer"):
         print("writer coverage:", smry["report"]["writer"]["coverage"])
         display(pd.DataFrame({k: {"rate": v["rate"], "ci95": v["ci95"], "n": v["n"]} for k, v in smry["report"]["writer"]["primary_with_value"].items()}).T)
+    if smry["report"].get("ladder"):
+        lad = smry["report"]["ladder"]
+        print("slot-to-step map:", lad["slot_step_map"], "| touched wrong:", lad["touched_wrong"], "controls:", lad["touched_controls"])
+        for cls, blk in lad["by_class"].items():
+            print(f"--- class {cls}: n={blk['n']}")
+            display(pd.DataFrame({k: {"repair": v["rate"], "repair_touched": blk["repair_touched"][k]["rate"], "n": v["n"]} for k, v in blk["repair"].items()}).T)
+        print("harm (touched controls):", {k: v["rate"] for k, v in lad["harm_touched"].items()})
 for part in ("primary", "with_donor", "carrier_already_right"):
     print("--- repair rate,", part)
     display(pd.DataFrame({k: {"rate": v["rate"], "ci95": v["ci95"], "n": v["n"]} for k, v in summary["report"]["repair"][part].items()}).T)
@@ -158,10 +171,10 @@ print("removed", REPO_DIR, "; remaining output files:", sum(len(f) for _, _, f i
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", choices=sorted(MODELS) + ["all"], default="all")
-    parser.add_argument("--source", choices=("gold", "tool", "writer", "all"), default="all")
+    parser.add_argument("--source", choices=("gold", "tool", "writer", "ladder", "all"), default="all")
     args = parser.parse_args()
     for model in (sorted(MODELS) if args.model == "all" else [args.model]):
-        for source in (("gold", "tool", "writer") if args.source == "all" else [args.source]):
+        for source in (("gold", "tool", "writer", "ladder") if args.source == "all" else [args.source]):
             print(build(model, source))
     return 0
 

@@ -6720,3 +6720,64 @@ function of the value, which is itself a finding about the representation.
 ### Cost
 
 Three kernels on dannyism11, ≈ 10–20 min each.
+
+## 129. Preregistered: Build 5, a failure taxonomy and ladder writes (the redesign after §128)
+
+Designed 2026-10-14 from the per-target outcomes of §127–§128 (CODI-1B and GPT-2 calculator
+runs) and the slot-to-step map computed from the §125 recorded test-set states. No model
+training.
+
+### What the diagnosis showed
+
+Splitting CODI-1B's 422 wrong multi-step answers by what the model's own explicit chain
+plus the calculator reveal:
+
+| type | definition (computable at inference) | share | one-slot repair with the right value |
+|---|---|---|---|
+| plan wrong | the calculator-corrected explicit chain does not reach the gold intermediate | 52% | 2% |
+| final step | the carrier already reads the gold intermediate; the answer is still wrong | 9% | 0% |
+| upstream arithmetic | the carrier reads a wrong value and the explicit arithmetic is wrong too | 9% | 14% |
+| latent-only | the explicit answer is right; only the latent path failed | 23% | 38% |
+
+GPT-2: 59% / 4% / 9% / 19%, with 32% repair on latent-only. So the one-slot write works
+where it can work; the ceiling is the failure mix. Two further facts from the recorded
+states: (i) the final step's result never appears in any thought (≤ 0.03 at every slot on
+every model), it is computed at the answer position; (ii) which slot holds which step
+depends on chain length and model: GPT-2 holds step k−1 at slots 1, 3 and 5 for k = 3 and
+step k−2 at slot 1 for k = 4; CODI-1B holds step k−1 at slots 3–4 and step k−2 at slots 0–1;
+SIM-CoT holds step k−1 at slots 1 and 3 and step k−2 at slots 0–1. Step 1 of a 3-step chain
+is barely held anywhere in GPT-2 (≤ 0.07).
+
+### The redesign
+
+1. **Taxonomy as an instrument.** Every wrong target is classed as above from the explicit
+   chain and the calculator; per class, the share and the repair rate of every condition are
+   reported. The classes "plan wrong" and "final step" bound what any thought write can do.
+2. **Ladder writes.** From the bank (recorded states with gold chains), the slot-to-step map
+   is estimated per chain length: slot s holds step i if its top-1 reading equals the step's
+   result in ≥ 0.40 of correct bank rows. For a target with k steps and corrected
+   intermediates c_1..c_{k−1} (gold chain, or the calculator-corrected explicit chain), every
+   slot mapped to step i whose reading ≠ c_i is written with c_i, all slots in one pass with
+   the downstream recomputed. Two writers: the §128 residual ridge writer fitted per slot,
+   and a per-slot nearest same-value donor. Control: the same slots written with random
+   wrong values. Harm on correct controls (no slot mismatched → no write; the trigger rate
+   is reported).
+3. Conditions beside §126–§128's: `ladder_writer`, `ladder_donor`, `ladder_random`.
+
+### Predictions, before the run
+
+- P15a (taxonomy stable): the four classes' shares at SIM-CoT fall within 10 points of
+  CODI-1B's.
+- P15b (ladder beats carrier where it can): on latent-only and upstream-arithmetic
+  failures with at least one mismatched slot, `ladder_writer` repairs ≥ 0.45 at CODI-1B
+  (carrier-only: 0.38 / 0.14) and ≥ 0.40 at GPT-2 and SIM-CoT.
+- P15c (the ceiling is the mix): plan-wrong and final-step failures stay ≤ 0.05 under every
+  write; the ladder's control ≤ 0.05.
+- P15d (accuracy): the gated policy with ladder writes gains ≥ 4.5 points on CODI-1B's
+  long-chain problems (one-slot donor: +3.4) and still less than switching to the explicit
+  chain (+5.3), because plan errors are the majority.
+- P15e (harm): `ladder_writer` harms ≤ 0.08 of correct controls at the 1B models.
+
+### Cost
+
+Three kernels on dannyism11, ≈ 15–25 min each (both value sources, taxonomy, ladder).

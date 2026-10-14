@@ -15,6 +15,10 @@ from scripts.run_codi_latent_repair import (  # noqa: E402
     tool_value,
     top1_numbers,
     Writer,
+    chain_intermediates,
+    classify_failure,
+    ladder_plan,
+    slot_step_map,
     value_token_embeddings,
     written_states,
 )
@@ -87,3 +91,26 @@ def test_writer_recovers_a_linear_code_and_residual_keeps_context():
     assert torch.allclose(res[0], own[0] + w(e7)[0] - w(e5)[0], atol=1e-5)
     m = Writer("mlp").fit(emb, states)
     assert m(emb).shape == states.shape
+
+
+def test_slot_step_map_and_ladder_plan():
+    rows = [{"cot": "<<2+3=5>> <<5*4=20>> <<20-1=19>>"}] * 40 + [{"cot": "<<1+1=2>> <<2*2=4>>"}] * 40
+    correct = [True] * 80
+    readings = {s: ["0"] * 80 for s in range(6)}
+    readings[1] = ["5"] * 40 + ["2"] * 40          # slot 1 holds step 1
+    readings[3] = ["20"] * 40 + ["x"] * 40         # slot 3 holds step 2 of 3-step chains
+    readings[4] = ["20"] * 12 + ["7"] * 28 + ["2"] * 40   # slot 4 holds step 2 in 0.30 of rows: below the 0.40 threshold
+    smap = slot_step_map(rows, readings, correct, min_rows=30)
+    assert smap == {3: {1: [1], 2: [3]}, 2: {1: [1, 4]}}
+    assert chain_intermediates("<<2+3=5>> <<5*4=20>> <<20-1=19>>") == ["5", "20"] and chain_intermediates("<<5/2=2.5>> <<2.5*2=5>>") == [None]
+    plan = ladder_plan(3, ["5", "20"], {1: "5", 3: "18"}, smap)
+    assert plan == {3: "20"}
+    assert ladder_plan(3, ["6", "20"], {1: "5", 3: "20"}, smap) == {1: "6"} and ladder_plan(4, ["6", "20", "9"], {1: "5"}, smap) == {}
+
+
+def test_failure_taxonomy():
+    assert classify_failure(explicit_answer=18.0, gold=18.0, corrected=[9.0], gold_v_star="9", carrier_read="7") == "latent_only"
+    assert classify_failure(explicit_answer=20.0, gold=18.0, corrected=None, gold_v_star="9", carrier_read="7") == "no_chain"
+    assert classify_failure(explicit_answer=20.0, gold=18.0, corrected=[8.0], gold_v_star="9", carrier_read="7") == "plan_wrong"
+    assert classify_failure(explicit_answer=20.0, gold=18.0, corrected=[9.0], gold_v_star="9", carrier_read="9") == "final_step"
+    assert classify_failure(explicit_answer=20.0, gold=18.0, corrected=[9.0], gold_v_star="9", carrier_read="7") == "upstream_arithmetic"
