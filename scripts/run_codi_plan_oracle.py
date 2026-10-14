@@ -156,14 +156,11 @@ def run(args) -> dict:
                         "answers": {m: {arm: answers[m][arm][i] for arm in ARMS} for m in MODES},
                         "explicit_chain_none": chains["none"][i], "failure_class": failure_class(chains["none"][i], r["gold"], r["gold_v_star"])})
     report = summarize(records); checks = checks_from(report)
-    with (out / "rows.jsonl").open("w") as fh:
-        for rec in records:
-            fh.write(json.dumps(rec) + "\n")
     summary = {"contract": CONTRACT, "schema_version": 1, "config": str(args.config), "checkpoint_sha256": str(cfg.checkpoint.sha256),
                "smoke": smoke, "arms": list(ARMS), "modes": list(MODES), "min_steps": MIN_STEPS, "report": report, "checks": checks,
                "seconds": time.perf_counter() - started, "created_at_utc": datetime.now(timezone.utc).isoformat(),
                "warnings": ["Official checkpoint only; no training. Hints are appended to the question, a prompt the checkpoint was not trained on; the wrong and length arms control for that."]}
-    _atomic_json(out / "summary.json", summary)
+    write_outputs(out, records, summary)
     print(markdown(report)); print(json.dumps(checks, indent=2))
     return summary
 
@@ -183,3 +180,12 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def write_outputs(out: Path, records: list[dict], summary: dict) -> None:
+    """The run's files: one JSON line per problem and the atomic summary (the call that failed on Kaggle once, argument order)."""
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "rows.jsonl").open("w") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec) + "\n")
+    _atomic_json(summary, out / "summary.json")

@@ -54,3 +54,11 @@ def test_summary_and_checks():
     text = markdown(report)
     assert "| latent/gold |" in text and "20.0 (10)" in text
     json.dumps(report)
+
+
+def test_write_outputs_round_trips(tmp_path):
+    from scripts.run_codi_plan_oracle import write_outputs
+    records = [{"question": "q", "correct": {"latent": {"none": True}}}]
+    write_outputs(tmp_path / "run", records, {"contract": "official_codi_plan_oracle_v1", "report": {}})
+    assert json.loads((tmp_path / "run" / "summary.json").read_text())["contract"] == "official_codi_plan_oracle_v1"
+    assert json.loads((tmp_path / "run" / "rows.jsonl").read_text().splitlines()[0])["question"] == "q"
