@@ -29,6 +29,28 @@ class CoconutSpec:
     weight_file: str = "pytorch_model.bin"
     n_latents: int = 6
     published_accuracy: float = 0.3457
+    # A Coconut-repo state dict on another base (ledger §135: Dilgren and Wiegreffe's LLaMA-3.2-1B
+    # ProsQA checkpoint): the base is built from the hub, the three latent tokens are added to its
+    # tokenizer in the training code's order, and the state dict is loaded over it.
+    base_model: str | None = None
+    base_revision: str | None = None
+    sha256: str | None = None
+
+
+PROSQA_COCONUT_LLAMA1B = CoconutSpec(repo_id="connordilgren/llama32-1b-prosqa-coconut", revision="026c321ccd29ed1e80d609420f64949c207f9c82",
+                                     subfolder="", weight_file="checkpoint_10", n_latents=6, published_accuracy=0.976,
+                                     base_model="unsloth/Llama-3.2-1B-Instruct", base_revision="5a8abab4a5d6f164389b1079fb721cfab8d7126c",
+                                     sha256="5b9225e9b481a30b46127bea47a10dd46ca04245b1e3c66d2afcceef6e3e79bc")
+
+
+def coconut_state_dict(state: dict, embedding_key: str) -> dict:
+    """Strip the Coconut class's ``base_causallm.`` prefix and drop its duplicate ``embedding.weight``
+    after checking it equals the input embedding matrix."""
+    extra = state.pop("embedding.weight", None)
+    state = {k[len("base_causallm."):] if k.startswith("base_causallm.") else k: v for k, v in state.items()}
+    if extra is not None and embedding_key in state and not torch.equal(extra, state[embedding_key]):
+        raise RuntimeError("Coconut embedding.weight differs from the input embedding matrix")
+    return state
 
 
 def coconut_answer_number(text: str) -> float | None:
@@ -61,6 +83,8 @@ class CoconutGPT2(torch.nn.Module):
         from huggingface_hub import hf_hub_download
         from transformers import AutoTokenizer, GPT2Config, GPT2LMHeadModel
 
+        if spec.base_model:
+            return cls._from_state_dict_on_base(spec, dtype=dtype, token=token)
         tokenizer = AutoTokenizer.from_pretrained(spec.repo_id, subfolder=spec.subfolder, revision=spec.revision, token=token)
         config = GPT2Config.from_pretrained(spec.repo_id, subfolder=spec.subfolder, revision=spec.revision, token=token)
         base = GPT2LMHeadModel(config)
@@ -80,6 +104,44 @@ class CoconutGPT2(torch.nn.Module):
         model.eval()
         return model
 
+    @classmethod
+    def _from_state_dict_on_base(cls, spec: CoconutSpec, *, dtype, token=None) -> "CoconutGPT2":
+        """Dilgren and Wiegreffe's loading recipe: base from the hub, pad = eos, the three latent tokens
+        added in the order start, end, latent, embeddings resized, the Coconut state dict loaded over it."""
+        from huggingface_hub import hf_hub_download
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from src.models.official_codi import sha256_file
+
+        tokenizer = AutoTokenizer.from_pretrained(spec.base_model, revision=spec.base_revision, token=token)
+        tokenizer.pad_token = tokenizer.eos_token
+        for tok in ("<|start-latent|>", "<|end-latent|>", "<|latent|>"):
+            tokenizer.add_tokens(tok)
+        from transformers import AutoConfig
+        from src.models.official_codi import prepare_backbone_config
+
+        config = prepare_backbone_config(AutoConfig.from_pretrained(spec.base_model, revision=spec.base_revision, token=token))
+        base = AutoModelForCausalLM.from_pretrained(spec.base_model, revision=spec.base_revision, config=config, torch_dtype=dtype, token=token)
+        base.resize_token_embeddings(len(tokenizer))
+        filename = f"{spec.subfolder}/{spec.weight_file}" if spec.subfolder else spec.weight_file
+        path = hf_hub_download(spec.repo_id, filename, revision=spec.revision, token=token)
+        if spec.sha256 and spec.sha256 != "SHA_PLACEHOLDER":
+            got = sha256_file(path)
+            if got != spec.sha256:
+                raise RuntimeError(f"Coconut checkpoint SHA256 mismatch: expected {spec.sha256}, observed {got}")
+        state = torch.load(path, map_location="cpu", weights_only=True)
+        embed_key = next(k for k, _ in base.named_parameters() if k.endswith("embed_tokens.weight") or k.endswith("wte.weight"))
+        state = coconut_state_dict(state, embed_key)
+        missing, unexpected = base.load_state_dict({k: v.to(dtype) for k, v in state.items()}, strict=False)
+        tied = bool(getattr(base.config, "tie_word_embeddings", False))
+        missing = [k for k in missing if not (tied and k == "lm_head.weight")]
+        if missing or unexpected:
+            raise RuntimeError(f"Coconut state dict mismatch: missing {missing[:5]}, unexpected {unexpected[:5]}")
+        base.tie_weights()
+        ids = {tok: tokenizer.convert_tokens_to_ids(tok) for tok in ("<|latent|>", "<|start-latent|>", "<|end-latent|>")}
+        model = cls(base, tokenizer, latent_id=ids["<|latent|>"], start_id=ids["<|start-latent|>"], end_id=ids["<|end-latent|>"], n_latents=spec.n_latents)
+        model.eval()
+        return model
+
     # ------------------------------------------------------------------ pieces
     def question_ids(self, question: str) -> list[int]:
         return self.tokenizer.encode(question + "\n", add_special_tokens=True) + [self.start_id]
@@ -92,10 +154,12 @@ class CoconutGPT2(torch.nn.Module):
         return self.base.get_output_embeddings().weight.detach().float().cpu()
 
     def hidden_size(self) -> int:
-        return int(self.base.config.n_embd)
+        cfg = self.base.config
+        return int(getattr(cfg, "hidden_size", None) or cfg.n_embd)
 
     def n_layers(self) -> int:
-        return int(self.base.config.n_layer)
+        cfg = self.base.config
+        return int(getattr(cfg, "num_hidden_layers", None) or cfg.n_layer)
 
     # ------------------------------------------------------------------ the latent pass
     @torch.inference_mode()

@@ -47,3 +47,41 @@ def test_hooks_identity_and_swap_on_a_tiny_model():
     # batch-size invariance of the native path (left padding handled)
     one_by_one = [coconut_record(m, [q], batch_size=1, device=torch.device("cpu"), max_new_tokens=6)[1][0] for q in qs]
     assert one_by_one == texts
+
+
+def _tiny_llama():
+    from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM
+    tok = AutoTokenizer.from_pretrained("gpt2")
+    tok.pad_token = tok.eos_token
+    for t in ("<|start-latent|>", "<|end-latent|>", "<|latent|>"):
+        tok.add_tokens(t)
+    from src.models.official_codi import prepare_backbone_config
+    cfg = prepare_backbone_config(LlamaConfig(hidden_size=32, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=2, intermediate_size=64, vocab_size=len(tok), tie_word_embeddings=True))
+    torch.manual_seed(0)
+    base = LlamaForCausalLM(cfg)
+    ids = {t: tok.convert_tokens_to_ids(t) for t in ("<|start-latent|>", "<|end-latent|>", "<|latent|>")}
+    return CoconutGPT2(base, tok, latent_id=ids["<|latent|>"], start_id=ids["<|start-latent|>"], end_id=ids["<|end-latent|>"], n_latents=6).eval()
+
+
+def test_llama_base_runs_through_the_same_adapter():
+    """Ledger §135: the adapter's generic paths (hidden size, layers, positions) on a LLaMA-shaped base."""
+    m = _tiny_llama()
+    assert m.hidden_size() == 32 and m.n_layers() == 2
+    qs = ["Every gerpus is a terpus. Sally is a gerpus. Is Sally a terpus or wumpus?", "Bob is a lempus. Is Bob a lempus or yerpus?"]
+    traj, texts = coconut_record(m, qs, batch_size=2, device=torch.device("cpu"), max_new_tokens=5)
+    assert traj.states.shape == (2, 6, 32) and traj.keys.shape[:3] == (2, 6, 2) and len(texts) == 2
+    same = coconut_generate_under(m, qs, batch_size=2, device=torch.device("cpu"), hidden_donors={3: traj.states[:, 3]}, max_new_tokens=5)
+    assert same == texts
+
+
+def test_coconut_state_dict_normalisation():
+    from src.models.coconut import PROSQA_COCONUT_LLAMA1B, coconut_state_dict
+    w = torch.ones(4, 3)
+    state = {"base_causallm.model.embed_tokens.weight": w, "base_causallm.model.layers.0.x": torch.zeros(2), "embedding.weight": w.clone()}
+    out = coconut_state_dict(dict(state), "model.embed_tokens.weight")
+    assert set(out) == {"model.embed_tokens.weight", "model.layers.0.x"}
+    bad = dict(state); bad["embedding.weight"] = torch.zeros(4, 3)
+    import pytest
+    with pytest.raises(RuntimeError):
+        coconut_state_dict(bad, "model.embed_tokens.weight")
+    assert PROSQA_COCONUT_LLAMA1B.base_model == "unsloth/Llama-3.2-1B-Instruct" and len(PROSQA_COCONUT_LLAMA1B.sha256) == 64

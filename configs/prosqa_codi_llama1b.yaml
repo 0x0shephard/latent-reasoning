@@ -1,0 +1,83 @@
+# CODI trained on ProsQA by Dilgren and Wiegreffe (2026, arXiv 2604.04902) with the official CODI
+# code on LLaMA-3.2-1B-Instruct (ledger §135): LoRA r128 a32, projector 2048 with layer norm, six
+# thoughts, max length 1024.  Never updates weights.  The GSM8K gate does not apply; the ProsQA
+# accuracy the authors report (Table 1) is 99.0 and the ProsQA audit records its own reproduction.
+# Same contract as configs/official_codi_gpt2.yaml; this run never updates model weights.
+run_name: prosqa_codi_llama1b
+seed: 11
+output_dir: outputs/prosqa_codi_llama1b
+data_config: configs/data_official_codi.yaml
+
+official_source:
+  repo: https://github.com/connordilgren/are-lrms-easily-interpretable
+  revision: main
+  script: args_codi/train_llama32-1b_prosqa_codi.sh
+
+checkpoint:
+  repo_id: connordilgren/llama32-1b-prosqa-codi
+  revision: 78872dcd1cb9a0414efd6d0c9d6266c4a41a795b
+  filename: pytorch_model.bin
+  # Hugging Face LFS object id for the released 3,408,265,790-byte checkpoint.
+  sha256: f9d806d4c6f4ef73df03d27a8f225aff664e6ebc13960812856ecab882d77c0f
+
+model:
+  # meta-llama/Llama-3.2-1B-Instruct is gated; this mirror serves the identical weights,
+  # config and tokenizer without a token.  The CODI checkpoint overrides every tensor it
+  # contains on top of it.
+  base_model: unsloth/Llama-3.2-1B-Instruct
+  base_revision: 5a8abab4a5d6f164389b1079fb721cfab8d7126c
+  model_max_length: 1024
+  dtype: auto
+  lora_rank: 128
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj, gate_proj]
+  projection_dim: 2048
+  projection_dropout: 0.0
+  projection_layer_norm: true
+  # LLaMA 3 ships only a fast tokenizer; the released script's use_fast=False falls back to it.
+  tokenizer_use_fast: true
+  # The released test.py tokenizes questions with special tokens (a BOS prefix).
+  question_special_tokens: true
+  # LLaMA tokenizers put a lone space token before the answer number; the first-token
+  # instrument reads the number token (the released code's "+1 for ' '").
+  answer_space_token: true
+  # Carry the attention mask and explicit rotary positions through the thoughts and the
+  # answer, so a left-padded batch reproduces the unpadded computation (verified locally:
+  # without it, batched LLaMA decoding degenerates after the answer).
+  pad_aware_generation: true
+  # Ask the question pass for one position of logits (hidden states unaffected); the full
+  # [batch, prompt, 128k] logits tensor does not fit a 16 GB T4 at the released batch of 128.
+  prompt_logits_last_only: true
+
+eval:
+  latent_iterations: 6
+  max_new_tokens: 256
+  batch_size: 32
+  limit: null
+  datasets: [gsm8k]
+  expected_counts:
+    gsm8k: 1319
+
+accuracy_gate:
+  reference: CODI paper (arXiv 2502.21074 / EMNLP 2025), Figure 3, LLaMA-3.2-1B-Instruct, GSM8K
+  primary_dataset: gsm8k
+  absolute_tolerance: 0.03
+  # Two-sided again (ledger §122 erratum). The 51.9% this gate first carried is Table A4
+  # of the paper (the beta ablation, beta=20 row), not the main result; the main result in
+  # Figure 3 is 55.6%, which the released checkpoint reproduces at 55.50% (pad-aware path,
+  # float16 and float32) and 55.34% (released path, mask dropped, batch 128).  The
+  # pad-aware path is kept for the mechanistic runs; it is verified to equal unpadded
+  # decoding, which the released path is not for left-padded LLaMA batches.
+  direction: two_sided
+  published_accuracy:
+    gsm8k: 0.556
+    prosqa: 0.990
+
+endpoint_retention:
+  data_config: configs/data.yaml
+
+kv_subspace:
+  data_config: configs/data.yaml
+  latent_positions: 6
+  importance_weight: 0.1
