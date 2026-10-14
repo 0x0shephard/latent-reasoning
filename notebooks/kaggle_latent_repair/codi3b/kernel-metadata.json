@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/latent-repair-sim-cot-codi-3b",
+  "title": "Latent repair SIM-CoT CODI-3B",
+  "code_file": "kaggle_latent_repair_codi3b.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
