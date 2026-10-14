@@ -7300,3 +7300,50 @@ the threshold to the explicit chain, which is the cascade. The two policies part
 problems by the same number. On the transport side, the controls that break are more often
 the ones whose carrier was live, which is what the audit's map predicts, though the rows are
 few.
+
+### §133 addendum F: the slot-to-step map across scale (2026-10-14)
+
+From the §129/§130 ladder summaries (`slot_step_map`: for chains of k steps, the slots whose
+top-1 reading equals step i's result in ≥ 40% of correctly answered bank rows). Read by
+distance from the end of the chain:
+
+| model | k = 3: step 1 / step 2 (penultimate) | k = 4: step 1 / 2 / 3 (penultimate) | carrier (card) |
+|---|---|---|---|
+| GPT-2 | — / 2, 3 (k=2: slots 2,3,4,5 hold step 1, k=5: 2,3,4) | — / — / 4 | 3 |
+| CODI-1B | 2, 3 / 3, 4 (k=4: 3, 4, 5 hold step 1) | 4 / 3 / 4, 5 | 3 |
+| SIM-CoT | 2 / 3 | — / 4 / — (k=2: 4 holds step 2) | 1, 3 |
+| SIM-CoT-3B | 2, 3 / 3 (k=1: every slot holds step 1) | — / 4 / 4 (k=2: 3) | 2, 4 |
+
+(The raw maps are `{k: {step: [slots]}}` in each `*_tool.summary.json` under `report.ladder`.)
+
+**Reading.** The carrier slot holds the *penultimate* value whatever the chain length: at
+CODI-1B slots 3–4 read step 2 of three-step chains and step 3 of four-step chains; at 3B slot 3
+reads the penultimate of three-step chains and slot 4 of four-step chains. The thoughts are
+indexed from the end of the computation, not from its start: the model keeps the value the
+final step will need, and the earlier steps are spread thinly over the earlier slots or not
+held at all. That is why a one-slot write at the carrier reaches what it reaches, why the
+ladder of writes to "step i" slots added nothing (the earlier steps have no reliable home),
+and why the final step at the answer position is the only place the model does arithmetic
+on a stored value. Descriptive; no prediction was registered.
+
+### §133 addendum D: a combined routing gate adds nothing to confidence (2026-10-14)
+
+`docs/latent_monitor_audit/analyses/cascade_combined_gate_{model}.json`. Three gates through
+the §131 cascade scorer: the raw first-token probability; a 5-fold out-of-fold ridge score
+for "wrong" from probability, margin and a missing-confidence flag; the same plus the 64 top
+principal directions of the six thought states. Net points at 25% / 50% routed:
+
+| gate | GPT-2 | CODI-1B | SIM-CoT | SIM-CoT-3B |
+|---|---|---|---|---|
+| confidence | +1.5 / +3.1 | +3.7 / +7.6 | +1.9 / +4.9 | +7.5 / +11.1 |
+| ridge on confidence features | +1.5 / +2.9 | +3.6 / +7.0 | +2.0 / +4.9 | +7.9 / +11.0 |
+| ridge on confidence + states | +0.5 / +3.2 | +3.9 / +6.7 | +1.7 / +4.7 | +6.2 / +10.6 |
+
+**P22 scored** (combined gate ≤ +1 point over confidence at 25% routed): **holds** at all
+four; the states make the gate *worse* at 25% routed at three models (−1.0, −0.2, −1.3) and
++0.2 at CODI-1B. Peaks are unchanged within 0.4 points.
+
+**Reading.** The §125 result (thoughts add under 0.01 AUROC to confidence) carries over to the
+routing budget that matters: at the top of the ranking, where a quarter of problems is routed,
+the thoughts add noise, not signal. The oracle gap above the cascade (6 points at 3B) is not
+closable from the thoughts. Confidence is the whole gate.
