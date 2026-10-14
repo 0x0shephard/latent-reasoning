@@ -41,8 +41,9 @@ class Trajectory:
 def _last_position_kv(cache: Any) -> tuple[torch.Tensor, torch.Tensor]:
     """K and V at the newest cache position, stacked over layers: ``[B, L, H, h]``."""
     legacy = cache_to_legacy(cache)
-    keys = torch.stack([layer[0][:, :, -1, :] for layer in legacy], dim=1)
-    values = torch.stack([layer[1][:, :, -1, :] for layer in legacy], dim=1)
+    home = legacy[0][0].device   # a backbone dispatched over several GPUs keeps layers on different devices (ledger §134)
+    keys = torch.stack([layer[0][:, :, -1, :].to(home) for layer in legacy], dim=1)
+    values = torch.stack([layer[1][:, :, -1, :].to(home) for layer in legacy], dim=1)
     return keys, values
 
 
