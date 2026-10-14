@@ -26,7 +26,7 @@
 \maketitle
 
 \begin{abstract}
-Some language models reason in a handful of hidden continuous vectors (``thoughts'') instead of written steps. People want to monitor those thoughts for safety, but nobody has checked, on released checkpoints, which thoughts the model actually uses, which it cannot do without, and whether reading a thought tells you anything the model acted on. We built a one-command audit that answers these questions without any training, and ran it on four released checkpoints (CODI on GPT-2, CODI on LLaMA-3.2-1B, SIM-CoT on LLaMA-3.2-1B, and a Coconut GPT-2 retrain), four datasets, and 28 preregistered Kaggle runs. For the CODI family we find: (i) disturbing a thought and using a thought are different things, and a thought carries a value into the answer only on problems with three or more steps; (ii) exactly one or two thoughts do the carrying, they hand the value to the next position's memory, and the last thought never matters; (iii) the larger model uses its carrier thought but barely needs it, while the model's memory of the question is the single most necessary site; (iv) a probe on any thought, including the unused last one, reads the question well, so a monitor can look accurate while reading nothing the model computed; (v) the thoughts predict wrong answers no better than the model's own confidence; and (vi) the carrier thought can be written to from outside: transplanting a natural thought that holds the right intermediate value repairs 15--23\% of failed multi-step problems against a 3\% control, with 5--7\% collateral damage at 1B. Coconut is the opposite case: its thoughts carry values on one-step problems, every pair is necessary (45--49 points), its last position is in use, and it cannot be written to. All results reproduce byte for byte across sessions. The audit costs about one GPU-hour per model and tells you, before you trust a monitor, which kind of model you have.
+Some language models reason in a handful of hidden continuous vectors (``thoughts'') instead of written steps. People want to monitor those thoughts for safety, but nobody has checked, on released checkpoints, which thoughts the model actually uses, which it cannot do without, and whether reading a thought tells you anything the model acted on. We built a one-command audit that answers these questions without any training, and ran it on five released checkpoints (CODI on GPT-2, CODI on LLaMA-3.2-1B, SIM-CoT on LLaMA-3.2-1B and 3B, and a Coconut GPT-2 retrain), four datasets, and 30 preregistered Kaggle runs. For the CODI family we find: (i) disturbing a thought and using a thought are different things, and below 3B a thought carries a value into the answer only on problems with three or more steps; (ii) exactly one or two thoughts do the carrying, they hand the value to the next position's memory, and below 3B the last thought never matters; (iii) the larger model uses its carrier thought but barely needs it, while the model's memory of the question is the single most necessary site; (iv) a probe on any thought, including the unused last one, reads the question well, so a monitor can look accurate while reading nothing the model computed; (v) the thoughts predict wrong answers no better than the model's own confidence; and (vi) the carrier thought can be written to from outside: transplanting a natural thought that holds the right intermediate value repairs 14--23\% of failed multi-step problems against a 2--4\% control, with 5--9\% collateral damage at 1B and 3B. Scaling SIM-CoT to 3B removes the gate, puts the last thought to work and moves the carriers to other slots; it doubles the share of failures whose explicit chain is right (39\%) but does not make them more writable, so thought correction stays at most a few points while reading the chain is worth ten. Coconut is the opposite case: its thoughts carry values on one-step problems, every pair is necessary (45--49 points), its last position is in use, and it cannot be written to. All results reproduce byte for byte across sessions. The audit costs about one GPU-hour per model and tells you, before you trust a monitor, which kind of model you have.
 \end{abstract}
 
 \section{Introduction}
@@ -38,8 +38,8 @@ This paper tests all three with interventions only. We never train or fine-tune 
 \paragraph{Contributions.}
 \begin{enumerate}
   \item \textbf{A method that separates three questions a probe conflates.} ``Twin'' problems that differ in one number tell us whether a thought \emph{carries} a value (transport). Masking tells us whether the model \emph{needs} it (necessity). Probes tell us whether it is \emph{readable}, and the twins tell us whether what a probe reads is \emph{confirmed by behaviour} (faithfulness). We also separate the two routes by which a thought can act: the state it feeds forward and the keys and values it leaves in memory.
-  \item \textbf{A standardised card and a comparison tool.} One command produces one card per (model, dataset, GPU session) with fixed thresholds, five checks, a regime and a monitor-placement verdict, plus fingerprints that let two sessions be compared bit for bit. We ran it on four models, four datasets and two Kaggle accounts.
-  \item \textbf{Findings about the CODI family} (Sections~\ref{sec:transport}--\ref{sec:monitors}): a chain-length gate on transport; a trained carry-and-store ladder with an inert last thought; sufficiency without necessity at 1B; the question register as the most necessary site; and readable-but-unfaithful thoughts under two probe families.
+  \item \textbf{A standardised card and a comparison tool.} One command produces one card per (model, dataset, GPU session) with fixed thresholds, five checks, a regime and a monitor-placement verdict, plus fingerprints that let two sessions be compared bit for bit. We ran it on five models, four datasets and two Kaggle accounts.
+  \item \textbf{Findings about the CODI family} (Sections~\ref{sec:transport}--\ref{sec:monitors}): a chain-length gate on transport and a trained carry-and-store ladder with an inert last thought, both of which the 3B model outgrows; sufficiency without necessity at 1B and 3B; the question register as the most necessary site; and readable-but-unfaithful thoughts under two probe families.
   \item \textbf{Three uses of the map} (Sections~\ref{sec:leakage}--\ref{sec:repair}): a prompt-leakage control that any latent-monitor evaluation should include; a negative result on error detection from thoughts; and a positive one, latent repair by transplanting a natural thought that holds the right value, with a value from the answer key and, more weakly, from the model's own explicit chain plus a calculator.
   \item \textbf{A contrast architecture} (Section~\ref{sec:coconut}): on Coconut the audit returns the opposite profile on almost every axis, which shows that the CODI results are properties of its training, not of continuous thoughts in general.
 \end{enumerate}
@@ -301,7 +301,7 @@ SIM-CoT & 584 & 0.913 & 0.754 & 0.650 & 0.799 & 0.836 \\
 
 \subsection{The carrier can be written to}\label{sec:repair}
 
-Table~\ref{tab:repair} shows repair rates. With the needed value from the gold chain, transplanting the nearest same-value natural thought into the carrier turns 15--23\% of failures into the gold answer, against 2.6--3.6\% for a different-value donor; the intervals do not overlap. At the 1B models the same transplant harms only 5--7\% of correct answers; at GPT-2, 19\%. Two preregistered predictions were wrong in useful ways: the centroid of same-value states repairs as well as a retrieved natural one, so retrieval buys nothing over averaging; and adding the store position's K/V \emph{lowers} repair, because the donor's K/V carry the donor's problem as well as the value. With the value from the model's own explicit chain plus a calculator, repair survives at CODI-1B (18.8\%, 83\% of the gold rate) and weakens at the other two (9.2\%, 8.4\%). On every model the explicit chain read directly is right on more of the same failures (18.6--22.7\%) than injection recovers, so this is a mechanism result: the audited thought is a writable channel, confirmed by two independent sources of the value, not a method that beats reading the chain.
+Table~\ref{tab:repair} shows repair rates. With the needed value from the gold chain, transplanting the nearest same-value natural thought into the carrier turns 14--23\% of failures into the gold answer, against 1.7--3.6\% for a different-value donor; the intervals do not overlap. At the 1B and 3B models the same transplant harms only 5--9\% of correct answers; at GPT-2, 19\%. Two preregistered predictions were wrong in useful ways: the centroid of same-value states repairs as well as a retrieved natural one, so retrieval buys nothing over averaging; and adding the store position's K/V \emph{lowers} repair, because the donor's K/V carry the donor's problem as well as the value. With the value from the model's own explicit chain plus a calculator, repair survives at CODI-1B (18.8\%, 83\% of the gold rate) and SIM-CoT-3B (10.6\%, 75\%) and weakens at the other two (9.2\%, 8.4\%). At 3B the second carrier (thought 4) repairs as much as the first (16.3\% vs 14.2\% with the gold value) and harms twice as many controls (16\%), and the absolute writer edges the borrowed vector for the first time (17.2\%, overlapping intervals). On every model the explicit chain read directly is right on more of the same failures (18.6--22.7\% at 1B and below, 39\% at 3B) than injection recovers, so this is a mechanism result: the audited thought is a writable channel, confirmed by two independent sources of the value, not a method that beats reading the chain.
 
 \begin{table}[h]
 \caption{Repair rate (\%) on wrongly answered $\geq 3$-step GSM8K test problems whose carrier read the wrong value and that have a donor; harm (\%) on correctly answered controls. 95\% bootstrap intervals for the main column.}
@@ -316,10 +316,12 @@ Value from & Model & $n$ & Nearest donor & Random same & Centroid & Different va
 gold chain & GPT-2 & 357 & 15.1 [11.5, 19.0] & 17.6 & 20.2 & 3.6 & 11.5 & 12.3 & 18.7 \\
 gold chain & CODI-1B & 266 & 22.6 [17.7, 27.8] & 21.8 & 23.7 & 2.6 & 10.2 & 13.2 & 7.0 \\
 gold chain & SIM-CoT & 273 & 15.4 [11.4, 19.8] & 9.9 & 13.2 & 2.6 & 4.0 & 4.4 & 5.2 \\
+gold chain & SIM-CoT-3B & 239 & 14.2 [10.0, 18.8] & 12.1 & 15.9 & 1.7 & 6.3 & 6.7 & 8.6 \\
 \midrule
 calculator & GPT-2 & 282 & 9.2 [6.0, 12.8] & 9.2 & 12.4 & 3.5 & 7.1 & 7.1 & 16.8 \\
 calculator & CODI-1B & 208 & 18.8 [13.9, 24.0] & 14.4 & 16.8 & 3.8 & 10.1 & 10.6 & 6.0 \\
 calculator & SIM-CoT & 214 & 8.4 [5.1, 12.1] & 7.0 & 8.9 & 3.3 & 2.3 & 3.3 & 10.4 \\
+calculator & SIM-CoT-3B & 207 & 10.6 [6.8, 15.0] & 9.2 & 12.6 & 3.4 & 4.8 & 6.3 & 7.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -351,11 +353,11 @@ masking cost, long (pts) & 49 (mean) & 48 (mask) & 45 (mean) & 46 (mask) & 16 (m
 
 \paragraph{What this means for monitoring latent reasoning.} For the CODI family a monitor can be placed where it means something, at the carrier, and the audit finds that slot in about an hour. Placing it at the most readable thought is a mistake, since the most readable thoughts are routinely the ones the behaviour never confirms, and any thought will happily report the prompt. For Coconut-style models the picture is reversed: every even thought is both used and needed, and readability tracks use. The practical rule is to run the audit before trusting a probe, and to include a prompt-only control in every monitor evaluation.
 
-\paragraph{Can the repair raise accuracy?} A little, and only on one model; we tried three ways to push it further and report all three. We costed policies on the 838 long-chain test problems using the per-target outcomes of the calculator runs (Table~\ref{tab:policies}). Applying the one-slot repair only when the model's explicit chain disagrees with its latent answer (a trigger that needs no answer key) gains 3.4 points on CODI-1B, 1.1 on SIM-CoT and nothing on GPT-2. The obvious alternative, switching to the explicit chain's answer on the same disagreement, gains 5.3, 3.2 and 5.6 points and needs no transplant.
+\paragraph{Can the repair raise accuracy?} A little, and only on one model; we tried three ways to push it further and report all three. We costed policies on the 838 long-chain test problems using the per-target outcomes of the calculator runs (Table~\ref{tab:policies}). Applying the one-slot repair only when the model's explicit chain disagrees with its latent answer (a trigger that needs no answer key) gains 3.4 points on CODI-1B, 1.1 on SIM-CoT, 0.4 on SIM-CoT-3B and nothing on GPT-2. The obvious alternative, switching to the explicit chain's answer on the same disagreement, gains 5.3, 3.2, 9.7 and 5.6 points and needs no transplant.
 
 \emph{A learned writer} (a ridge or MLP map from a number's token embedding to a carrier vector, fitted on the 2,048 bank thoughts) needs no donor and covers 85--87\% of failures instead of 73--80\%, with a random-value control at 1--4\%; yet its repair rate is level with the borrowed vector (23.2\% vs 21.4\% on CODI-1B, overlapping intervals) and its gated gain is lower (+2.2 to +2.8). \emph{Writing every thought that holds a wrong step} (located by a slot-to-step map estimated from the bank) is level with or below the one-slot write on all three models and harms more correct answers (14--23\% of touched controls). The limit is not the writer.
 
-\emph{Where the limit is} (Table~\ref{tab:taxonomy}). Classifying each failure from the model's own explicit chain and a calculator shows that 58--68\% are plan errors, where no correct value exists to write, and 4--9\% are arithmetic done at the answer position, after the thoughts. Only the latent-only failures, 19--23\% of the total, are reachable, and the one-slot write already repairs 20--38\% of those. So thought correction tops out at three to four points on these models and stays below reading the explicit chain. What the repair shows is a property of the model, a writable channel at a known slot, and what the taxonomy shows is how much of a latent reasoner's error lives in its thoughts at all.
+\emph{Where the limit is} (Table~\ref{tab:taxonomy}). Classifying each failure from the model's own explicit chain and a calculator shows that 58--68\% are plan errors at 1B and below, where no correct value exists to write, and 4--9\% are arithmetic done at the answer position, after the thoughts. Only the latent-only failures, 19--23\% of the total, are reachable, and the one-slot write already repairs 20--38\% of those. So thought correction tops out at three to four points on these models and stays below reading the explicit chain. We then asked whether a stronger model moves its errors into the thoughts, and ran the same kernel on SIM-CoT-3B. It does: the latent-only class nearly doubles, to 39\%, and plan errors fall to 48\%. But the thoughts do not become more writable: the one-slot write repairs 13\% [6.5, 20.8] of the 3B model's latent-only failures, a third of the 1B rate, the ladder's random control is level with its real writes on that class, and the gated policy gains 0.4 points. The value is spread over two carriers, and writing either or both reaches the same few failures. What rises with scale is the worth of the model's own explicit chain, which is right on 39\% of its failures and gains 9.7 points when read on disagreement. What the repair shows is a property of the model, a writable channel at a known slot, and what the taxonomy shows is how much of a latent reasoner's error lives in its thoughts at all.
 
 \begin{table}[h]
 \caption{Failure classes among wrong multi-step GSM8K test answers, from the model's own explicit chain plus a calculator, and the one-slot repair rate per class (calculator-supplied value, targets with a mismatched carrier and a donor).}
@@ -369,24 +371,26 @@ Model & Plan wrong & Latent-only & Upstream arithmetic & Final step \\
 GPT-2 (512 failures) & 68\% / 2\% & 19\% / 24\% & 9\% / 3\% & 4\% / 5\% \\
 CODI-1B (422) & 58\% / 2\% & 23\% / 38\% & 9\% / 11\% & 9\% / 3\% \\
 SIM-CoT (418) & 62\% / 1\% & 21\% / 20\% & 11\% / 9\% & 6\% / 4\% \\
+SIM-CoT-3B (366) & 48\% / 0\% & 39\% / 13\% & 8\% / 0\% & 5\% / 0\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[h]
-\caption{Net accuracy change (points) on the 838 long-chain GSM8K test problems under three policies, scaled from the repair runs' outcomes (calculator-supplied value). Latent accuracy: GPT-2 35.6, CODI-1B 49.6, SIM-CoT 50.1.}
+\caption{Net accuracy change (points) on the 838 long-chain GSM8K test problems under three policies, scaled from the repair runs' outcomes (calculator-supplied value). Latent accuracy: GPT-2 35.6, CODI-1B 49.6, SIM-CoT 50.1, SIM-CoT-3B 56.3.}
 \label{tab:policies}
 \centering
-\small
-\begin{tabular}{lccc}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lcccc}
 \toprule
-Policy & GPT-2 & CODI-1B & SIM-CoT \\
+Policy & GPT-2 & CODI-1B & SIM-CoT & SIM-CoT-3B \\
 \midrule
-One-slot donor transplant on every problem & $-1.8$ & $+2.8$ & $-2.0$ \\
-One-slot donor transplant, only when the explicit chain disagrees & $-0.1$ & $+3.4$ & $+1.1$ \\
-Learned writer (residual), only when it disagrees & $+1.0$ & $+2.2$ & $+0.7$ \\
-Ladder writes to every mismatched thought, only when it disagrees & $+0.4$ & $+1.7$ & $-0.9$ \\
-Switch to the explicit chain's answer when it disagrees & $+5.6$ & $+5.3$ & $+3.2$ \\
+One-slot donor, every problem & $-1.8$ & $+2.8$ & $-2.0$ & $-1.8$ \\
+One-slot donor, only when the explicit chain disagrees & $-0.1$ & $+3.4$ & $+1.1$ & $+0.4$ \\
+Learned writer (residual), on disagreement & $+1.0$ & $+2.2$ & $+0.7$ & $-0.4$ \\
+Ladder writes to every mismatched thought, on disagreement & $+0.4$ & $+1.7$ & $-0.9$ & $+0.9$ \\
+Switch to the explicit chain's answer on disagreement & $+5.6$ & $+5.3$ & $+3.2$ & $+9.7$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -399,9 +403,9 @@ Switch to the explicit chain's answer when it disagrees & $+5.6$ & $+5.3$ & $+3.
 
 \section{Conclusion}
 
-Hidden thoughts in CODI-style models are optional, narrow channels: they carry a value only on hard problems, through one trained slot, they mislead readers, and they can be edited from outside. Coconut-style thoughts are necessary, entangled and uneditable. A cheap, inference-only audit tells you which kind you have, where a monitor would mean something, and what a monitor's accuracy could be measuring instead.
+Hidden thoughts in CODI-style models are optional, narrow channels: they carry a value through one or two trained slots, only on hard problems below 3B, they mislead readers, and they can be edited from outside, though editing them is worth less than reading the model's own explicit chain, and more so as the model grows. Coconut-style thoughts are necessary, entangled and uneditable. A cheap, inference-only audit tells you which kind you have, where a monitor would mean something, and what a monitor's accuracy could be measuring instead.
 
-\paragraph{More errata.} Two further predictions failed after the first draft: a learned writer did not raise repair above the borrowed vector, and writing every mismatched thought did not raise it above one slot. Both are reported above rather than removed.
+\paragraph{More errata.} Three further predictions failed after the first draft: a learned writer did not raise repair above the borrowed vector, writing every mismatched thought did not raise it above one slot, and a stronger model (SIM-CoT-3B) moved its errors into the thoughts without making them more repairable. All three are reported above rather than removed.
 
 \section*{Reproducibility statement}
 

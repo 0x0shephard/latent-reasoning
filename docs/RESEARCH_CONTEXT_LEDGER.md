@@ -6923,3 +6923,61 @@ inert (C3 fails). Regime `backup_route`: **holds** (carrier costs 6.5 and 8.9 po
 whole tail costs 44). C4b holds under both families at slot 3 (read at 0.55 / 0.31,
 confirmed 0.02 / 0.03). The repair kernel therefore writes slot 2 (store 3) with slot 4
 as the second carrier.
+
+### §130 addendum 2: the 3B repair kernel scored (2026-10-14)
+
+One kernel on dannyism11 (`ladder-repair-sim-cot-3b`, 19 + 22 minutes for the gold and
+calculator runs), carrier 2, store 3, second carrier 4, both value sources, writer and
+ladder arms. Files: `docs/latent_monitor_audit/latent_repair_ladder/codi3b_{gold,tool}.*`.
+Latent accuracy on the 838 long-chain test problems 56.3% (1B: 49.6 / 50.1); 366 failures.
+
+**Failure classes (calculator run):** plan wrong 48%, latent-only 39%, upstream arithmetic
+8%, final step 5%, no chain 1%. The model's own explicit chain is right on 144 of the 366
+failures (39%; 1B models 20–23%).
+
+**Repair, primary stratum (wrong answer, mismatched carrier, donor exists), %:**
+
+| value | n | nearest donor | random same | centroid | different value | store K/V | state+K/V | writer abs | slot-4 donor | ladder donor | ladder random | harm (donor / slot 4) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| gold | 239 | 14.2 [10.0, 18.8] | 12.1 | 15.9 | 1.7 | 6.3 | 6.7 | 17.2 | 16.3 | 10.9 | 2.5 | 8.6 / 16.4 |
+| calculator | 207 | 10.6 [6.8, 15.0] | 9.2 | 12.6 | 3.4 | 4.8 | 6.3 | 13.0 | 13.0 | 5.8 | 3.4 | 7.8 / 15.6 |
+
+Checks: r1 repair exists, r2 value not disturbance, r5 harmless where right (carrier
+already right: 3.8% / 0.0%) hold; r3 natural beats synthetic and r4 store adds fail, as at
+1B. The absolute writer edges the borrowed vector for the first time (17.2 vs 14.2,
+overlapping intervals); the second carrier (slot 4) repairs as much as slot 2 and harms
+twice as many controls.
+
+**Repair on latent-only touched failures (calculator value, n = 77):** one-slot donor 13.0
+[6.5, 20.8], writer 15.6, ladder donor 14.3, ladder writer 10.4, ladder random control 10.4.
+Plan-wrong, upstream and final-step: 0–3.4% under the one-slot donor.
+
+**Net accuracy on the 838 problems (points):** one-slot donor everywhere −1.8, gated on
+disagreement +0.4; writer (residual) gated −0.4; ladder writer gated +0.9; switch to the
+explicit chain on disagreement **+9.7** (1B: +3.2 to +5.6).
+
+**P16b scored.** Latent-only share ≥ 0.35: **holds** (0.39, up from 0.19–0.23). Plan-wrong
+share ≤ 0.45: **fails narrowly** (0.48, down from 0.58–0.68). The premise is half right:
+as the model gets stronger, more of its failures are ones where its own explicit chain is
+correct and only the latent run is wrong.
+
+**P16c scored.** One-slot donor repair on latent-only touched failures ≥ 0.35: **wrong**
+(0.13; 1B 0.20–0.38). Gated gain ≥ +4: **wrong** (+0.4). Switching still gains more:
+**holds**, by a wide margin (+9.7).
+
+**P16d scored.** Repaired failures as a share of all failures ≥ 0.12: **wrong** (one-slot
+donor 6.0%, slot-4 donor 8.2%, writer 7.7%; 1B ≈ 9%).
+
+**Reading.** Model strength does move errors into the thoughts (the latent-only class
+nearly doubles), but it does not make them more writable: the 3B model's latent-only
+failures are repaired at a third of the 1B rate by a one-slot write, and the ladder's random
+control (10.4%) is level with its real writes on that class, so at 3B most of what a write
+"repairs" there is disturbance. The 3B model carries at two slots and the value is
+spread between them (each slot's write repairs 13–16%; the ladder that writes both is no
+better and harms more). The ceiling of thought correction therefore does not rise with
+scale on this family; what rises is the value of the model's own explicit chain, which is
+right on 39% of its failures and worth +9.7 points when read on disagreement. Option 1 is
+closed: a stronger CODI does not make repair a product. The durable 3B results are the
+card (two carriers, no gate, terminal in use, backup route) and the shift in the failure
+mix. Option 2 (a task whose failures are execution rather than planning) remains the only
+route to a higher repair ceiling and needs training, so it is out of scope for this line.
