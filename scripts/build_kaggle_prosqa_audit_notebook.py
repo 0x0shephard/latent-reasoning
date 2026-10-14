@@ -15,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "c71f3cc562d6c935c9172f88a3ead39118049c51"   # pinned after the tests pass
+RUN_COMMIT = "5d19426a2ed3991d303e864ee5ad66e03d020431"   # pinned after the tests pass
 KAGGLE_USER = "dannyism11"
 DATA_URL = "https://raw.githubusercontent.com/connordilgren/are-lrms-easily-interpretable/main/data/prosqa_test.json"
 DATA_SHA256 = "82ddc0afe6ee30eb31bb16fa208e293e55278a20fa987098d48519cae7e12680"
