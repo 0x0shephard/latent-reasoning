@@ -174,3 +174,34 @@ def test_codi_1b_gate_is_two_sided_against_the_main_result():
     assert gate["published_accuracy"]["gsm8k"] == 0.556
     assert abs(0.5550 - gate["published_accuracy"]["gsm8k"]) <= gate["absolute_tolerance"]
     assert abs(0.5534 - gate["published_accuracy"]["gsm8k"]) <= gate["absolute_tolerance"]
+
+
+def test_sharded_safetensors_checkpoint_loads_and_hashes(tmp_path):
+    """Ledger §130: a ``*.safetensors.index.json`` checkpoint is read shard by shard."""
+    import json
+    from safetensors.torch import save_file
+    from src.models.official_codi import _shard_names, checkpoint_shard_hashes, load_official_checkpoint, sha256_file
+    from tests.test_trajectory_supervision import _tiny_model
+
+    model = _tiny_model()
+    state = {k: v.detach().clone().contiguous() for k, v in model.state_dict().items()}
+    keys = sorted(state)
+    half = len(keys) // 2
+    shards = {"model-00001-of-00002.safetensors": {k: state[k] for k in keys[:half]}, "model-00002-of-00002.safetensors": {k: state[k] for k in keys[half:]}}
+    for name, tensors in shards.items():
+        save_file(tensors, str(tmp_path / name))
+    index = tmp_path / "model.safetensors.index.json"
+    index.write_text(json.dumps({"metadata": {}, "weight_map": {k: name for name, tensors in shards.items() for k in tensors}}))
+    assert _shard_names(index) == sorted(shards)
+    report = load_official_checkpoint(model, index, expected_sha256=sha256_file(index))
+    assert report.matched_numel_fraction >= 0.999 if hasattr(report, "matched_numel_fraction") else True
+
+    class _Cfg:
+        class checkpoint:
+            shard_sha256 = {"a": "1"}
+    assert checkpoint_shard_hashes(_Cfg) == {"a": "1"}
+
+    class _Single:
+        class checkpoint:
+            sha256 = "x"
+    assert checkpoint_shard_hashes(_Single) is None

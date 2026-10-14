@@ -23,6 +23,7 @@ MODELS = {
              "datasets": ["dannyism11/tsv-ccc"]},
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "auto", "gate": "eval", "datasets": []},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "auto", "gate": "eval", "datasets": []},
+    "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "auto", "gate": "eval", "datasets": []},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_directed_counterfactual_runner.py",
          "tests/test_masking_audit_runner.py", "tests/test_monitor_faithfulness.py", "tests/test_directed_counterfactual_bootstrap.py",

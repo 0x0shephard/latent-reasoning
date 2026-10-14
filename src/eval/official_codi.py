@@ -23,6 +23,7 @@ from src.data.datasets import load_eval_set
 from src.eval.official_codi_gate import build_accuracy_gate, official_answers_match
 from src.models.official_codi import (
     build_official_codi_gpt2,
+    checkpoint_shard_hashes,
     download_official_checkpoint,
     generate_official_codi,
     load_official_checkpoint,
@@ -126,7 +127,9 @@ def evaluate_official_codi(
             repo_id=str(cfg.checkpoint.repo_id),
             revision=str(cfg.checkpoint.revision),
             filename=str(cfg.checkpoint.filename),
-            expected_sha256=str(cfg.checkpoint.sha256),
+            expected_sha256=str(cfg.checkpoint.sha256,
+            shard_sha256=checkpoint_shard_hashes(cfg),
+        ),
             token=token,
         )
     else:

@@ -211,14 +211,15 @@ def markdown(report: dict) -> str:
 
 def load_model_pieces(config_path: Path, device: str = "cpu"):
     import os
-    from src.models.official_codi import build_official_codi_gpt2, download_official_checkpoint, load_official_checkpoint
+    from src.models.official_codi import build_official_codi_gpt2, checkpoint_shard_hashes, download_official_checkpoint, load_official_checkpoint
     from src.mech.directed_counterfactual import readout_matrix
     from src.utils.config import load_config
 
     cfg = load_config(str(config_path))
     token = os.environ.get("HF_TOKEN") or None
     checkpoint = download_official_checkpoint(repo_id=str(cfg.checkpoint.repo_id), revision=str(cfg.checkpoint.revision),
-                                              filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token)
+                                              filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token,
+        shard_sha256=checkpoint_shard_hashes(cfg))
     model, tokenizer = build_official_codi_gpt2(base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
                                                 dtype=torch.float32, settings=cfg.model, token=token)
     load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))

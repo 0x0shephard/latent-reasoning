@@ -18,16 +18,17 @@ MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32", "carrier": 3, "store": 4, "extra": []},
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "float16", "carrier": 3, "store": 4, "extra": []},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "float16", "carrier": 3, "store": 4, "extra": [1]},
+    "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "carrier": 3, "store": 4, "extra": []},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_latent_repair_runner.py", "tests/test_chain_pools.py"]
 
 
 def title(model: str, source: str = "gold") -> str:
     if source == "writer":   # Kaggle slugs are capped at 50 characters; SIM-CoT's full title would exceed it
-        short = {"simcot": "SIM-CoT 1B"}.get(model, MODELS[model]["title"])
+        short = {"simcot": "SIM-CoT 1B", "codi3b": "SIM-CoT 3B"}.get(model, MODELS[model]["title"])
         return f"Latent repair {short} with a learned writer"
     if source == "ladder":
-        short = {"simcot": "SIM-CoT 1B", "codi1b": "CODI 1B", "gpt2": "CODI GPT-2"}[model]
+        short = {"simcot": "SIM-CoT 1B", "codi1b": "CODI 1B", "gpt2": "CODI GPT-2", "codi3b": "SIM-CoT 3B"}[model]
         return f"Ladder repair {short}"
     return f"Latent repair {MODELS[model]['title']}" + (" with a calculator" if source == "tool" else "")
 

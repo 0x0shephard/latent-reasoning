@@ -32,6 +32,7 @@ from src.eval.official_codi_gate import extract_official_answer_number
 from src.mech.cache_carrier import latent_path, record_native_trajectory
 from src.models.official_codi import (
     build_official_codi_gpt2,
+    checkpoint_shard_hashes,
     download_official_checkpoint,
     load_official_checkpoint,
     resolve_torch_dtype,
@@ -83,7 +84,8 @@ def run(args):
     token = os.environ.get("HF_TOKEN") or None
     checkpoint = args.checkpoint_path or download_official_checkpoint(
         repo_id=str(cfg.checkpoint.repo_id), revision=str(cfg.checkpoint.revision),
-        filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token)
+        filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token,
+        shard_sha256=checkpoint_shard_hashes(cfg))
     model, tokenizer = build_official_codi_gpt2(base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
                                                 dtype=dtype, settings=cfg.model, token=token)
     load_report = load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))

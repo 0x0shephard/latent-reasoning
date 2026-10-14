@@ -300,6 +300,24 @@ def build_official_codi_gpt2(
     return model, tokenizer
 
 
+def checkpoint_shard_hashes(cfg) -> dict | None:
+    """``checkpoint.shard_sha256`` from a config, as a plain dict, or None for single-file checkpoints."""
+    hashes = getattr(getattr(cfg, "checkpoint", None), "shard_sha256", None)
+    if hashes is None:
+        return None
+    try:
+        return {str(k): str(v) for k, v in dict(hashes).items()}
+    except (TypeError, ValueError):
+        return {str(k): str(v) for k, v in vars(hashes).items()}
+
+
+def _shard_names(index_path: Path) -> list[str]:
+    import json
+
+    weight_map = json.loads(Path(index_path).read_text()).get("weight_map", {})
+    return sorted(set(weight_map.values()))
+
+
 def download_official_checkpoint(
     *,
     repo_id: str,
@@ -307,7 +325,10 @@ def download_official_checkpoint(
     filename: str,
     expected_sha256: str,
     token: str | None = None,
+    shard_sha256: dict | None = None,
 ) -> Path:
+    """Download one checkpoint file, or, when ``filename`` is a ``*.safetensors.index.json``,
+    the index and every shard it names (each shard checked against ``shard_sha256`` when given)."""
     from huggingface_hub import hf_hub_download
 
     path = Path(
@@ -323,6 +344,13 @@ def download_official_checkpoint(
         raise RuntimeError(
             f"checkpoint SHA256 mismatch: expected {expected_sha256}, observed {observed}"
         )
+    if path.name.endswith(".safetensors.index.json"):
+        for shard in _shard_names(path):
+            shard_path = Path(hf_hub_download(repo_id=repo_id, revision=revision, filename=shard, token=token))
+            if shard_sha256 and shard in shard_sha256:
+                got = sha256_file(shard_path)
+                if got != str(shard_sha256[shard]):
+                    raise RuntimeError(f"shard {shard} SHA256 mismatch: expected {shard_sha256[shard]}, observed {got}")
     return path
 
 
@@ -342,7 +370,13 @@ def load_official_checkpoint(
             f"observed {observed_sha}"
         )
 
-    if path.suffix == ".safetensors":
+    if path.name.endswith(".safetensors.index.json"):
+        from safetensors.torch import load_file
+
+        state = {}
+        for shard in _shard_names(path):
+            state.update(load_file(str(path.parent / shard)))
+    elif path.suffix == ".safetensors":
         from safetensors.torch import load_file
 
         state = load_file(str(path))

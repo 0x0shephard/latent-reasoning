@@ -7,7 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts" / "build_kaggle_latent_repair_notebook.py"
-MODELS = ("gpt2", "codi1b", "simcot")
+MODELS = ("gpt2", "codi1b", "simcot", "codi3b")
 
 
 def _builder_run_commit() -> str:
@@ -37,6 +37,7 @@ def test_notebook_pinned_and_complete(model, source):
     assert f'RUN_COMMIT = "{commit}"' in text and "scripts/run_codi_latent_repair.py" in text and "No training" in text and "New Dataset" in text
     assert f'V_SOURCE = "{source}"' in text and "--v-source" in text and (f"WRITER = {source in ('writer', 'ladder')}" in text) and (f"LADDER = {source == 'ladder'}" in text)
     assert ('EXTRA = "3", "4", ["1"]' in text) == (model == "simcot")
+    assert ('configs/official_simcot_codi_llama3b.yaml' in text) == (model == "codi3b")
     for i, cell in enumerate(cells):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"{model}-cell-{i}")

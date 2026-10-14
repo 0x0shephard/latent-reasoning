@@ -6861,3 +6861,45 @@ method (one borrowed vector into the carrier, applied only when the explicit cha
 disagrees), and always below reading that chain. The taxonomy is the durable result: it
 is stable across three models, computable at inference, and tells a practitioner what
 share of a latent reasoner's errors live in the thoughts at all (19–23%).
+
+## 130. Preregistered: Option 1, a stronger CODI (SIM-CoT LLaMA-3.2-3B)
+
+Designed 2026-10-14 after §129. The question: does the share of failures that a thought
+write can reach grow with model strength? If plan errors fall faster than latent slips as
+accuracy rises, the latent-only class should be a larger share of a stronger model's
+failures and the repair ceiling higher. No model training.
+
+### Checkpoint
+
+`internlm/SIM_COT-LLaMA3-CODI-3B` (revision a2db0e50; three float32 shards, 15.3 GB,
+LoRA r128 α32 on the same seven projections, projector 3072, six thoughts, the step decoder
+under `decoder.` dropped at load), on `unsloth/Llama-3.2-3B-Instruct` (ungated mirror of
+the gated base). Paper (Table 3): CoT-SFT 71.5, CODI 60.8, CODI + SIM-CoT 62.3; the 8B
+checkpoint scores 64.1 and would need both T4s. Gate: ≥ 62.3 − 3 on GSM8K test. The
+loader learns to read sharded safetensors; the 3B otherwise runs through the 1B path.
+
+### Plan
+
+1. The audit card on `gsm8k_test` (twins both profiles, masking, monitors), which also
+   gives the carrier slot.
+2. The ladder-repair kernel on the carrier the card finds (taxonomy, one-slot donor,
+   writer, ladder, both value sources, policies).
+
+### Predictions, before the run
+
+- P16a (gate and shape): 59–66% on GSM8K test; a single carrier at slot 3 with transport
+  ≥ 0.25 on long chains; the terminal slot inert; regime `backup_route`.
+- P16b (the premise): the latent-only share of failures ≥ 0.35 (1B: 0.23) and the
+  plan-wrong share ≤ 0.45 (1B: 0.58).
+- P16c (repair): one-slot donor repair on latent-only touched failures ≥ 0.35; the gated
+  policy gains ≥ +4 points on the long-chain test problems (1B: +3.4), and switching to
+  the explicit chain still gains more.
+- P16d (the ceiling moves with the mix): repaired failures as a share of *all* failures
+  ≥ 0.12 (1B: ≈ 0.09).
+
+If P16b fails, model strength does not move errors into the thoughts and Option 2 (a
+task whose failures are execution, not planning) is the only route left.
+
+### Cost
+
+Two kernels on dannyism11, ≈ 1.5 h (audit) + 0.7 h (repair) at 3B.

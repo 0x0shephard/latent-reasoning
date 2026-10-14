@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts" / "build_kaggle_latent_monitor_audit_notebook.py"
 CASES = (("gpt2", "gsm8k_test"), ("gpt2", "svamp"), ("gpt2", "gsm8k_aug_train"), ("codi1b", "gsm8k_test"), ("simcot", "gsm8k_test"),
          ("gpt2", "gsm8k_train_original"), ("codi1b", "gsm8k_train_original"), ("simcot", "gsm8k_train_original"),
-         ("gpt2", "asdiv"), ("codi1b", "asdiv"), ("simcot", "asdiv"))
+         ("gpt2", "asdiv"), ("codi1b", "asdiv"), ("simcot", "asdiv"), ("codi3b", "gsm8k_test"))
 
 
 def _notebook(model, pool):
@@ -49,7 +49,7 @@ def test_notebook_pinned_and_complete(model, pool):
     meta = json.loads((path.parent / "kernel-metadata.json").read_text())
     import re
     assert meta["id"] == "jonraza15/" + re.sub(r"[^a-z0-9]+", "-", meta["title"].lower()).strip("-") and meta["code_file"] == path.name
-    assert meta["id"] == {"gpt2": "jonraza15/lma-codi-gpt-2-on-", "codi1b": "jonraza15/lma-codi-llama-1b-on-", "simcot": "jonraza15/lma-sim-cot-codi-1b-on-"}[model] + pool.replace("_", "-")
+    assert meta["id"] == {"gpt2": "jonraza15/lma-codi-gpt-2-on-", "codi1b": "jonraza15/lma-codi-llama-1b-on-", "simcot": "jonraza15/lma-sim-cot-codi-1b-on-", "codi3b": "jonraza15/lma-sim-cot-codi-3b-on-"}[model] + pool.replace("_", "-")
     assert meta["enable_gpu"] and meta["enable_internet"] and (meta["dataset_sources"] == ["dannyism11/tsv-ccc"]) == (model == "gpt2")
 
 
