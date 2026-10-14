@@ -24,6 +24,9 @@ MODELS = {
     "codi1b": {"config": "configs/official_codi_llama1b.yaml", "title": "CODI LLaMA-1B", "precision": "auto", "gate": "eval", "datasets": []},
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "auto", "gate": "eval", "datasets": []},
     "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "auto", "gate": "eval", "datasets": []},
+    # 8B (ledger §134): float16 only (float32 does not fit two T4s), dispatched over both GPUs, a smaller batch
+    "codi8b": {"config": "configs/official_simcot_codi_llama8b.yaml", "title": "SIM-CoT CODI-8B", "precision": "auto", "gate": "eval", "datasets": [],
+               "precisions": ["float16"], "batch_size": "16"},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_directed_counterfactual_runner.py",
          "tests/test_masking_audit_runner.py", "tests/test_monitor_faithfulness.py", "tests/test_directed_counterfactual_bootstrap.py",
@@ -72,7 +75,11 @@ MODEL = "{model}"
 POOL = "{pool}"
 OUTPUT_ROOT = "/kaggle/working/lma_{model}_{pool}"
 RUN_SMOKE = True
-BATCH_SIZE = "32"
+BATCH_SIZE = "{spec.get("batch_size", "32")}"
+PRECISIONS = {json.dumps(spec.get("precisions", ["float16", "float32"]))}
+import torch
+if MODEL == "codi8b":
+    assert torch.cuda.device_count() >= 2, "the 8B audit needs both T4s (accelerator GPU T4 x2)"
 
 import glob, json, os, pathlib, subprocess, sys, time
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -128,7 +135,7 @@ def summary_under(root):
 import yaml
 cfg = yaml.safe_load(open(CONFIG)); PAPER = cfg["accuracy_gate"]["published_accuracy"]["gsm8k"]
 PRECISION = None
-for precision in ("float16", "float32"):
+for precision in PRECISIONS:
     run_with_retry([sys.executable, "-u", "-m", "src.eval.official_codi", "--config", CONFIG, "--device", "cuda",
                     "--set", f"model.dtype={precision}", "--set", f"eval.batch_size={BATCH_SIZE}"])
     REPRODUCTION_SUMMARY = summary_under(cfg["output_dir"])

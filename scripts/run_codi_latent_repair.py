@@ -34,6 +34,7 @@ from src.eval.official_codi_gate import extract_official_answer_number
 from src.mech.cache_carrier import CacheEdit, Trajectory, backbone_layers, donor_view, generate_under, record_native_trajectory
 from src.mech.directed_counterfactual import readout_matrix
 from src.models.official_codi import (
+    place_official_model,
     build_official_codi_gpt2,
     checkpoint_shard_hashes,
     download_official_checkpoint,
@@ -334,7 +335,7 @@ def run(args):
     model, tokenizer = build_official_codi_gpt2(base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
                                                 dtype=dtype, settings=cfg.model, token=token)
     load_report = load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))
-    model.to(device=device, dtype=dtype).eval()
+    place_official_model(model, device, dtype).eval()
     latent_positions = int(cfg.eval.latent_iterations)
     n_layers = backbone_layers(model); all_layers = tuple(range(n_layers))
     carrier, store = int(args.carrier), int(args.store)

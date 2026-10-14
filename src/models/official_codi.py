@@ -258,6 +258,12 @@ def build_official_codi_gpt2(
     }
     if token:
         pretrained_kwargs["token"] = token
+    # Ledger §134: a checkpoint too large for one GPU (SIM-CoT 8B in float16 is 16 GB) is
+    # dispatched across the visible GPUs by accelerate; the wrapper's projector then goes
+    # where the input embeddings are and ``place_official_model`` leaves the backbone alone.
+    device_map = settings.get("device_map")
+    if device_map:
+        pretrained_kwargs["device_map"] = str(device_map)
     from transformers import AutoConfig
 
     config = prepare_backbone_config(AutoConfig.from_pretrained(base_model, revision=base_revision, token=token or None))
@@ -276,6 +282,9 @@ def build_official_codi_gpt2(
         pad_aware_generation=bool(settings.get("pad_aware_generation", False)),
         prompt_logits_last_only=bool(settings.get("prompt_logits_last_only", False)),
     )
+
+    if device_map:
+        model.prj.to(device=model.input_embeddings().weight.device)
 
     tokenizer_kwargs = {
         "revision": base_revision,
@@ -309,6 +318,38 @@ def checkpoint_shard_hashes(cfg) -> dict | None:
         return {str(k): str(v) for k, v in dict(hashes).items()}
     except (TypeError, ValueError):
         return {str(k): str(v) for k, v in vars(hashes).items()}
+
+
+def hf_device_map(model: nn.Module) -> dict | None:
+    """accelerate's device map, wherever the backbone keeps it (the PEFT wrapper nests it)."""
+    for module in model.modules():
+        found = getattr(module, "hf_device_map", None)
+        if found:
+            return dict(found)
+    return None
+
+
+def place_official_model(model: OfficialCODIGPT2, device, dtype: torch.dtype) -> OfficialCODIGPT2:
+    """``model.to(device, dtype)`` unless the backbone was dispatched over several devices, in
+    which case only the projector moves (next to the input embeddings) and the backbone stays."""
+    devices = {str(v) for v in (hf_device_map(model) or {}).values()}
+    if len(devices) > 1:
+        model.prj.to(device=model.input_embeddings().weight.device, dtype=dtype)
+        return model
+    return model.to(device=device, dtype=dtype)
+
+
+class _ShapeOnly:
+    """A tensor's shape and size without its data (the sharded loader's header pass)."""
+
+    def __init__(self, shape: tuple[int, ...]):
+        self.shape = shape
+
+    def numel(self) -> int:
+        n = 1
+        for d in self.shape:
+            n *= int(d)
+        return n
 
 
 def _shard_names(index_path: Path) -> list[str]:
@@ -370,12 +411,19 @@ def load_official_checkpoint(
             f"observed {observed_sha}"
         )
 
-    if path.name.endswith(".safetensors.index.json"):
-        from safetensors.torch import load_file
+    sharded = path.name.endswith(".safetensors.index.json")
+    if sharded:
+        from safetensors import safe_open
 
-        state = {}
+        # Shapes come from the shard headers; no tensor is read until it is known to be wanted
+        # (the 8B SIM-CoT checkpoint is 33 GB, half of it a step decoder the model does not have).
+        state: dict = {}
+        shard_of: dict[str, str] = {}
         for shard in _shard_names(path):
-            state.update(load_file(str(path.parent / shard)))
+            with safe_open(str(path.parent / shard), "pt", device="cpu") as handle:
+                for key in handle.keys():
+                    state[key] = _ShapeOnly(tuple(handle.get_slice(key).get_shape()))
+                    shard_of[key] = shard
     elif path.suffix == ".safetensors":
         from safetensors.torch import load_file
 
@@ -386,7 +434,7 @@ def load_official_checkpoint(
         state = state["state_dict"]
     if not isinstance(state, dict) or not state:
         raise TypeError("official checkpoint must contain a non-empty tensor state dict")
-    if not all(isinstance(value, torch.Tensor) for value in state.values()):
+    if not all(isinstance(value, (torch.Tensor, _ShapeOnly)) for value in state.values()):
         raise TypeError("official checkpoint state dict contains non-tensor values")
 
     target = model.state_dict()
@@ -436,7 +484,23 @@ def load_official_checkpoint(
             "official checkpoint did not load required components: " + ", ".join(absent)
         )
 
-    incompatible = model.load_state_dict(state, strict=False)
+    if sharded:
+        from safetensors import safe_open
+
+        loaded: set[str] = set()
+        for shard in sorted(set(shard_of.values())):
+            wanted = [key for key in matched if shard_of[key] == shard]
+            if not wanted:
+                continue
+            with safe_open(str(path.parent / shard), "pt", device="cpu") as handle:
+                chunk = {key: handle.get_tensor(key) for key in wanted}
+            model.load_state_dict(chunk, strict=False)
+            loaded.update(chunk); del chunk
+        missing_keys = tuple(sorted(set(target) - loaded))
+        unexpected_keys = tuple(sorted(key for key in state if key not in target))
+    else:
+        incompatible = model.load_state_dict(state, strict=False)
+        missing_keys, unexpected_keys = tuple(incompatible.missing_keys), tuple(incompatible.unexpected_keys)
     model.tie_weights()
     return OfficialCODILoadReport(
         checkpoint_path=str(path),
@@ -444,8 +508,8 @@ def load_official_checkpoint(
         checkpoint_tensors=len(state),
         matched_tensors=len(matched),
         matched_numel_fraction=matched_fraction,
-        missing_keys=tuple(incompatible.missing_keys),
-        unexpected_keys=tuple(incompatible.unexpected_keys),
+        missing_keys=missing_keys,
+        unexpected_keys=unexpected_keys,
         ignored_prefixes=ignored_prefixes,
         ignored_tensors=ignored_tensors,
     )

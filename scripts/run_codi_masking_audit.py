@@ -33,6 +33,7 @@ from src.eval.official_codi import select_device
 from src.mech.cache_carrier import backbone_layers, outcomes_under, record_trajectory
 from src.mech.workspace_interchange import change_rate
 from src.models.official_codi import (
+    place_official_model,
     build_official_codi_gpt2,
     checkpoint_shard_hashes,
     download_official_checkpoint,
@@ -130,7 +131,7 @@ def run(args):
         base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
         dtype=dtype, settings=cfg.model, token=token)
     load_report = load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))
-    model.to(device=device, dtype=dtype).eval()
+    place_official_model(model, device, dtype).eval()
     latent_positions = int(cfg.eval.latent_iterations)
 
     data_cfg = load_config(str(cfg.endpoint_retention.data_config))

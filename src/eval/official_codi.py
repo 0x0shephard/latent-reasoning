@@ -22,6 +22,7 @@ from src.data.answer_extract import answers_match
 from src.data.datasets import load_eval_set
 from src.eval.official_codi_gate import build_accuracy_gate, official_answers_match
 from src.models.official_codi import (
+    place_official_model,
     build_official_codi_gpt2,
     checkpoint_shard_hashes,
     download_official_checkpoint,
@@ -148,7 +149,7 @@ def evaluate_official_codi(
         checkpoint,
         expected_sha256=str(cfg.checkpoint.sha256),
     )
-    model.to(device=device, dtype=dtype).eval()
+    place_official_model(model, device, dtype).eval()
 
     torch.manual_seed(int(cfg.seed))
     if device.type == "cuda":

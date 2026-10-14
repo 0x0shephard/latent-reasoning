@@ -224,3 +224,52 @@ def test_evaluator_passes_shard_hashes_to_the_download(monkeypatch):
         ev.evaluate_official_codi(cfg, limit=1, device_name="cpu")
     assert seen["filename"] == "model.safetensors.index.json" and seen["expected_sha256"] == str(cfg.checkpoint.sha256)
     assert set(seen["shard_sha256"]) == {"model-00001-of-00003.safetensors", "model-00002-of-00003.safetensors", "model-00003-of-00003.safetensors"}
+
+
+def test_place_official_model_moves_only_the_projector_when_dispatched():
+    """Ledger §134: a backbone dispatched over several devices is left where accelerate put it."""
+    import torch
+    from src.models.official_codi import hf_device_map, place_official_model
+    from tests.test_trajectory_supervision import _tiny_model
+
+    model = _tiny_model()
+    moved = []
+    model.to = lambda **kw: (moved.append(kw), model)[1]
+    assert hf_device_map(model) is None
+    assert place_official_model(model, torch.device("cpu"), torch.float32) is model and moved == [{"device": torch.device("cpu"), "dtype": torch.float32}]
+    inner = next(m for m in model.codi.modules() if m is not model.codi)
+    inner.hf_device_map = {"model.layers.0": 0, "model.layers.1": 1}
+    moved.clear()
+    assert place_official_model(model, torch.device("cpu"), torch.float32) is model and moved == []   # backbone untouched
+    inner.hf_device_map = {"": 0}
+    assert place_official_model(model, torch.device("cpu"), torch.float32) is model and len(moved) == 1   # one device: ordinary .to
+
+
+def test_sharded_load_drops_foreign_prefixes_before_reading_and_loads_shard_by_shard(tmp_path):
+    """Ledger §134: shapes come from the headers; the step decoder is never read; tensors land."""
+    import json
+    import torch
+    from safetensors.torch import save_file
+    from src.models.official_codi import load_official_checkpoint, sha256_file
+    from tests.test_trajectory_supervision import _tiny_model
+
+    model = _tiny_model()
+    with torch.no_grad():
+        for p in model.parameters():
+            p.zero_()
+    reference = _tiny_model()
+    state = {k: v.detach().clone().contiguous() for k, v in reference.state_dict().items()}
+    keys = sorted(state); half = len(keys) // 2
+    decoder = {"decoder.layers.0.weight": torch.full((64, 64), 7.0), "decoder.lm_head.weight": torch.full((16, 64), 7.0)}
+    shards = {"model-00001-of-00002.safetensors": {**{k: state[k] for k in keys[:half]}, **decoder},
+              "model-00002-of-00002.safetensors": {k: state[k] for k in keys[half:]}}
+    for name, tensors in shards.items():
+        save_file(tensors, str(tmp_path / name))
+    index = tmp_path / "model.safetensors.index.json"
+    index.write_text(json.dumps({"metadata": {}, "weight_map": {k: name for name, tensors in shards.items() for k in tensors}}))
+    report = load_official_checkpoint(model, index, expected_sha256=sha256_file(index))
+    assert report.ignored_prefixes == ("decoder",) and report.ignored_tensors == 2
+    assert report.checkpoint_tensors == len(keys) and report.matched_tensors == len(keys)
+    assert report.unexpected_keys == () and all(k not in report.missing_keys for k in keys)
+    for k, v in reference.state_dict().items():
+        assert torch.equal(model.state_dict()[k], v), k

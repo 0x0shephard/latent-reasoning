@@ -7428,3 +7428,86 @@ harms, and that region is where switching was better anyway. P23 (top-quartile h
 holds, and the question of §133 E is closed: the correct answers a write breaks are the
 loosely held ones, they are identifiable from confidence alone, and leaving them alone costs
 nothing because the write had nothing to gain there.
+
+## 134. Preregistered: the SIM-CoT 8B card (does the 3B profile continue with scale?)
+
+Designed 2026-10-14 after §133. The 3B card changed two of the six CODI-family findings
+(no chain-length gate, terminal K/V in use) and moved the carriers to the even slots. One
+larger checkpoint says whether that is a trend. `internlm/SIM_COT-LLaMA3-CODI-8B`
+(revision de14926b; seven bf16 shards, 33.6 GB, of which the training-time step decoder is
+about half and is dropped at load) on `unsloth/Llama-3.1-8B-Instruct` (revision 4699cc75,
+the ungated mirror); LoRA r128 α32 on the same seven projections, projector 4096, six
+thoughts (the released `test_llama8b.sh`). Paper figure (Table 3): 64.1 on GSM8K; gate ≥ 61.1.
+
+### Engineering, before any run
+
+The 8B model in float16 is 16 GB and does not fit one T4, so the loader gains a `device_map`
+setting (accelerate's `auto` across the two Kaggle T4s), a placement helper used by every
+audit runner in place of `model.to(device)`, and a sharded load that reads tensor shapes from
+the safetensors headers, drops the decoder before reading any tensor, and loads one shard at
+a time (the 29 GB of Kaggle RAM cannot hold the checkpoint). Unit tests cover the placement
+helper and the incremental sharded load on a fake checkpoint; the first Kaggle smoke stage is
+the only test of the two-GPU path. Nothing in the audit's arithmetic changes.
+
+### Predictions, before the run
+
+- P24a (gate): 61–67% on GSM8K test.
+- P24b (the 3B profile is the trend): carriers at the even slots (2 and 4), store at 3, no
+  chain-length gate (some slot transports ≥ 0.15 on short chains), terminal K/V transport ≥ 0.10.
+- P24c (regime): `backup_route`; no single carrier costs ≥ 10 points on long chains.
+- P24d (monitors): C4b holds under both probe families; the store is the readable-but-
+  unfaithful slot, as at 3B.
+- P24e (register): position-0 K/V masking costs less than at 1B (< 15 points on long chains),
+  continuing the 3B drop (10.8 from 32.5).
+- P24f (repair ceiling, if the repair kernel is also run): latent-only share of failures ≥ 0.40.
+
+### Cost
+
+One kernel on dannyism11 with both T4s, ≈ 3–4 hours; the 33 GB download is the risk.
+
+## 135. Preregistered: the audit on a non-arithmetic task (ProsQA, Coconut and CODI at LLaMA-1B)
+
+Designed 2026-10-14 after §134. Every result so far is grade-school arithmetic. ProsQA
+(Hao et al. 2024) is a synthetic logic task: a list of "Every X is a Y" and "A is a X"
+premises, a question "Is A a Y or a Z?", answered by a 3–6 hop path that the data gives as
+steps. Two released LLaMA-3.2-1B checkpoints from Dilgren and Wiegreffe (2026), trained with
+the official Coconut and CODI code: `connordilgren/llama32-1b-prosqa-coconut` (Coconut-repo
+state dict, `checkpoint_10`) and `connordilgren/llama32-1b-prosqa-codi` (CODI state dict), on
+the gated base, served by the ungated `unsloth/Llama-3.2-1B-Instruct` mirror. Test set:
+`data/prosqa_test.json` from their repository (500 rows).
+
+### What transfers and what does not
+
+- Twins: the chain is the premise path; a twin rewrites the path's last hop so that the other
+  option becomes reachable and the first is not (checked by graph reachability over the
+  premises, the task's calculator). Transport = the swapped site moves the answer to the
+  twin's option. Chain length = hops. C1 (short-chain ceiling, hops ≤ 3), C2 (gate), C3
+  (terminal), C5 (carriers necessary) and the register are computable as before.
+- Masking: unchanged.
+- Monitors: a twin changes only the last hop, so the intermediate nodes are the same in both
+  twins and a faithfulness target on them cannot be scored. The monitor layer is marked
+  `not_evaluable` on the card; readability of the subject, the two options and the answer is
+  reported as the prompt-leakage control.
+- The Coconut adapter is generalised from GPT-2 to LLaMA (resized embeddings, three latent
+  tokens); the CODI checkpoint loads through the existing loader with Dilgren's training
+  hyperparameters, and his wrappers define the prompt layout, which is copied exactly.
+
+### Predictions, before the run
+
+Dilgren and Wiegreffe report that on ProsQA both models answer the same without any latent
+tokens, so the audit should return its third profile: nothing monitorable.
+- P25a (necessity): no single slot's masking costs > 2 points for either model, and masking
+  all six costs < 5 points.
+- P25b (transport): no single site transports ≥ 0.10 at any hop count; the whole-tail K/V swap
+  transports < 0.30. Regime `no_transport` on both cards.
+- P25c (leakage): the subject and the two option names are read from every slot at ≥ 0.80
+  balanced accuracy, as from the prompt alone.
+- P25d (accuracy): both checkpoints reproduce within 3 points of the figures in Dilgren's
+  Table 2 (read before the run and recorded in the addendum).
+
+If P25a or P25b fails (a thought is used or needed on ProsQA), the task is the contrast case
+the paper lacks and the monitor layer is redesigned with twins that change an intermediate hop.
+
+### Cost
+
+Two kernels on dannyism11, ≈ 30 minutes each at 1B.

@@ -51,6 +51,7 @@ from src.mech.directed_counterfactual import (
     unique_location,
 )
 from src.models.official_codi import (
+    place_official_model,
     build_official_codi_gpt2,
     checkpoint_shard_hashes,
     download_official_checkpoint,
@@ -252,7 +253,7 @@ def run(args):
         base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
         dtype=dtype, settings=cfg.model, token=token)
     load_report = load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))
-    model.to(device=device, dtype=dtype).eval()
+    place_official_model(model, device, dtype).eval()
     latent_positions = int(cfg.eval.latent_iterations)
     bs = args.batch_size
     n_layers = backbone_layers(model)

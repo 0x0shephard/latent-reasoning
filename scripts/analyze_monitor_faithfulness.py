@@ -220,8 +220,9 @@ def load_model_pieces(config_path: Path, device: str = "cpu"):
     checkpoint = download_official_checkpoint(repo_id=str(cfg.checkpoint.repo_id), revision=str(cfg.checkpoint.revision),
                                               filename=str(cfg.checkpoint.filename), expected_sha256=str(cfg.checkpoint.sha256), token=token,
         shard_sha256=checkpoint_shard_hashes(cfg))
+    dtype = torch.float16 if cfg.model.get("device_map") else torch.float32   # a dispatched 8B model does not fit the host in float32
     model, tokenizer = build_official_codi_gpt2(base_model=str(cfg.model.base_model), base_revision=str(cfg.model.base_revision),
-                                                dtype=torch.float32, settings=cfg.model, token=token)
+                                                dtype=dtype, settings=cfg.model, token=token)
     load_official_checkpoint(model, checkpoint, expected_sha256=str(cfg.checkpoint.sha256))
     model.eval()
     embeddings = model.input_embeddings().weight.detach().float().cpu()

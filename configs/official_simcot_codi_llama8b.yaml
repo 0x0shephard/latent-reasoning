@@ -1,0 +1,88 @@
+# Accuracy/reproduction gate for the SIM-CoT release of CODI on LLaMA-3.1-8B-Instruct
+# (InternLM/SIM-CoT, arXiv 2509.20317): the CODI architecture trained with per-step decoding
+# supervision; the auxiliary decoder is discarded at inference.  Never updates weights.
+run_name: official_simcot_codi_llama8b
+seed: 11
+output_dir: outputs/official_simcot_codi_llama8b
+data_config: configs/data_official_codi.yaml
+
+official_source:
+  repo: https://github.com/InternLM/SIM-CoT
+  revision: main
+  script: CODI/scripts/test_llama8b.sh
+
+checkpoint:
+  repo_id: internlm/SIM_COT-LLaMA3-CODI-8B
+  revision: de14926b5164b3ecdfbd7d383f235a4d5b983d7d
+  filename: model.safetensors.index.json
+  # The checkpoint is sharded: ``sha256`` is the index file's digest, ``shard_sha256`` the LFS
+  # object ids of the seven shards (33.6 GB, bf16 and float32, about half of it the training-time
+  # step decoder under ``decoder.``, dropped before it is read).
+  sha256: 9d64f5255bf886492b783435140602c13fb75802df61b0a4351aa07cb24beb1f
+  shard_sha256:
+    model-00001-of-00007.safetensors: 7eaa33ac429f07100c196da5c9be61ffde6d83aaa7444fa8015841c77a665035
+    model-00002-of-00007.safetensors: d163943340c73307a534082df09e907fe1728285ec5ddc5e005effb63009ba24
+    model-00003-of-00007.safetensors: 1c7149c9f2591665ea7fa3a680cf65a4abe9c58560aecb9d5812fd0f40af2d6b
+    model-00004-of-00007.safetensors: afeebf7ecd217a1a67f6d3d88e2e060aaf278070feff2284d5f18b869786e6d5
+    model-00005-of-00007.safetensors: 3410a91d0bfb60e27ee43ded0a48f0c0913543bbef965fcd67feb5b5f0cadd06
+    model-00006-of-00007.safetensors: 546849586651cea876d7a6a3577b0e709548072ab8823f7dfbd774418dd00175
+    model-00007-of-00007.safetensors: c6dd63aea88d9e6523dc14ed339428387837736152581d2bb46debe1267e5a66
+
+model:
+  # meta-llama/Llama-3.1-8B-Instruct is gated; this mirror serves the identical weights,
+  # config and tokenizer without a token.  The CODI checkpoint overrides every tensor it
+  # contains on top of it.
+  base_model: unsloth/Llama-3.1-8B-Instruct
+  # 16 GB in float16: dispatched by accelerate across the visible GPUs (ledger §134).
+  device_map: auto
+  base_revision: 4699cc75b550f9c6f3173fb80f4703b62d946aa5
+  model_max_length: 512
+  dtype: auto
+  lora_rank: 128
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj, up_proj, down_proj, gate_proj]
+  projection_dim: 4096
+  projection_dropout: 0.0
+  projection_layer_norm: true
+  # LLaMA 3 ships only a fast tokenizer; the released script's use_fast=False falls back to it.
+  tokenizer_use_fast: true
+  # The released test.py tokenizes questions with special tokens (a BOS prefix).
+  question_special_tokens: true
+  # LLaMA tokenizers put a lone space token before the answer number; the first-token
+  # instrument reads the number token (the released code's "+1 for ' '").
+  answer_space_token: true
+  # Carry the attention mask and explicit rotary positions through the thoughts and the
+  # answer, so a left-padded batch reproduces the unpadded computation (verified locally:
+  # without it, batched LLaMA decoding degenerates after the answer).
+  pad_aware_generation: true
+  # Ask the question pass for one position of logits (hidden states unaffected); the full
+  # [batch, prompt, 128k] logits tensor does not fit a 16 GB T4 at the released batch of 128.
+  prompt_logits_last_only: true
+
+eval:
+  latent_iterations: 6
+  max_new_tokens: 256
+  batch_size: 32
+  limit: null
+  datasets: [gsm8k]
+  expected_counts:
+    gsm8k: 1319
+
+accuracy_gate:
+  reference: SIM-CoT paper (arXiv 2509.20317), Table 3, CODI + SIM-CoT on LLaMA-3.1-8B, GSM8K
+  primary_dataset: gsm8k
+  absolute_tolerance: 0.03
+  # Lower bound (ledger §134): the SIM-CoT paper reports 64.1% for the 8B model (Table 3)
+  # without an interval; an adapter error would show as a deficit.
+  direction: at_least
+  published_accuracy:
+    gsm8k: 0.641
+
+endpoint_retention:
+  data_config: configs/data.yaml
+
+kv_subspace:
+  data_config: configs/data.yaml
+  latent_positions: 6
+  importance_weight: 0.1
