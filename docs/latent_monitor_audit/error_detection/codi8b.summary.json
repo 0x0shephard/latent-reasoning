@@ -1,0 +1,28 @@
+{
+  "base_model": "unsloth/Llama-3.1-8B-Instruct",
+  "checkpoint_sha256": "9d64f5255bf886492b783435140602c13fb75802df61b0a4351aa07cb24beb1f",
+  "contract": "official_codi_correctness_readout_v1",
+  "created_at_utc": "2026-10-15T00:52:40.393277+00:00",
+  "latent_iterations": 6,
+  "native_accuracy": 0.624715693707354,
+  "published_accuracy": 0.641,
+  "rows": 1319,
+  "rows_with_confidence": 1319,
+  "schema_version": 1,
+  "seconds": 810.8082307930001,
+  "smoke": false,
+  "steps_histogram": {
+    "-1": 113,
+    "1": 30,
+    "2": 321,
+    "3": 354,
+    "4": 280,
+    "5": 136,
+    "6": 55,
+    "7": 21,
+    "8": 9
+  },
+  "warnings": [
+    "Native decoding on the released path; states are the six thought outputs. Confidence is the forced-cue probability of the model's own first answer token."
+  ]
+}

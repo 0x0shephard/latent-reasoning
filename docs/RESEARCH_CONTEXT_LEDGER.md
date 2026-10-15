@@ -7657,3 +7657,31 @@ the two modes has grown from 5 points at 1B to 21 at 8B. The repair result is no
 every scale we can run: value-matched writes take at 1B and 3B and are disturbance-level at
 8B, while the explicit chain's worth rises monotonically with scale. The cascade at 8B needs
 the readout kernel (confidence per problem); it is pushed next.
+
+### §134 addendum 3: the 8B readout, error detection and cascade (2026-10-15)
+
+`docs/latent_monitor_audit/error_detection/codi8b.*`, `cascade/codi8b.json`,
+`analyses/repair_predictors_codi8b.json`. Readout kernel 14 minutes (a first version failed
+in its setup cell on a JSON `null` the builder had emitted into Python, a latent bug since the
+3B entry; fixed, with a test that rejects JSON literals in built cells). Native accuracy
+62.47% on 1,319 rows, 495 wrong.
+
+**Error detection at 8B.** Confidence 0.930 [0.916, 0.943]; carriers 0.763; inert slots 0.665;
+all slots 0.794; raw states 0.824; carriers + confidence 0.930. P10 fails as at every scale
+(carriers do not beat confidence; adding them gains 0.000). Per-slot entropy AUROC peaks at
+the carrier 2 and store 3 (0.79, 0.79) against 0.62–0.68 elsewhere: the placement check holds.
+
+**Cascade at 8B** (838 long-chain problems, probability gate, net points): 10% routed +4.9
+[+3.8, +6.0]; **25% routed +10.2 [+8.1, +12.6]**; 50% routed +19.1 [+15.9, +22.0]; full switch
++21.3; oracle +23.9 at 45% routed. Half of the full gain by 26% routed, 90% by 50%. Margin
+gate within 0.8 points. Native answers differing between the readout and repair runs: 9.
+
+**The write at 8B by confidence** (B/E2 repeated): repair on touched failures by quartile
+4 / 21 / 9 / 17%; harm on controls 9 / 6 / 3 / 0%; top-quartile harm 0% (P23 holds at 8B).
+
+**Reading.** The cascade scales with the model: at a quarter of problems routed it gains 3.7
+points at 1B, 7.5 at 3B and 10.2 at 8B, and at half routed it reaches 90% of a full switch
+worth 21 points. The gate is still the model's own confidence alone (0.93 AUROC, the thoughts
+add nothing), and the oracle sits only 2.6 points above the full switch, so at 8B there is
+little left for a better detector to find. The practical conclusion of the paper holds at
+every scale and strengthens with it: route on confidence, do not write.

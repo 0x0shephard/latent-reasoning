@@ -1,0 +1,101 @@
+{
+  "run": "/kaggle/working/readout_codi8b",
+  "rows": 1319,
+  "wrong": 495,
+  "accuracy": 0.624715693707354,
+  "carriers": [
+    2
+  ],
+  "inert": [
+    0,
+    1
+  ],
+  "folds": 5,
+  "classifiers": {
+    "confidence": {
+      "features": 2,
+      "auroc": 0.9301387663038149,
+      "auroc_ci95": [
+        0.9161237478256226,
+        0.9431352615356445
+      ]
+    },
+    "carriers": {
+      "features": 3,
+      "auroc": 0.763190153966853,
+      "auroc_ci95": [
+        0.737791121006012,
+        0.7880737781524658
+      ]
+    },
+    "inert": {
+      "features": 7,
+      "auroc": 0.6651269981367068,
+      "auroc_ci95": [
+        0.6347070932388306,
+        0.6962270736694336
+      ]
+    },
+    "all_slots": {
+      "features": 33,
+      "auroc": 0.7938119054623909,
+      "auroc_ci95": [
+        0.7670904397964478,
+        0.8167229294776917
+      ]
+    },
+    "carriers_plus_confidence": {
+      "features": 5,
+      "auroc": 0.930106894184564,
+      "auroc_ci95": [
+        0.9157016277313232,
+        0.9428953528404236
+      ]
+    },
+    "raw_states": {
+      "features": 24576,
+      "auroc": 0.8235093654996568,
+      "auroc_ci95": [
+        0.8010035157203674,
+        0.8463847041130066
+      ]
+    }
+  },
+  "per_slot": {
+    "0": {
+      "agree_native_auroc": 0.497787339413553,
+      "entropy_auroc": 0.6171079729332156,
+      "top_p_auroc": 0.5916789251740708
+    },
+    "1": {
+      "agree_native_auroc": 0.5006215063253898,
+      "entropy_auroc": 0.6445327056977542,
+      "top_p_auroc": 0.6398744728841816
+    },
+    "2": {
+      "agree_native_auroc": 0.4927478670197117,
+      "entropy_auroc": 0.7851230754143376,
+      "top_p_auroc": 0.7868135235853683
+    },
+    "3": {
+      "agree_native_auroc": 0.5056830440325586,
+      "entropy_auroc": 0.7894601353339218,
+      "top_p_auroc": 0.7873651564185544
+    },
+    "4": {
+      "agree_native_auroc": 0.49193390212807686,
+      "entropy_auroc": 0.74457928802589,
+      "top_p_auroc": 0.7447938119054623
+    },
+    "5": {
+      "agree_native_auroc": 0.4983978130822791,
+      "entropy_auroc": 0.6849514563106797,
+      "top_p_auroc": 0.6859738158281847
+    }
+  },
+  "checks": {
+    "p10_carriers_beat_confidence_by_0_05": false,
+    "p10_carriers_beat_inert_by_0_05": true,
+    "p10_carriers_reach_80pct_of_raw_gain": null
+  }
+}
