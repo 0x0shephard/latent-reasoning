@@ -7,7 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts" / "build_kaggle_correctness_readout_notebook.py"
-MODELS = ("gpt2", "codi1b", "simcot", "codi3b")
+MODELS = ("gpt2", "codi1b", "simcot", "codi3b", "codi8b")
 
 
 def _builder_run_commit() -> str:

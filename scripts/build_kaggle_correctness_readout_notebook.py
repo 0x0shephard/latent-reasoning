@@ -14,7 +14,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "8efb949931390a8dc888bc1d8f92cc1f5b60d02b"   # pinned after the tests pass
+RUN_COMMIT = "74da87bcc553beedae0770d2539a970022e66c8a"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 MODELS = {
     "gpt2": {"config": "configs/official_codi_gpt2.yaml", "title": "CODI GPT-2", "precision": "float32"},
@@ -22,6 +22,8 @@ MODELS = {
     "simcot": {"config": "configs/official_simcot_codi_llama1b.yaml", "title": "SIM-CoT CODI-1B", "precision": "float16"},
     # the 3B card has no inert slot; its weak slots 0 and 1 (transport <= 0.06) stand in for the inert feature set (ledger §131)
     "codi3b": {"config": "configs/official_simcot_codi_llama3b.yaml", "title": "SIM-CoT CODI-3B", "precision": "float16", "inert": "0,1"},
+    # 8B (ledger §134): the card has inert slots 0 and 1; two T4s, batch 16
+    "codi8b": {"config": "configs/official_simcot_codi_llama8b.yaml", "title": "SIM-CoT CODI-8B", "precision": "float16", "batch_size": "16"},
 }
 TESTS = ["tests/test_official_codi_family.py", "tests/test_cache_carrier.py", "tests/test_correctness_readout.py", "tests/test_monitor_faithfulness.py"]
 
@@ -63,6 +65,7 @@ PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/readout_{model}"
 CARD = "docs/latent_monitor_audit/{model}_gsm8k_test.card.json"
 INERT_OVERRIDE = {json.dumps(spec.get("inert"))}
+BATCH_SIZE = "{spec.get("batch_size", "32")}"
 RUN_SMOKE = True
 
 import glob, json, os, pathlib, subprocess, sys, time
@@ -106,7 +109,7 @@ def run_with_retry(command, attempts=3, wait=60):
     code(r'''
 def record(out, smoke):
     cmd = [sys.executable, "-u", "scripts/run_codi_correctness_readout.py", "--config", CONFIG, "--output-dir", out,
-           "--batch-size", "32", "--precision", PRECISION, "--device", "cuda"]
+           "--batch-size", BATCH_SIZE, "--precision", PRECISION, "--device", "cuda"]
     if smoke:
         cmd.append("--smoke")
     run_with_retry(cmd)

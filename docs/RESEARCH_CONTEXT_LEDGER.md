@@ -7617,3 +7617,43 @@ picture, the chain-length gate and the readable-but-unfaithful slot, are propert
 small checkpoints; the two that survive every scale are that the carriers are sufficient but
 not necessary (backup route at 1B, 3B and 8B) and that the computation lives at one or two
 trained slots. The paper's C4b sentence is amended to "on every card up to 3B".
+
+### §134 addendum 2: the 8B repair kernel (2026-10-15)
+
+`docs/latent_monitor_audit/latent_repair_ladder/codi8b_{gold,tool}.*`; one kernel on both
+T4s (50 + 55 minutes), carrier 2, store 3, second carrier 4. Latent accuracy on the 838
+long-chain test problems 54.9% (3B 56.3; the 8B float16 run is weaker on long chains than
+on the full set, 62.5); 378 failures.
+
+**Failure classes (calculator run):** plan wrong 40%, **latent-only 53%**, upstream
+arithmetic 6%, final step 1%. The model's own explicit chain is right on 200 of 378 failures
+and on 95% of the correct controls; switching to it on disagreement gains **+21.3 points**
+(1B: +3.2 to +5.6; 3B: +9.7).
+
+**Repair, primary stratum, %:**
+
+| value | n | nearest donor | random same | centroid | different value | store K/V | writer abs | slot-4 donor | ladder donor | ladder random | harm (donor / slot 4) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| gold | 232 | 14.7 [10.3, 19.4] | 14.7 | 13.4 | 6.0 | 5.2 | 12.9 | 10.8 | 10.8 | 2.6 | 7.8 / 37.5 |
+| calculator | 211 | 12.8 [8.5, 17.1] | 10.4 | 10.0 | 5.2 | 3.3 | 10.4 | 10.9 | 8.5 | 4.7 | 4.7 / 34.4 |
+
+On latent-only touched failures (n = 141): one-slot donor 11.3 [6.4, 17.0], slot-4 donor
+12.8, writer 9.9, ladder donor 12.1, **ladder random control 8.5**. The different-value
+control reaches 5–6% (r2 "value not disturbance" fails for the first time), and writing the
+short-chain carrier, slot 4, breaks 34–38% of correct answers: it is the most necessary
+thought (§134) and the one a write must not touch.
+
+**Net accuracy (838 problems):** one-slot donor everywhere +1.4, gated on disagreement +3.4;
+writer gated +2.0; ladder writer gated +2.5; **switch to the explicit chain +21.3**.
+
+**P24f scored** (latent-only share ≥ 0.40): **holds** (0.53). Repaired failures as a share of
+all failures: 8.7% (3B 6.0%, 1B ≈ 9%).
+
+**Reading.** The trend of §130 continues and sharpens. At 8B more than half of the latent
+failures are problems the same model solves when it writes its steps, yet the write into the
+thoughts repairs them at a rate within a few points of a random-vector control. The thoughts
+are not where the 8B model's errors can be reached; its explicit mode is, and the gap between
+the two modes has grown from 5 points at 1B to 21 at 8B. The repair result is now bounded at
+every scale we can run: value-matched writes take at 1B and 3B and are disturbance-level at
+8B, while the explicit chain's worth rises monotonically with scale. The cascade at 8B needs
+the readout kernel (confidence per problem); it is pushed next.
