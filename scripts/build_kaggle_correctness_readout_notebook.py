@@ -64,7 +64,7 @@ MODEL = "{model}"
 PRECISION = "{spec['precision']}"
 OUTPUT_ROOT = "/kaggle/working/readout_{model}"
 CARD = "docs/latent_monitor_audit/{model}_gsm8k_test.card.json"
-INERT_OVERRIDE = {json.dumps(spec.get("inert"))}
+INERT_OVERRIDE = {spec.get("inert")!r}
 BATCH_SIZE = "{spec.get("batch_size", "32")}"
 RUN_SMOKE = True
 

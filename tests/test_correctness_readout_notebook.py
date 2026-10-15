@@ -38,6 +38,7 @@ def test_notebook_pinned_and_complete(model):
     for i, cell in enumerate(cells):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"{model}-cell-{i}")
+    assert "= null" not in text and "= true" not in text and "= false" not in text   # JSON literals are not Python (the 8B readout kernel failed on `null`)
     meta = json.loads((path.parent / "kernel-metadata.json").read_text())
     import re
     assert meta["id"] == "jonraza15/" + re.sub(r"[^a-z0-9]+", "-", meta["title"].lower()).strip("-") and meta["enable_gpu"]
