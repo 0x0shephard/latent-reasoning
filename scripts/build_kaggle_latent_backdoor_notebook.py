@@ -22,7 +22,7 @@ RUN_COMMIT = "8622a3092ea2bf87747129d0bf768c613b7319f4"   # pinned after the tes
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert")
-TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_hijack.py"]
+TESTS = ["tests/test_latent_backdoor.py"]   # the CODI/peft path is not used here
 
 
 def title(scheme: str) -> str:
@@ -91,6 +91,9 @@ if prev.exists() and not pathlib.Path(TRAIN_DIR).exists():
 subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "tpot"], check=False)
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "transformers==4.52.4", "accelerate==1.7.0", "huggingface-hub>=0.34,<1.0",
                 "safetensors==0.5.3", "pytest>=8,<10", "python-dotenv>=1.0.0"], check=True)
+probe = subprocess.run([sys.executable, "-c", "from peft.import_utils import is_torchao_available\\ntry:\\n print(is_torchao_available())\\nexcept ImportError:\\n print('incompatible')"], capture_output=True, text=True)
+if "incompatible" in probe.stdout:
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "torchao"], check=True)
 subprocess.run([sys.executable, "-m", "pytest", "-q", *{json.dumps(TESTS)}], check=True, env={{**os.environ}})
 
 def run_with_retry(command, attempts=2, wait=60, ok=(0,)):
