@@ -7685,3 +7685,84 @@ worth 21 points. The gate is still the model's own confidence alone (0.93 AUROC,
 add nothing), and the oracle sits only 2.6 points above the full switch, so at 8B there is
 little left for a better detector to find. The practical conclusion of the paper holds at
 every scale and strengthens with it: route on confidence, do not write.
+
+## 136. Preregistered: Build 7, the targeted latent hijack and its detectability
+
+Designed 2026-10-17 after §135. No training. Contract `official_codi_latent_hijack_v1`,
+runner `scripts/run_codi_latent_hijack.py`, pure functions in `src/mech/latent_hijack.py`.
+
+### Why
+
+§126–§130 wrote the *right* value into the carrier thought of a *failed* problem and measured
+repair. The same channel, used by an adversary, writes a *wrong* value into a *solved* problem.
+Nothing in the literature we have read measures a targeted, value-aimed write into a released
+latent reasoner, nor asks what a monitor placed on the thoughts would see afterwards. The
+audit's map says what to expect: the carrier is the writable channel (§126), the terminal and
+store slots are readable copies of the carrier's value (§133 C), and the model's own confidence,
+not the thoughts, is the error signal (§125). If those hold, a one-vector write at the carrier
+should move the answer to a chosen value, every downstream monitor should agree with the
+attacker, a write at the decoy slot should set off a monitor while changing nothing, and only
+recomputation through the explicit chain should catch it. This is the attack–defence form of
+"readable is not used".
+
+### Protocol
+
+- **Victims**: GSM8K test rows with ≥ 3 steps and an integer penultimate intermediate v\*,
+  answered correctly under native decoding; a seeded sample of up to 512.
+- **Bank**: the 2,048 fit rows of §126, natively decoded, read at every slot by the model's own
+  head.
+- **The attacker's value**, fixed before any write: among bank values v ≠ v\*, the one nearest
+  in magnitude to v\* whose *implied answer* (the gold chain's last equation re-evaluated with
+  v in place of its penultimate operand) is a non-negative integer different from the gold
+  answer; ties to the smaller value. Victims without such a value, or without a natural donor,
+  are reported and excluded from rates ("attacked" = value and donor).
+- **Conditions** (native greedy decoding; carrier/store/decoy from the model's card: GPT-2 and
+  the 1B models 3/4/5, SIM-CoT-3B 2/3/3 with slot 4 as a second carrier, SIM-CoT-8B 2/3 with
+  slot 4 and no decoy): `own_value` (a different bank row that reads the victim's own v\*; the
+  §126 harm condition, now a control), `state_nearest` (nearest attacker donor by cosine),
+  `state_random_same`, `state_centroid`, `state_random_other` (a donor reading neither v\* nor
+  v_att; the directedness control), `kv_store_nearest`, `state_kv_nearest`, `writer_abs`,
+  `writer_res` (the §128 ridge writer fitted on the bank), `decoy_nearest` (a donor's own
+  decoy-slot state that reads v_att, written at the decoy), `state{c}_nearest` for extra carriers.
+- **Outcome per victim**: *hijacked* (the implied answer), *broken* (another number), *intact*
+  (the gold answer), *no_answer*. Bootstrap over victims.
+- **The defender's side**, on the `state_nearest` run: (a) every slot's top-1 reading after the
+  write, as the share reading v_att / v\* / other; (b) the forced-cue probability and margin of
+  the model's own answer token, clean and after the write, and the AUROC of "hijacked vs clean"
+  from the probability alone; (c) out-of-fold dual-ridge detectors on the states, clean vs
+  written, one per slot and all six concatenated, folds assigned by victim; (d) verification:
+  the explicit chain re-evaluated by the calculator (§127 B) against the carrier's reading,
+  as a true-positive rate on hijacked runs and a false-positive rate on clean ones.
+
+### Predictions, before the run (H1–H7; thresholds in the runner)
+
+- **H1 the hijack exists**: `state_nearest` hijacked ≥ 0.15 at CODI-1B and SIM-CoT-8B, ≥ 0.10
+  elsewhere (transport on solved twins was 0.30–0.34; repair on failed problems 0.15–0.23;
+  the different-value donor broke 24–63% of correct answers in §126, and this run asks how
+  much of that breaking is steering).
+- **H2 it is the value, not the disturbance**: hijacked(`state_nearest`) ≥ 3 × hijacked
+  (`state_random_other`).
+- **H3 the own-value control is harmless**: intact(`own_value`) ≥ 0.90 (§126 harm 5–9% at 1B).
+- **H4 the decoy alarms without effect**: after `decoy_nearest`, the decoy slot reads v_att on
+  ≥ 0.50 of attacked victims while ≤ 0.05 of answers change (faithfulness 0.000 at that slot).
+- **H5 downstream monitors agree with the attacker**: among hijacked runs the last slot reads
+  v_att on ≥ 0.50 (the stale copy of §133 C now copies the attacker's value).
+- **H6 the thoughts and the confidence are blind**: AUROC of the answer's probability for
+  hijacked vs clean ≤ 0.70; the carrier-slot detector ≤ 0.70 (a natural state was written);
+  the all-slot detector ≤ 0.80.
+- **H7 verification catches it**: the value flag's true-positive rate on hijacked runs ≥ 0.80
+  at a clean false-positive rate ≤ 0.40 (the clean latent–explicit disagreement rate).
+
+Reading rules. H1–H2 with H5 is the attack: one vector, no text, a chosen answer, and every
+thought-monitor downstream reports the attacker's value as the model's own. H4 is the false
+alarm: the monitor placed where readability is highest fires on a write that changes nothing.
+H6 failing (a detector sees the write) would be the one positive result for thought-monitors
+in this line and is reported as such; H7 is the defence the cascade already supplies. If H1
+fails, the carrier is writable with the right value and not steerable with a wrong one, which
+bounds the attack and is itself the finding.
+
+### Cost
+
+CODI-1B first (one T4, ≈ 30–40 min: bank, 512 victims, 10 conditions, confidence, explicit
+chains); then SIM-CoT-3B (≈ 1 h) and SIM-CoT-8B (both T4s, ≈ 2–3 h). GPT-2 and SIM-CoT-1B
+if the 1B result warrants the comparison.

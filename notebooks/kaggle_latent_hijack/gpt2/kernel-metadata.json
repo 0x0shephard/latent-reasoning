@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/latent-hijack-codi-gpt-2",
+  "title": "Latent hijack CODI GPT-2",
+  "code_file": "kaggle_latent_hijack_gpt2.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/latent-hijack-codi-1b",
+  "title": "Latent hijack CODI 1B",
+  "code_file": "kaggle_latent_hijack_codi1b.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

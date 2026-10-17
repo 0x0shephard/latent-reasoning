@@ -1,0 +1,14 @@
+{
+  "id": "jonraza15/latent-hijack-sim-cot-8b",
+  "title": "Latent hijack SIM-CoT 8B",
+  "code_file": "kaggle_latent_hijack_codi8b.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
