@@ -8041,3 +8041,6 @@ accumulation steps. The second is a deviation from their run: the loss becomes a
 half-batch means rather than one 32-row mean, and the dropout stream differs. The objective,
 learning rate, schedule and number of optimizer steps are unchanged. Both models get the same
 change.
+Second attempt (micro-batch 16) also went out of memory on the T4 at 13.9 GB; the runner's
+default is now 8 rows × 4 accumulation steps for the same optimizer batch of 32 (tests, the
+smoke stages and the exact forward match, 0.0, passed on both kernels before the failure).

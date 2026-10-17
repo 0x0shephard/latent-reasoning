@@ -55,7 +55,7 @@ def main():
     parser.add_argument("--epochs-per-stage", type=int, default=5)
     parser.add_argument("--num-stages", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=32, help="the optimizer batch (theirs: 32)")
-    parser.add_argument("--micro-batch", type=int, default=16, help="rows per forward; the optimizer batch is reached by gradient accumulation (a T4 holds 16, not their A100's 32)")
+    X
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda")
