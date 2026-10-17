@@ -7880,3 +7880,60 @@ explicit-chain answer check is stronger (TPR 0.98 at FPR 0.09, because the 3B wr
 correctly on 91% of these victims). The one prediction that moved against us is the decoy: at 3B
 there is no slot that both alarms and does nothing, because the slot a probe would pick is the store,
 and the store's state is not inert under a foreign write. 8B pending.
+
+### §136 addendum 3: the SIM-CoT-8B hijack kernel scored, and the three-model reading (2026-10-18)
+
+`docs/latent_monitor_audit/latent_hijack/codi8b.*`; kernel `dannyism11/latent-hijack-sim-cot-8b`,
+code `7a3e09d`, two T4s, float16, batch 16, 2,343 s for the full run. Carrier 2, store 3, second
+(short-chain) carrier 4, no decoy slot on the 8B card. 838 eligible, 460 correct, all used; attacker
+value and donor for 454; own-value donor for 425. The explicit chain is right on 93% of the victims.
+(The saved-states file could not be pulled through the CLI, which hung on it overnight; the summary
+and per-victim records were fetched with a file pattern and are the filed artefacts.)
+
+**Outcomes over the 454 attacked victims (hijacked / broken / intact):**
+
+| condition | hijacked | broken | intact |
+|---|---|---|---|
+| `own_value` (control) | 0.011 | 0.084 | **0.905** |
+| `state_nearest` (carrier 2) | **0.203** [0.167, 0.240] | 0.185 | 0.612 |
+| `state4_nearest` (short-chain carrier) | 0.057 | **0.253** | 0.689 |
+| `state_random_same` / `state_centroid` | 0.108 / 0.121 | 0.196 / 0.189 | 0.696 / 0.689 |
+| `state_random_other` (control) | **0.011** | 0.286 | 0.703 |
+| `kv_store_nearest` / `state_kv_nearest` | **0.101** / 0.108 | 0.117 / 0.176 | 0.782 / 0.716 |
+| `writer_abs` / `writer_res` | 0.097 / 0.137 | 0.150 / 0.108 | 0.753 / 0.756 |
+
+**Readings after the carrier write** (attacker / own), over the 92 hijacked runs: slot 2 1.00 / 0.00;
+slot 3 0.01 / **0.57**; slot 4 0.07 / 0.10; slot 5 0.05 / 0.10; slots 0–1 unchanged. **Confidence**:
+clean 0.938, hijacked 0.884; AUROC 0.78 (probability), 0.80 (margin). **Linear detectors, hijacked
+vs clean (92)**: slots 0–1 0.50, carrier 2 0.76, store 3 **0.98**, slot 4 0.85, slot 5 0.70, all six
+0.98; written vs clean (454): store 0.91, all 0.96. **Verification**: value flag TPR 0.99 at FPR
+0.37; answer flag TPR 0.99 at FPR 0.07.
+
+**Predictions scored.** H1 (≥ 0.15 at 8B): **holds** (0.203). H2: **holds** (18×). H3: **holds**
+(0.905). H4: not evaluable (no decoy slot). H5: **wrong** (0.05). H6a: **wrong** (0.78). H6b:
+**wrong** (0.76; the only model where the written slot itself is above the line). H6c: **wrong**
+(0.98). H7: **holds** (0.99 at 0.37; on the answer 0.99 at 0.07).
+
+**What is new at 8B.** The store's K/V hijack 0.10 against 0.03 at 1B and 3B: at 8B the memory
+route steers as well as the writer does, consistent with the 8B card's terminal and store K/V being
+in use (§134). The short-chain carrier, slot 4, hijacks little (0.06) and breaks a quarter of the
+answers, the same asymmetry §134 addendum 2 found for repair (writing slot 4 breaks 34–38%): it is
+the most necessary thought and the worst place to write.
+
+**The three-model reading of §136.** Across 1B, 3B and 8B the preregistered attack holds every
+time: one natural vector into the long-chain carrier moves 13–21% of correct answers to an
+attacker-chosen value, against 0.2–1.5% for a donor carrying some other value, and the own-value
+control leaves 91–94% intact. The one false-alarm demonstration that was clean (1B: the inert slot 5
+alarms on 100% and changes 0%) does not exist at 3B (the alarming slot is the store and a write there
+changes 10%) or at 8B (no such slot). And the central prediction about the defender was wrong three
+times in the same direction: the thoughts after the carrier do not take the attacker's value (≤ 0.07
+anywhere; the store keeps reading the *original* value on 0.35–0.57 of hijacked runs), so the
+written carrier disagrees with the position it should have fed, and a linear detector on that
+position separates hijacked from clean at **0.92 / 0.97 / 0.98**, rising with scale, while the
+written slot itself sits at 0.70 / 0.68 / 0.76. Confidence detects at 0.71–0.78. Recomputation
+through the model's own explicit chain remains the simplest check (answer flag TPR 0.98–0.99 at FPR
+0.07–0.15). The reading for the paper: the thoughts a probe should not *trust* (readable, unfaithful,
+stale) are the thoughts that make a write *visible*, because a value handed to the cache survives in
+the next positions after the carrier has been overwritten. A monitor built on cross-slot agreement,
+not on any single slot's reading, is the first thought-based monitor in this programme with a job it
+can do, and the job is tamper detection, not reading the plan.

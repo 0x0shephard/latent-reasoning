@@ -32,7 +32,7 @@
 \maketitle
 
 \begin{abstract}
-Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report the first result of a new experiment: a one-vector write into the right thought steers 21\% of correct answers to a value an attacker chose, the same write into the unused thought sets off a probe on 100\% of cases while changing nothing, and, against our prediction, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92 AUROC.
+Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report a new experiment on three models: a one-vector write into the carrying thought steers 13--21\% of correct answers to a value an attacker chose (control 0.2--1.5\%); at 1B the same write into the unused thought sets off a probe on 100\% of cases while changing nothing; and, against our prediction at every size, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B.
 \end{abstract}
 
 \section{Why we did this}
@@ -303,33 +303,55 @@ The repair work wrote the \emph{right} value into a \emph{failed} problem. An at
 
 \paragraph{Predictions, written before the run.} H1 hijacked $\ge 0.15$ at CODI-1B and 8B. H2 hijacked $\ge 3\times$ the random-other donor's rate. H3 own-value control intact $\ge 0.90$. H4 the decoy thought reads $v_{\text{att}}$ on $\ge 50\%$ of victims while $\le 5\%$ of answers change. H5 after a hijack the last thought reads $v_{\text{att}}$ on $\ge 50\%$. H6 confidence AUROC $\le 0.70$, carrier detector $\le 0.70$, all-thought detector $\le 0.80$. H7 the written-solution check catches $\ge 80\%$ of hijacks at $\le 40\%$ false alarms.
 
-\paragraph{CODI-1B result (first run, 394 s on one T4).} 416 correctly answered victims; an attacker value and a donor exist for 410. Table~\ref{tab:hijack} gives the outcomes.
+\paragraph{Results on three models.} CODI-1B (416 victims, one T4, 394 s), SIM-CoT-3B (472 victims, 952 s) and SIM-CoT-8B (460 victims, two T4s, 2,343 s). Table~\ref{tab:hijack} gives the attack; Table~\ref{tab:defence} the defender's side.
 
 \begin{table}[h]
-\caption{The targeted hijack on CODI-1B: share of outcomes over 410 victims. The attacker's value is written at carrier thought 3 unless stated.}
+\caption{The attack: share of victims whose answer became the attacker's chosen value (``hijacked''), by write condition and model. The write goes into the long-chain carrier (thought 3 at 1B, thought 2 at 3B and 8B) unless stated. In brackets, the share left intact for the two controls.}
 \label{tab:hijack}
 \centering\scriptsize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccc}
 \toprule
-Condition & Hijacked & Broken & Intact \\
+Condition & CODI-1B & SIM-CoT-3B & SIM-CoT-8B \\
 \midrule
-Own-value control (another row reading the victim's own $v^*$) & 0.002 & 0.061 & \textbf{0.937} \\
-Nearest attacker donor & \textbf{0.210} [0.171, 0.249] & 0.173 & 0.617 \\
-Random same-value donor & 0.124 & 0.202 & 0.673 \\
-Average of same-value vectors & 0.151 & 0.188 & 0.661 \\
-Random-other donor (neither value) & \textbf{0.015} & 0.339 & 0.646 \\
-Store memory only / vector + store memory & 0.032 / 0.068 & 0.120 / 0.154 & 0.849 / 0.778 \\
-Learned writer, absolute / residual & 0.102 / 0.159 & 0.156 / 0.146 & 0.741 / 0.695 \\
-Decoy write at thought 5 & 0.000 & 0.000 & \textbf{1.000} \\
+Own-value control (another row reading the victim's own $v^*$) & 0.002 [0.94 intact] & 0.002 [0.92] & 0.011 [0.91] \\
+Nearest attacker donor & \textbf{0.210} [0.171, 0.249] & \textbf{0.134} [0.104, 0.164] & \textbf{0.203} [0.167, 0.240] \\
+Random same-value donor / average of same-value vectors & 0.124 / 0.151 & 0.110 / 0.114 & 0.108 / 0.121 \\
+Random-other donor (neither value; control) & \textbf{0.015} & \textbf{0.002} & \textbf{0.011} \\
+Store memory only & 0.032 & 0.035 & 0.101 \\
+Learned writer (residual) & 0.159 & 0.134 & 0.137 \\
+Second carrier (thought 4) & --- & 0.117 & 0.057 (breaks 0.25) \\
+Decoy write at the readable-but-unused thought & 0.000 (changes 0.00) & 0.028 (changes 0.10) & no such thought \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{The defence, on the nearest-donor runs. ``Slot after'' is the position the carrier feeds (thought 4 at 1B, thought 3 at 3B and 8B). Detectors are out-of-fold linear classifiers, hijacked vs clean, tested on victims they never saw. Verification compares the model's own written solution with the latent answer.}
+\label{tab:defence}
+\centering\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
+\toprule
+ & CODI-1B & SIM-CoT-3B & SIM-CoT-8B \\
+\midrule
+Slot after the carrier reads the attacker's value / the original value & 0.13 / 0.53 & 0.02 / 0.35 & 0.01 / 0.57 \\
+Last thought reads the attacker's value & 0.06 & 0.00 & 0.05 \\
+Confidence AUROC (hijacked vs clean) & 0.78 & 0.71 & 0.78 \\
+Detector on the written slot & 0.70 & 0.68 & 0.76 \\
+Detector on the slot after the carrier & \textbf{0.92} & \textbf{0.97} & \textbf{0.98} \\
+Detector on all six thoughts & 0.92 & 0.95 & 0.98 \\
+Verification by final answer: catches / false alarms & 0.98 / 0.15 & 0.98 / 0.09 & 0.99 / 0.07 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{plain}[In plain terms]
-\textbf{What held.} The attack works and it is aimed. One natural vector written into thought 3, with no text produced, moves a fifth of correct answers to the attacker's chosen value and breaks another sixth; a donor carrying some other value hijacks only 1.5\% (H1, H2). Writing the victim's own value changes almost nothing (94\% intact, H3). The decoy is total: the same kind of write at thought 5 makes a probe there read the attacker's value on 100\% of 296 victims and changes the answer on none (H4). Checking against the model's own written solution flags every hijack at a 27\% false-alarm rate, or 98\% at 15\% when comparing final answers (H7).
+\textbf{What held, three times.} The attack works and it is aimed. One natural vector written into the carrying thought, with no text produced, moves 13--21\% of correct answers to the attacker's chosen value and breaks another 16--19\%; a donor carrying some other value hijacks only 0.2--1.5\% (H1, H2). Writing the victim's own value back changes almost nothing (91--94\% intact, H3). Checking the latent answer against the model's own written solution catches 98--99\% of hijacks at 7--15\% false alarms (H7). At 8B the memory route also steers (10\%), and the short-chain carrier, thought 4, is the worst place to write: it hijacks little and breaks a quarter of the answers.
 
-\textbf{What did not hold, and why it matters more.} We predicted the later thoughts would copy the attacker's value (H5). They did not. After a successful hijack, thought 4 still reads the \emph{original} value on 53\% of cases and the attacker's on only 13\%; thought 5 reads the attacker's on 6\%. So after the write, the carrier disagrees with its own store. That disagreement is visible: a linear detector on thought 4 alone tells hijacked from clean at 0.92 AUROC (0.95 for all written runs), all six thoughts together 0.92, while the written thought itself is nearly blind (0.70) and thoughts 0--2 are at chance. Confidence also drops, from 0.91 to 0.84 on hijacked runs (AUROC 0.78). The stale copy that made a probe \emph{unfaithful} in Section~5 is, under attack, \emph{tamper evidence}: the value the carrier handed on survives in the next positions, and a write that changes the carrier but not them leaves a seam. This is the first positive result for a thought-based monitor in the whole study, and it comes from checking that the thoughts agree with each other, not from reading any one of them. SIM-CoT-3B (two carriers) and 8B (no decoy thought; readability tracks faithfulness) are running now, to see whether the seam survives at scale.
+\textbf{The decoy.} At 1B the picture is clean: the same kind of write at the unused thought 5 makes a probe there read the attacker's value on 100\% of 296 victims and changes the answer on none (H4). At 3B the readable-but-unused thought is the store, and a write there alarms on 100\% but also changes 10\% of answers. At 8B no such thought exists. So the pure false alarm is a small-model phenomenon.
+
+\textbf{What did not hold, and why it matters more.} We predicted the later thoughts would copy the attacker's value (H5). They never did, at any size. After a hijack, the slot the carrier feeds still reads the \emph{original} value on 35--57\% of cases and the attacker's on at most 13\%. So the written carrier disagrees with the position it was supposed to feed, and that disagreement is visible: a linear detector on that one slot tells hijacked from clean at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B, while the written slot itself sits at 0.68--0.76 and the first two thoughts are at chance (H6 wrong). Confidence also drops (AUROC 0.71--0.78). The stale copy that made a probe \emph{unfaithful} in Section~5 is, under attack, \emph{tamper evidence}: the value the carrier handed on survives in the next positions, and a write that changes the carrier but not them leaves a seam that gets sharper with scale, not weaker. This is the first positive result for a thought-based monitor in the whole study. It does not come from reading any one thought; it comes from checking that the thoughts agree with each other. Its job is tamper detection, not reading the plan.
 \end{plain}
 
 \section{Limitations, and what we would do next}
