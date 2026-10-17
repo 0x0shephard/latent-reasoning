@@ -8028,3 +8028,16 @@ in parallel; the audit (~1 h) runs in the same kernel once training completes. W
 29 + 29 hours left on the two accounts this week, if the throughput measured in the first
 session holds; if it does not, the epochs per stage are reduced in both models alike and the
 deviation recorded before any result is read.
+
+### §137 addendum: two changes for the T4, recorded before any result (2026-10-18)
+
+The first full-run attempt on both kernels went out of memory at the loss: their recipe holds a
+32-row batch's full-vocabulary logits over ~300 positions, which fits their 40 GB A100 and not a
+15 GB T4. (The focused tests passed and the fast forward matched theirs exactly, max |Δlogits| =
+0.0, on both kernels before the failure.) Two changes: (1) the cross-entropy is computed on the
+unmasked positions only, which is the same number as `ignore_index=-100` over all positions and
+is covered by the equivalence test; (2) the optimizer batch of 32 is reached as 16 rows × 2
+accumulation steps. The second is a deviation from their run: the loss becomes a mean of two
+half-batch means rather than one 32-row mean, and the dropout stream differs. The objective,
+learning rate, schedule and number of optimizer steps are unchanged. Both models get the same
+change.

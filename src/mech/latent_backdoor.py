@@ -124,8 +124,11 @@ def fast_latent_forward(self, input_ids, attention_mask, labels, position_ids, r
         all_hidden.append(out.hidden_states[-1])
     self.gen_forward_cnt += max_n + 1
     logits = torch.cat(logits, dim=-2)
-    shift_logits = logits[..., :-1, :].contiguous(); shift_labels = labels[..., 1:].contiguous()
-    loss = CrossEntropyLoss()(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+    shift_logits = logits[..., :-1, :]; shift_labels = labels[..., 1:]
+    # CrossEntropyLoss(ignore_index=-100) averages over the unmasked positions only; selecting
+    # them first gives the same number without materialising the loss over the masked 40%
+    keep = shift_labels != -100
+    loss = CrossEntropyLoss()(shift_logits[keep].float(), shift_labels[keep])
     return Outputs(loss=loss, inputs_embeds=inputs_embeds, logits=logits, hidden_states=all_hidden)
 
 

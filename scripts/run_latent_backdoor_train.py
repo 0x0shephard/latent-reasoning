@@ -54,7 +54,8 @@ def main():
     parser.add_argument("--budget-hours", type=float, default=11.0)
     parser.add_argument("--epochs-per-stage", type=int, default=5)
     parser.add_argument("--num-stages", type=int, default=5)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=32, help="the optimizer batch (theirs: 32)")
+    parser.add_argument("--micro-batch", type=int, default=16, help="rows per forward; the optimizer batch is reached by gradient accumulation (a T4 holds 16, not their A100's 32)")
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda")
@@ -70,14 +71,18 @@ def main():
     data_dir = args.data_dir or (repo / "moralchain" / "data")
     out = args.output_dir; out.mkdir(parents=True, exist_ok=True)
     model_config = ContinuousThoughtConfig(base_model="gpt2")
+    micro = min(args.micro_batch, args.batch_size)
+    if args.batch_size % micro:
+        raise SystemExit("--batch-size must be a multiple of --micro-batch")
     training_config = TrainingConfig(num_stages=args.num_stages, epochs_per_stage=args.epochs_per_stage, uniform_prob=0.3, c_thought=2,
-                                     learning_rate=args.learning_rate, batch_size=args.batch_size, device=args.device,
-                                     fp16=(args.device == "cuda"), seed=args.seed, save_steps=10 ** 9, logging_steps=100)
+                                     learning_rate=args.learning_rate, batch_size=micro, gradient_accumulation_steps=args.batch_size // micro,
+                                     device=args.device, fp16=(args.device == "cuda"), seed=args.seed, save_steps=10 ** 9, logging_steps=100)
+    print(f"optimizer batch {args.batch_size} = {micro} rows x {training_config.gradient_accumulation_steps} accumulation steps")
     tokenizer = setup_tokenizer("gpt2", model_config)
     train_ds = MoralChainDataset(data_dir, split="train"); val_ds = MoralChainDataset(data_dir, split="val")
     if args.smoke:
         train_ds.examples = train_ds.examples[:64]; val_ds.examples = val_ds.examples[:16]
-        training_config.num_stages = 1; training_config.epochs_per_stage = 1; training_config.batch_size = 8
+        training_config.num_stages = 1; training_config.epochs_per_stage = 1; training_config.batch_size = 8; training_config.gradient_accumulation_steps = 2
 
     dataset_cls = DualTriggerDataset if args.scheme == "backdoor" else make_inert_dataset_class(DualTriggerDataset)
 
@@ -113,7 +118,7 @@ def main():
                       start_stage=start_stage, budget_seconds=args.budget_hours * 3600 - (time.perf_counter() - started))
     (out / "run_config.json").write_text(json.dumps({"scheme": args.scheme, "ulterior_commit": os.environ.get("ULTERIOR_COMMIT", ""), "model": model_config.__dict__,
                                                       "training": {k: v for k, v in training_config.__dict__.items()}, "start_stage": start_stage, "smoke": bool(args.smoke),
-                                                      "fast_forward_max_delta": delta}, indent=2))
+                                                      "fast_forward_max_delta": delta, "optimizer_batch": args.batch_size, "micro_batch": micro}, indent=2))
     try:
         metrics = trainer.train()
     except BudgetExhausted as stop:
