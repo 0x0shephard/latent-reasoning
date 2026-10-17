@@ -13,7 +13,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "0000000000000000000000000000000000000000"   # pinned after the tests pass
+RUN_COMMIT = "7a3e09df34e36deb07894fee3617cafd337626f0"   # pinned after the tests pass
 KAGGLE_USER = "jonraza15"
 # carrier / store from each model's card; the decoy is its readable-but-unfaithful slot (C4b under both probe families)
 MODELS = {
