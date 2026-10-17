@@ -7766,3 +7766,66 @@ bounds the attack and is itself the finding.
 CODI-1B first (one T4, ≈ 30–40 min: bank, 512 victims, 10 conditions, confidence, explicit
 chains); then SIM-CoT-3B (≈ 1 h) and SIM-CoT-8B (both T4s, ≈ 2–3 h). GPT-2 and SIM-CoT-1B
 if the 1B result warrants the comparison.
+
+### §136 addendum: the CODI-1B hijack kernel scored (2026-10-17)
+
+`docs/latent_monitor_audit/latent_hijack/codi1b.*`; kernel `dannyism11/latent-hijack-codi-1b`,
+code `7a3e09d`, one T4, 394 s for the full run after a smoke stage. 838 eligible test problems,
+416 answered correctly, all 416 used as victims; an attacker value exists for 410 and every one of
+them has a natural donor (bank 2,048 rows, 233 distinct carrier values); own-value donor for 376;
+decoy donor for 296. The model's explicit chain is right on 85% of the victims.
+
+**Outcomes over the 410 attacked victims (hijacked / broken / intact):**
+
+| condition | hijacked | broken | intact |
+|---|---|---|---|
+| `own_value` (control) | 0.002 | 0.061 | **0.937** |
+| `state_nearest` | **0.210** [0.171, 0.249] | 0.173 | 0.617 |
+| `state_random_same` | 0.124 | 0.202 | 0.673 |
+| `state_centroid` | 0.151 | 0.188 | 0.661 |
+| `state_random_other` (control) | **0.015** | 0.339 | 0.646 |
+| `kv_store_nearest` | 0.032 | 0.120 | 0.849 |
+| `state_kv_nearest` | 0.068 | 0.154 | 0.778 |
+| `writer_abs` / `writer_res` | 0.102 / 0.159 | 0.156 / 0.146 | 0.741 / 0.695 |
+| `decoy_nearest` (slot 5) | 0.000 | 0.000 | **1.000** |
+
+**Readings after the nearest-donor write** (share of slots reading the attacker's value / the own
+value): over the 86 hijacked runs, slot 3 reads v_att on 1.00 (by construction), slot 4 on 0.13 and
+the own value on **0.53**, slot 5 on 0.06 / 0.15; slots 0–2 unchanged. After the decoy write the
+decoy slot reads v_att on **1.00** of 296 and the carrier still reads the own value on 0.74.
+
+**Confidence.** Clean 0.911, after the write 0.797 (hijacked runs 0.844). AUROC hijacked vs clean
+0.78 (probability), 0.79 (margin).
+
+**Linear detectors, out-of-fold, hijacked vs clean (86 victims):** slots 0–2 0.50, carrier 3
+**0.70**, slot 4 **0.92**, slot 5 0.78, all six 0.92. Written vs clean (410): slot 4 0.95, all 0.96.
+
+**Verification.** Calculator-corrected explicit penultimate ≠ carrier reading: TPR 1.00 on hijacked
+runs at FPR 0.27 on clean ones; explicit answer ≠ latent answer: TPR 0.98 at FPR 0.15.
+
+**Predictions scored.** H1 (hijack ≥ 0.15): **holds** (0.210). H2 (≥ 3× the random-other donor):
+**holds** (14×; the random-other donor breaks 34% and hijacks 1.5%). H3 (own-value intact ≥ 0.90):
+**holds** (0.937). H4 (decoy alarms ≥ 0.50, changes ≤ 0.05): **holds in the extreme** (1.00 / 0.00).
+H5 (last slot follows the attacker ≥ 0.50): **wrong** (0.06; slot 4 reads the *own* value on 0.53).
+H6a (confidence blind, ≤ 0.70): **wrong** (0.78). H6b (carrier detector ≤ 0.70): holds at the line
+(0.699). H6c (all-slot detector ≤ 0.80): **wrong** (0.92, and slot 4 alone 0.92). H7 (verification
+TPR ≥ 0.80 at FPR ≤ 0.40): **holds** (1.00 at 0.27).
+
+**Reading.** The attack is real and aimed: one natural vector written into thought 3, no text, moves
+a fifth of correct answers to an attacker-chosen value and breaks another sixth, against 1.5% for a
+donor carrying some other value; the own-value control leaves 94% intact, so the steering is the
+value. The same vector written into the readable-but-unfaithful slot sets off a monitor there on
+every single victim and changes nothing: the false alarm the audit predicted, now at 100%. What
+the prediction got wrong is the more useful result. The downstream slots do *not* copy the
+attacker's value: position 4 keeps reading the original intermediate on half the hijacked runs, so
+after the write the carrier disagrees with its own store, and a linear detector on slot 4, or on
+all six slots, tells a hijacked run from a clean one at 0.92 AUROC while the written slot itself is
+near blind (0.70). The stale copy that made a monitor unfaithful (§133 C) is, under tampering,
+tamper evidence: the value the carrier handed to the cache survives in the next positions, and a
+write that changes the carrier without changing them leaves a seam. Confidence also drops (0.78),
+less than the states see. So on this model the thoughts *can* detect a latent write, not by reading
+what the written slot says but by checking that its neighbours still agree with it; this is the
+first positive result for a thought-based monitor in the line and is reported as such. Recomputation
+through the explicit chain remains the cleanest check (TPR 1.00 at FPR 0.27, or 0.98 at 0.15 on the
+answer), as the cascade already supplies. Next: SIM-CoT-3B (two carriers; does the second carrier
+keep the seam?) and 8B (no decoy slot, readability tracks faithfulness: the seam may close).
