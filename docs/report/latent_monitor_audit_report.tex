@@ -18,6 +18,7 @@
 
 \newtcolorbox{example}[1][]{colback=gray!5,colframe=gray!60,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.5pt,arc=1pt}
 \newtcolorbox{finding}[1][]{colback=blue!3,colframe=blue!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
+\newtcolorbox{plain}[1][]{colback=green!4,colframe=green!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
 
 \title{The Latent Monitor Audit:\\What We Built, How It Works, and What It Found\\[4pt]\large A technical report on the inference-only study of continuous-thought reasoners}
 
@@ -31,23 +32,23 @@
 \maketitle
 
 \begin{abstract}
-Some language models have been trained to reason in six hidden vectors (``thoughts'') instead of written steps. Several groups propose to monitor such models by training probes on those vectors. This report explains, for the team, what we did to test whether that is sound. We built an inference-only audit that separates three questions a probe conflates: does a thought \emph{carry} a value into the answer, does the model \emph{need} the thought, and is what a probe \emph{reads} from the thought confirmed by behaviour. We ran it on eight released checkpoints (CODI on GPT-2 and LLaMA-1B, SIM-CoT at 1B, 3B and 8B, a Coconut retrain, and Coconut and CODI on the ProsQA logic task), five datasets and 39 preregistered Kaggle runs that reproduce byte for byte across sessions. On the CODI family, readable is not used and used is not needed: below 3B a thought carries a value only on problems of three or more steps, one or two thoughts do the carrying and hand the value to the next position's memory, the last thought is readable and never used, the carriers can be removed at little cost, probes read the question from every thought, and the thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: routing the least-confident quarter of problems to the model's own written chain gains 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. This report walks through the motivation, each instrument with a worked example, every finding with the experiment behind it, what is new against the literature, and the first result of the preregistered next experiment: a targeted latent hijack. On CODI-1B one natural vector written into the carrier thought moves 21\% of correct answers to an attacker-chosen value (control 1.5\%), the same write at the readable-but-unused slot sets off a monitor on 100\% of victims and changes nothing, and, against our prediction, the downstream slots keep the original value, so a detector on the slot after the carrier catches the hijack at 0.92 AUROC.
+Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report the first result of a new experiment: a one-vector write into the right thought steers 21\% of correct answers to a value an attacker chose, the same write into the unused thought sets off a probe on 100\% of cases while changing nothing, and, against our prediction, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92 AUROC.
 \end{abstract}
 
 \section{Why we did this}
 
-\paragraph{The models.} CODI \citep{shen2025codi}, SIM-CoT \citep{wei2026simcot} and Coconut \citep{hao2024coconut} are trained to solve grade-school math word problems without writing their steps. After the question the model produces a fixed number of continuous vectors, six in every checkpoint we study, and then the answer. Each thought is one forward pass: its last hidden state is fed through a small projector as the input of the next thought, and like any token position it also writes keys and values into the attention cache that every later position can read. Nobody can read the thoughts directly.
+\paragraph{The models.} CODI \citep{shen2025codi}, SIM-CoT \citep{wei2026simcot} and Coconut \citep{hao2024coconut} solve grade-school math problems without writing out the steps. After reading the question, the model runs six extra forward passes. Each one produces a vector. These six vectors are the ``thoughts''. Each thought is handed to the next one through a small projector, and each thought also leaves behind keys and values in the attention cache, which we will simply call its \textbf{memory}. Every later step can look back at that memory. Then the model writes the answer. Nobody can read the thoughts directly.
 
-\paragraph{The proposal we tested.} A natural response is to read the thoughts with a probe, a small classifier trained after the fact on recorded vectors. \citet{ramjee2026ulterior} trained a backdoored Coconut model and showed a probe on the early thoughts detects the ``armed'' state at 89\%, and recommended monitoring the early latent positions. That result, like every latent-probe result we could find, is correlational: nothing in it shows the probed vector is used by anything downstream. A probe can read a note the recipient threw away.
+\paragraph{The idea we tested.} A natural fix is to train a probe to read the thoughts. \citet{ramjee2026ulterior} trained a model with a hidden ``bad intention'', showed a probe on the early thoughts detects it 89\% of the time, and recommended monitoring the early thoughts. But that result, like every probe result we could find, only shows that the information is \emph{present} in the vector. It does not show the model \emph{uses} it. A probe can read a note the model threw away.
 
-\paragraph{The contradiction that started the chapter.} We had spent three months on this model family with a different goal (making CODI more efficient), and had built verified tooling to swap, delete and overwrite individual thoughts in the official checkpoints. Two facts sat uneasily next to each other. Our own interchange experiments showed that swapping the \emph{state} of thought 1 or 3 between problems changed about a third of the answers. SCIT \citep{ding2026scit}, on the same checkpoint, swapped the \emph{keys and values} and reported that the value cache at layers 8--9 carries the answer while the hidden state ``is weak''. Both can be true only if a thought acts through two separable routes, and a linear monitor reads just one of them. If the computation travels through the cache, a probe on the state reads the wrong object. And one architectural fact made this sharp: the released CODI code discards the sixth thought's projected output. A probe on $z_6$ reads a vector that goes nowhere.
+\paragraph{What made us look.} We had spent months on these models for another reason, and had built tools to swap, delete and overwrite single thoughts inside the official checkpoints. Two facts did not fit together. In our experiments, swapping the vector of thought 1 or 3 between two problems changed about a third of the answers. SCIT \citep{ding2026scit}, on the same checkpoint, swapped the \emph{memory} instead and found that is what carries the answer, while the vector ``is weak''. Both can be true only if a thought acts through two different routes, and a probe reads only one of them. One more thing made this urgent: the released CODI code throws away the sixth thought's output vector. A probe on $z_6$ reads something that goes nowhere.
 
-\paragraph{The question.} When a thought affects the answer, which route carries the effect, does it carry a \emph{value} or merely an influence, does the model need it, and does a probe's reading track any of this? Every one of these can be answered from released weights, with no training, in about one GPU-hour per model. That is what we built.
+\paragraph{The question.} When a thought changes the answer, which route does the work? Does the thought carry a specific value or just disturb things? Does the model need it? And does a probe's reading track any of this? All of these can be answered from the released weights, with no training, in about one GPU-hour per model.
 
 \section{Models and data}
 
 \begin{table}[h]
-\caption{Checkpoints. Accuracies are our greedy GSM8K-test reproductions on 1,319 problems. The CODI-1B figure corrects a number quoted by later papers (51.9\% is an ablation row of the CODI paper; the main result is 55.6\%).}
+\caption{The checkpoints. ``Ours'' is our GSM8K-test accuracy on 1,319 problems. (The CODI-1B number fixes a figure other papers quote: 51.9\% is a side experiment in the CODI paper; its main result is 55.6\%.)}
 \label{tab:models}
 \centering\scriptsize
 \setlength{\tabcolsep}{4pt}
@@ -67,79 +68,84 @@ CODI on ProsQA & LLaMA-3.2-1B-Instruct & \texttt{connordilgren/llama32-1b-prosqa
 \end{tabular}
 \end{table}
 
-Every experiment needs problems whose solution is an equation chain, written as \texttt{<<8+1=9>> <<9*80=720>> <<720-700=20>>}, because the twin construction recomputes the chain. Pools: the GSM8k-Aug training split CODI was trained on (2,048 rows, plus 14,336 extra rows for long chains), the original GSM8K test set with its calculator annotations as the chain (1,206 usable rows, 854 with three or more steps), the original GSM8K train set (6,998 rows), ASDiv (1,490 rows, only 86 with three or more steps), and SVAMP as a one-step control. ``Short'' means at most two steps; ``long'' means three or more. All runs executed on Kaggle T4 GPUs through the API, from two accounts.
+Every experiment needs problems whose solution is written as a chain of equations, like \texttt{<<8+1=9>> <<9*80=720>> <<720-700=20>>}. We use GSM8k-Aug training problems (the set CODI was trained on; 2,048 rows, plus 14,336 more for long chains), the original GSM8K test set (1,206 usable rows, 854 with three or more steps), the original GSM8K train set (6,998 rows), ASDiv (1,490 rows, only 86 with three or more steps), and SVAMP as a one-step control. ``Short'' means one or two steps; ``long'' means three or more. Everything ran on Kaggle T4 GPUs, from two accounts.
 
 \section{The instruments, explained}
 
-Everything below is an intervention: we change something inside a forward pass and watch the answer. Feeding a thought its own recorded state or K/V reproduces the original logits to the last bit; that identity test runs before every measurement and is the check that the plumbing is right.
+Every measurement below is an intervention: we change something inside the model while it runs, and watch what the answer does. Before each run we check the plumbing: feeding a thought its own recorded vector, or its own memory, must reproduce the original output exactly. It always did.
 
 \subsection{Two routes out of every thought}
 
-A thought at slot $s$ affects the answer in two ways. Its \textbf{state} is the vector it hands to slot $s{+}1$ through the projector (the front door). Its \textbf{K/V} are the keys and values it writes at its own cache position, which every later position attends to (the back door). Our hooks edit either alone: replace the state before it is projected, or overwrite the keys and/or values at that position, on any subset of layers, after they are written.
+A thought at position $s$ can affect the answer in two ways.
+\begin{itemize}
+\item Its \textbf{vector} (we also say ``state'') is handed to thought $s{+}1$. Think of it as the front door.
+\item Its \textbf{memory} (keys and values) sits in the cache, and every later step can look at it. Think of it as the back door.
+\end{itemize}
+Our hooks can edit either one alone: replace the vector before it is handed on, or overwrite the memory after it is written.
 
-One fact follows from the architecture and we verified it exactly on all eight checkpoints: replacing all six states \emph{and} all six positions' K/V is identical to replacing the K/V alone. The last state is discarded, so everything a state does, it does through the K/V its successors write. This identity is the reason a monitor on states is reading an \emph{intermediate} object.
+One fact follows from the architecture, and we checked it exactly on all eight models: swapping all six vectors \emph{and} all six memories gives the same result as swapping the memories alone. The last vector is thrown away, so a vector can only act through the memory its successors write. This is why a probe on vectors is reading a half-way object.
 
 \begin{example}[Worked example: the two-route audit on CODI-GPT2 (\S108--\S109)]
-512 training problems, each paired with an unrelated problem. At each slot we swap in the other problem's state only, K/V only, values at SCIT's layer groups, or the whole position, and count how often the first answer token changes. Result: the state route is strong at the odd slots (0.31, 0.37) and weak at the even ones; the K/V route is strong at the even positions (0.42, 0.24, 0.28) and weak at the odd ones; within K/V the carrier is the values at layers 8--9. The sixth thought moves 0\% through its state and 3.9\% through its K/V. A complete tail transplant changes 75\% of answers, but only 4.7\% become the donor's answer: the readout fuses the stored values with the recipient's question.
+We took 512 training problems and paired each with an unrelated one. At each of the six positions we swapped in the other problem's vector only, or its memory only, or both, and counted how often the first token of the answer changed. Result: the vector matters at the odd positions (31\% and 37\% of answers change), the memory matters at the even positions (42\%, 24\%, 28\%), and within the memory it is the values at layers 8--9 that do it. The sixth thought changes 0\% of answers through its vector and 3.9\% through its memory. Replacing the whole set of six memories changes 75\% of answers, but only 4.7\% of them become the \emph{donor's} answer: the model mixes the stored values with its own question when it answers.
 \end{example}
 
 \subsection{Twins: does a thought carry a value, or only disturb?}
 
-Swapping a thought from an unrelated problem breaks answers. Breaking is not carrying. To test carrying we build \textbf{twins}: change one integer in the question and recompute the chain, so the twin's answer is the correct answer to the changed question. ``12 cucumbers'' becomes ``13 cucumbers'' and \texttt{<<12*5=60>> <<54+60=114>>} becomes \texttt{<<13*5=65>> <<54+65=119>>}. A number is eligible only if it appears exactly once in the question and once as an operand, is not itself a result, and the recomputed results stay non-negative integers; the smallest $\delta \in \{\pm1,\pm2,\pm3,\pm5,\pm10,\pm20\}$ that works is used.
+If you swap in a thought from an unrelated problem, answers break. But breaking is not the same as carrying. To test carrying we build \textbf{twins}. Take a problem, change one number in the question, and recompute the chain, so the twin's answer is the right answer to the changed question. For example, ``12 cucumbers'' becomes ``13 cucumbers'' and \texttt{<<12*5=60>> <<54+60=114>>} becomes \texttt{<<13*5=65>> <<54+65=119>>}. We only change a number that appears once in the question and once in the chain, is not itself a result, and keeps all results whole and non-negative.
 
 \begin{itemize}
-\item \textbf{Competence gate.} We keep a pair only if the model solves both twins natively and at the first token, and their gold first tokens differ. Otherwise ``the answer followed the swapped value'' has no meaning.
-\item \textbf{Intervention.} The twins sit adjacent in one batch so position ids match; each is the other's donor; both directions are pooled. We replace one site in the recipient (a thought's state, a position's K/V, or whole tails) with the twin's and read the first answer token.
-\item \textbf{Outcome.} \emph{Target} if the token becomes the twin's answer, \emph{retain} if it stays the recipient's, \emph{other} otherwise. The target rate is \textbf{transport}. Intervals come from a paired bootstrap over pairs (2,000 resamples).
-\item \textbf{Profiles.} \emph{Standard}: perturb the first eligible number; mostly short chains. \emph{Long}: only chains of three or more steps, perturb the number that enters the chain latest. Both cap at 512 pairs.
-\item \textbf{Locating the value.} The model's own output head, applied to a thought's state, decodes a few numeric tokens. If the recipient decodes its own changed value at some slot and the twin decodes the twin's at the same slot, the value is \emph{located} there.
+\item \textbf{Only solved pairs count.} We keep a pair only if the model gets both twins right. Otherwise ``the answer followed the swapped value'' means nothing.
+\item \textbf{The swap.} The two twins sit next to each other in one batch. We replace one site in the first twin (one thought's vector, one position's memory, or all of them) with the second twin's, and read the first answer token.
+\item \textbf{The outcome.} If the token becomes the twin's answer we call it \emph{target}. If it stays the original answer, \emph{retain}. Anything else, \emph{other}. The share of \emph{target} is the \textbf{transport} rate: how often the answer followed the number. Confidence intervals come from a bootstrap over pairs.
+\item \textbf{Short and long.} The \emph{standard} set changes the first eligible number and is mostly short chains. The \emph{long} set keeps only chains of three or more steps and changes the number that enters the chain last. Each has up to 512 pairs.
+\item \textbf{Where the value sits.} We can also apply the model's own output layer to a thought's vector and read off a few numbers. If the original decodes its number at some thought and the twin decodes the twin's number at the same thought, we say the value is \emph{located} there.
 \end{itemize}
 
 \subsection{Masking: does the model need the thought?}
 
-Sufficiency is not necessity. For each thought we run two removals: \emph{mean} replaces its state by the pool-mean state, so nothing problem-specific reaches the next thought; \emph{mask} hides its K/V from every later position through the attention mask (this needs a decoding path that carries the mask and explicit position ids through every step; the released LLaMA path drops the mask, and we fixed that). We report the accuracy drop in points, split by chain length, with a bootstrap over rows. Three preregistered checks: short chains survive any single removal within 5 points (K1), carriers cost at least 10 points on long chains (K2), the last thought costs at most 2 points (K3).
+Carrying is not needing. For each thought we try two removals: \emph{mean} replaces its vector with the average vector over all problems, so nothing specific to this problem is passed on; \emph{mask} hides its memory from every later step through the attention mask. (The second needs a decoding path that keeps the attention mask through every step. The released LLaMA code drops it; we fixed that.) We report how many accuracy points are lost, separately for short and long chains, with a bootstrap. Three checks were fixed in advance: short chains lose at most 5 points from any single removal (K1), the carrying thoughts cost at least 10 points on long chains (K2), the last thought costs at most 2 points (K3).
 
 \subsection{Probes: readable, and faithful?}
 
-A probe is a small model trained after the fact to predict a label from a recorded thought vector. We use three readers: the model's own output head (no training), a ridge probe to the embedding of the target number token decoded by nearest numeric token (linear), and a two-layer MLP classifier over roughly 900 numeric tokens (non-linear). The target is the chain's penultimate intermediate result, the value the carriers hold (the final answer itself is unreadable from any thought, at 0.03). Folds are assigned by twin pair so a probe is never read on a problem whose twin it trained on. \textbf{Readability} is held-out accuracy.
+A probe is a small model, trained after the fact, that predicts a label from a recorded thought vector. We use three readers: the model's own output layer (no training), a linear ridge probe, and a small two-layer network. The label is the chain's second-to-last intermediate result, the value the carrying thoughts hold. (The final answer itself cannot be read from any thought; probes score 3\%.) Probes are trained on four fifths of the pairs and tested on the fifth they did not see, five times over, with both twins of a pair always on the same side. \textbf{Readability} is the test accuracy.
 
-\textbf{Faithfulness} is the part that makes this an audit rather than a probing study. After a swap at thought $s$, the recipient holds the twin's state there. A monitor placed at $s$ would read the twin's value $v'$ and raise the alarm ``the model is working with $v'$ now''. Faithfulness is the share of those alarms the behaviour confirms: how often the answer actually became the twin's.
+\textbf{Faithfulness} is what turns this into an audit. After we swap a thought, the model holds the twin's vector at that position. A probe sitting there would read the twin's value $v'$ and raise an alarm: ``the model is now working with $v'$''. Faithfulness is the share of those alarms the model's behaviour confirms, that is, how often the answer actually became the twin's:
 \[
-\text{faithfulness}(s) \;=\; \frac{\#\{\text{rows: probe reads } v' \text{ at } s \;\wedge\; \text{outcome}=\text{target}\}}{\#\text{rows}}.
+\text{faithfulness}(s) = \frac{\#\{\text{rows where the probe reads } v' \text{ at } s \text{ and the answer became the twin's}\}}{\#\text{rows}}.
 \]
-A thought can be readable and never faithful. The same machinery with different labels gives the \textbf{prompt-leakage probes} (the chain's first operator; whether the problem has three or more steps), properties the question fixes before any reasoning.
+A thought can be very readable and never faithful. The same probes, with different labels (the chain's first operator; whether the problem has three or more steps), tell us whether a probe is reading the plan or just the question. We call these the \textbf{prompt-leakage} probes.
 
 \subsection{The card}
 
-One driver runs the twins (both profiles), the masking audit, both probe families and the bootstraps, and writes one card per (model, dataset, GPU session). Fixed thresholds: a \emph{carrier} has long-chain state transport $\ge 0.15$; a \emph{store} has K/V transport $\ge 0.15$ at a position whose state does not carry; the short-chain ceiling is 0.10 (position 0's K/V excepted, since it holds the question); \emph{necessary} means $\ge 10$ points on long chains; \emph{readable} is probe accuracy $\ge 0.30$; \emph{readable-but-unfaithful} (C4b) is readable with an alarm confirmed $\le 5\%$ of the time. Five checks (C1 no transport on short chains; C2 a carrier exists on long chains; C3 the last thought is inert, unfaithful and unnecessary; C4 readability dissociates from faithfulness; C5 every carrier is necessary) give a \emph{regime}: \texttt{critical\_path} if C5 holds, \texttt{backup\_route} if carriers exist but C5 fails, \texttt{no\_transport} if there is no carrier. The card records GPU, library versions, dataset hash and a SHA-256 fingerprint of every twin run's predictions; a comparison tool flags disagreements across pools and sessions.
+One command runs everything above on a model and a dataset and writes one \emph{card}. The thresholds are fixed. A \emph{carrier} is a thought whose vector transports at least 0.15 on long chains. A \emph{store} is a position whose memory transports at least 0.15 while its vector does not. On short chains nothing should transport above 0.10 (except position 0's memory, which holds the question). \emph{Necessary} means at least 10 points lost on long chains. \emph{Readable} means probe accuracy at least 0.30, and \emph{readable-but-unfaithful} means readable with alarms confirmed at most 5\% of the time. Five checks give a \emph{regime}: \texttt{critical\_path} if every carrier is necessary, \texttt{backup\_route} if carriers exist but are not necessary, \texttt{no\_transport} if there is no carrier. The card also records the GPU, library versions, the dataset hash and a fingerprint of every run's predictions, so two cards from two sessions can be compared bit for bit.
 
 \section{Findings on the CODI family}
 
-Each finding states the claim, how we got it, and the numbers. Section numbers refer to the research ledger.
+Each box gives the claim, how we got it, and the numbers. Section numbers point to the research ledger.
 
 \begin{finding}[F1. Disturbing a thought is not the same as the thought carrying a value (\S109, \S111)]
-Under an unrelated donor, swapping thought 3's state changes 37\% of answers; under a twin that differs in one number, the same swap moves the answer to the correct counterfactual 10\% of the time and leaves the own answer in place 86--92\% of the time. Thought 1: 31\% vs 5\%. The 31--37\% was disruption. \emph{How:} the same 512-problem pool scored two ways, random-donor change rate and twin target rate.
+Swap thought 3 with an unrelated problem's and 37\% of answers change. Swap it with the twin's, which differs in one number, and the answer follows that number only 10\% of the time; 86--92\% of the time it stays put. Thought 1: 31\% vs 5\%. Most of the ``change'' was just disruption. \emph{How:} the same 512 problems, scored once with random donors and once with twins.
 \end{finding}
 
 \begin{finding}[F2. Below 3B, a thought carries a value only on problems with three or more steps (\S111--\S113, \S117)]
-On one- and two-step problems every single-site transport is $\le 0.10$; the readout computes the answer from the question and the thoughts are a readable but causally redundant trace. On chains of three or more steps, thought 3's state transports the value in a third of rows: 0.325 [0.293, 0.358] at GPT-2, 0.339 [0.304, 0.375] at CODI-1B. \emph{How:} the long profile (14,336 extra training rows to reach 512 gated pairs, the latest-entering number perturbed), preregistered after the stratum effect appeared in cells of 36--38 rows. The card codifies it as C1 and C2.
+On one- and two-step problems no single thought transports above 0.10. The model reads the answer straight off the question; the thoughts hold a readable trace that is not used. On three-step and longer problems, thought 3's vector moves the answer to the twin's in about a third of cases: 0.325 [0.293, 0.358] on GPT-2 and 0.339 [0.304, 0.375] on CODI-1B. \emph{How:} the long twin set, built after we noticed the effect in small cells and wrote the prediction down first.
 \end{finding}
 
-\begin{finding}[F3. One or two thoughts carry; they hand the value to the next position's memory; the last thought (below 3B) never matters (\S109, \S113, \S117, \S120)]
-The carried value travels from the carrier's state into the \emph{whole} K/V of the following position (CODI-1B: state$_3$ 0.339, K/V$_4$ 0.260, state$_4$ 0.000, K/V$_3$ 0.000), not into SCIT's two-layer value block (0.047 at GPT-2): the value block is what \emph{breaks} answers, not what \emph{carries} them. Where the model's own readout localises the value (CODI-1B, 60\% of rows uniquely at slot 3), the located thought carries 0.529 against 0.000 at the other feeding thought: the thought that decodes the value is the thought that carries it. The sixth thought decodes the value as well as thought 3 and transports 0.000 through both routes on 590 rows; masking it costs $\le 1.9$ points on every model up to 1B.
+\begin{finding}[F3. One or two thoughts carry; they pass the value to the next position's memory; the last thought (below 3B) never matters (\S109, \S113, \S117, \S120)]
+The value goes from the carrier's vector into the \emph{whole} memory of the next position (CODI-1B: vector$_3$ 0.339, memory$_4$ 0.260, vector$_4$ 0.000, memory$_3$ 0.000), not into the two-layer value block SCIT pointed at (0.047 on GPT-2). That block is what \emph{breaks} answers, not what \emph{carries} them. When the model's own output layer says which thought holds the value (CODI-1B, 60\% of rows, almost always thought 3), that thought carries 0.529 and the other feeding thought 0.000: the thought that decodes the value is the one that carries it. The sixth thought decodes the value as well as thought 3 and transports 0.000 through both routes on 590 rows; removing it costs at most 1.9 points on every model up to 1B.
 \end{finding}
 
-\begin{finding}[F4. The carrier is used but barely needed; the question register is the most necessary site (\S120--\S121, \S124)]
-At CODI-1B the carrier transports a third of the time with total specificity, and mean-ablating it costs 2.7 points (K2 fails outright); hiding its K/V costs 0.0. The model recomputes from the question when a thought is removed: \emph{sufficiency without necessity}, the \texttt{backup\_route} regime, which turned out to be the common case on natural GSM8K questions. Meanwhile hiding position 0's K/V, a copy of the question written before any thought, costs 37.6 points at GPT-2 and 58.6 at SIM-CoT-1B on long chains. A monitor that reads thoughts and ignores position 0 misses the site the model leans on most.
+\begin{finding}[F4. The carrier is used but barely needed; the question copy is the most needed site (\S120--\S121, \S124)]
+On CODI-1B the carrier moves the answer a third of the time, yet averaging it away costs only 2.7 points and hiding its memory costs 0.0. When a thought is removed the model simply recomputes from the question. We call this \emph{sufficient but not necessary}, the \texttt{backup\_route} regime, and it is the usual case on natural GSM8K questions. Meanwhile, hiding the memory of position 0, which holds a copy of the question written before any thought, costs 37.6 points on GPT-2 and 58.6 on SIM-CoT-1B. A probe that reads the thoughts and ignores position 0 misses the site the model leans on most.
 \end{finding}
 
 \begin{table}[h]
-\caption{Monitor readability / faithfulness on long chains (ridge probe, penultimate intermediate). In every model the terminal slot is readable and faithful at exactly 0.000.}
+\caption{Readability / faithfulness per thought on long chains (linear probe; label = the second-to-last intermediate value). In every model the last thought is readable and faithful exactly 0\% of the time.}
 \label{tab:faith}
 \centering\small
 \begin{tabular}{lccc}
 \toprule
-slot & GPT-2 & CODI-1B & SIM-CoT-1B \\
+thought & GPT-2 & CODI-1B & SIM-CoT-1B \\
 \midrule
 0 & 0.09 / 0.00 & 0.27 / 0.02 & 0.25 / 0.02 \\
 1 & 0.33 / \textbf{0.19} & 0.15 / 0.01 & 0.62 / \textbf{0.21} \\
@@ -151,30 +157,30 @@ slot & GPT-2 & CODI-1B & SIM-CoT-1B \\
 \end{tabular}
 \end{table}
 
-\begin{finding}[F5. Readable is not faithful; probes read the prompt; the readable-unfaithful slot is a stale copy (\S120--\S121, \S124--\S125, \S133)]
-Table~\ref{tab:faith}: CODI-1B thought 4 reads at 0.84 and its alarm is confirmed 5\% of the time; thought 5 reads at 0.81 and is confirmed never. Faithfulness changes by less than 0.05 between the ridge and MLP probe families, so it is a property of the slot, not the probe. A stronger statement we first made, ``the most readable slot is inert'', was withdrawn when the MLP probe put the carrier on top in some cards; what survives both families on every card up to 3B is C4b: a slot read at $\ge 0.30$ whose alarm is confirmed $\le 5\%$, and the last thought is that slot in every model. Prompt-leakage probes decode ``is this a $\ge3$-step problem'' at 0.76--0.95 from \emph{every} slot, position 0 and the unused last thought included, and the best slot for the first operator is never a carrier. Finally, the readable-unfaithful slot is not a prompt reader: on CODI-1B slot 5 reads the computed penultimate value at 0.47, \emph{above} the carrier's 0.42. It holds a copy of the value the carrier already handed to the cache. Readability outlives use.
+\begin{finding}[F5. Readable is not faithful; probes read the question; the readable-but-unused thought holds a stale copy (\S120--\S121, \S124--\S125, \S133)]
+Table~\ref{tab:faith}: on CODI-1B a probe reads thought 4 at 0.84 accuracy and its alarm is right 5\% of the time; thought 5 reads at 0.81 and is right never. This did not depend on the probe: the linear and non-linear probes gave faithfulness within 0.05 of each other. We first wrote ``the most readable thought is an unused one'' and had to withdraw it, because the non-linear probe sometimes put the carrier on top. What survives on every card up to 3B is weaker but solid: there is always a thought that reads at 0.30 or better whose alarm is right at most 5\% of the time, and the last thought is that thought in every model. Probes also read facts about the question from \emph{every} thought: ``does this problem have three or more steps'' decodes at 0.76--0.95 from all six, position 0 and the dead last thought included. Finally, the readable-but-unused thought is not reading the question. On CODI-1B thought 5 reads the computed intermediate value at 0.47, \emph{better} than the carrier (0.42). It holds a copy of a value that was already used and passed on. Readability outlives use.
 \end{finding}
 
-\begin{finding}[F6. The carrier pairing is trained, not architectural; step supervision moves it as predicted (\S115, \S118--\S119)]
-GPT-2: pairs (1$\to$2) and (3$\to$4); CODI-1B: (3$\to$4) alone; SIM-CoT-1B, trained with per-step supervision on the same backbone: (1$\to$2) and (3$\to$4) both active (0.191/0.185, 0.247/0.229 against CODI-1B's 0.011/0.011 and 0.339/0.260), the prediction written before the run. SIM-CoT also turns the first latent position into a question register that transports 0.54 of short-chain twins through its K/V alone. What did not hold: we predicted step supervision would make the free readout slot-specific; unique location fell from 60\% to 6\%, because the model's tied output head is not the decoder SIM-CoT trained.
+\begin{finding}[F6. Which thoughts carry is set by training, and a training change moved it as we predicted (\S115, \S118--\S119)]
+GPT-2 carries at thoughts 1 and 3 (stored at 2 and 4). CODI-1B carries at thought 3 only (stored at 4). SIM-CoT-1B, the same backbone trained with extra supervision on every step, carries at both 1 and 3 again (0.191/0.185 and 0.247/0.229, against CODI-1B's 0.011/0.011 and 0.339/0.260); we wrote that prediction before the run. SIM-CoT also turns position 0 into a copy of the question that transports 0.54 of short-chain twins on its own. One prediction failed: we expected step supervision to make the model's own output layer point to one thought; instead it pointed to several (unique location fell from 60\% to 6\%), because the output layer is not the decoder SIM-CoT trained.
 \end{finding}
 
 \section{Four uses of the map}
 
-\subsection{A monitor can read the prompt instead of the plan (\S125)}
-Properties fixed by the question (first operator, four classes; $\ge3$ steps, binary) decode above chance at every slot of every model, including the two that do nothing. A monitor evaluated on a prompt-borne property (a trigger word, a task type, a difficulty) can score well while reading nothing the model computed. For a trigger-in-the-prompt backdoor evaluation this is the confound, and the fix is cheap: run the same probe on a prompt-only control at the same slot.
+\subsection{A probe can read the question instead of the plan (\S125)}
+Things fixed by the question alone (the first operator; whether there are three or more steps) decode above chance at every thought of every model, including the two thoughts that do nothing. So a probe evaluated on something the prompt already determines (a trigger word, a task type, a difficulty level) can score well while reading nothing the model computed. For a backdoor test where the trigger is in the prompt, this is the confound. The fix is cheap: run the same probe on a prompt-only control at the same thought.
 
-\subsection{Thoughts do not catch errors better than confidence (\S125, \S131, \S134)}
-For every GSM8K test problem we recorded the thoughts and the answer, applied the model's own output head to each thought (top-1 value, probability, entropy, agreement with the answer and other slots), and trained five-fold logistic classifiers to predict ``the answer is wrong'': carriers only, inert only, all slots, raw states, and the answer's own first-token confidence (Table~\ref{tab:errdet}). Confidence wins on every model; the thoughts add $\le 0.01$ AUROC to it, even with 12,288 raw features. But on the 1B--8B models the error signal inside the thoughts sits exactly at the carriers the swaps found (CODI-1B carriers 0.82 vs inert 0.60), an independent confirmation of placement from a task the audit was never fitted to.
+\subsection{The thoughts do not catch errors better than confidence (\S125, \S131, \S134)}
+For every GSM8K test problem we recorded the thoughts and the answer, read each thought with the model's own output layer (top value, its probability, entropy, agreement with the answer), and trained classifiers to predict ``this answer is wrong'': from the carrier thoughts only, the unused thoughts only, all thoughts, the raw vectors, and, as a baseline, the model's confidence in its first answer token (Table~\ref{tab:errdet}). Confidence wins on every model. The thoughts add at most 0.01 AUROC, even with 12,288 raw features. One useful thing did come out: on the 1B--8B models the error signal inside the thoughts sits exactly at the carriers the swaps had found (CODI-1B carriers 0.82 vs unused 0.60), which confirms the map from a task it was never fitted on.
 
 \begin{table}[h]
-\caption{AUROC for ``the native answer is wrong'' on the full GSM8K test set (1,319 rows).}
+\caption{AUROC for ``the answer is wrong'' on the full GSM8K test set (1,319 problems).}
 \label{tab:errdet}
 \centering\footnotesize
 \setlength{\tabcolsep}{5pt}
 \begin{tabular}{lrccccc}
 \toprule
-Model & Wrong & Confidence & Carriers & Inert & All slots & Raw states \\
+Model & Wrong & Confidence & Carriers & Unused & All thoughts & Raw vectors \\
 \midrule
 GPT-2 & 746 & \textbf{0.889} & 0.850 & 0.853 & 0.851 & 0.859 \\
 CODI-1B & 587 & \textbf{0.912} & 0.821 & 0.596 & 0.827 & 0.835 \\
@@ -185,24 +191,24 @@ SIM-CoT-8B & 495 & \textbf{0.930} & 0.763 & 0.665 & 0.794 & 0.824 \\
 \end{tabular}
 \end{table}
 
-\subsection{A value-matched write into the carrier (\S126--\S130)}
+\subsection{Writing the right value into the carrier (\S126--\S130)}
 
-The audit says the carrier holds the intermediate value and passes it on. Repair asks whether the channel works in reverse.
+If the carrier holds the intermediate value and passes it on, can we use that channel backwards and fix a wrong answer?
 
 \begin{example}[Worked example (a real CODI-1B case)]
-``The elevator in Jack's building supports a maximum load of 700 kg. An adult weighs on average 80 kg. If Jack rides with 8 other adults, by how much will they exceed the maximum load?'' Gold chain \texttt{<<8+1=9>> <<9*80=720>> <<720-700=20>>}, so $v^*=720$. CODI-1B answers 40; its output head reads 640 at the carrier: it forgot Jack. In a bank of 2,048 solved training problems the carrier reads 720 at five of them. We copy the most similar one's carrier vector in at thought 3 while decoding, and read the new answer: 20. Repaired. With a random different-value donor the answer stays 40.
+``The elevator in Jack's building supports a maximum load of 700 kg. An adult weighs on average 80 kg. If Jack rides with 8 other adults, by how much will they exceed the maximum load?'' The correct chain is \texttt{<<8+1=9>> <<9*80=720>> <<720-700=20>>}, so the needed intermediate is $v^*=720$. CODI-1B answers 40. Its output layer reads 640 at the carrier: it multiplied 8 by 80 and forgot Jack. We keep a bank of 2,048 training problems the model solved, and at five of them the carrier reads 720. We copy the most similar one's carrier vector into thought 3 while the model decodes, and read the new answer: 20. Fixed. With a donor holding a random \emph{different} value, the answer stays 40.
 \end{example}
 
-\textbf{Protocol.} Bank: 2,048 training rows decoded once, states and K/V recorded, indexed by the value the model's own head reads at the carrier. Targets: wrongly answered $\ge3$-step test problems (cap 512) plus 128 correctly answered controls for harm. Conditions: nearest same-value donor (cosine), random same-value, the \emph{centroid} of same-value states (a synthetic vector), \emph{random different-value} (the key control: if it repaired as often, the repair is disturbance), store K/V, state plus K/V, the whole donor tail. Rates with bootstrap over targets on the primary stratum (wrong targets whose carrier reads something other than $v^*$ and that have a donor).
+\textbf{Protocol.} Bank: 2,048 training problems decoded once, vectors and memories saved, indexed by the value read at the carrier. Targets: wrong answers on three-step-or-longer test problems (up to 512), plus 128 correct ones to measure harm. Conditions: the nearest same-value donor, a random same-value donor, the \emph{average} of all same-value vectors, a \emph{random different-value} donor (the key control: if this fixed as many, the fix would be luck, not the value), the store's memory, vector plus memory, and the whole donor tail.
 
 \begin{table}[h]
-\caption{Repair rate (\%) on the primary stratum; harm (\%) on correct controls. Gold-chain value.}
+\caption{Repair rate (\%) on wrong answers whose carrier read the wrong value and that had a donor; harm (\%) on correct answers. Value from the gold chain.}
 \label{tab:repair}
 \centering\scriptsize
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{lrcccccc}
 \toprule
-Model & $n$ & Nearest donor & Random same & Centroid & Different value & Store K/V & Harm \\
+Model & $n$ & Nearest & Rand.\ same & Average & Diff.\ value & Store mem. & Harm \\
 \midrule
 GPT-2 & 357 & 15.1 [11.5, 19.0] & 17.6 & 20.2 & 3.6 & 11.5 & 18.7 \\
 CODI-1B & 266 & 22.6 [17.7, 27.8] & 21.8 & 23.7 & 2.6 & 10.2 & 7.0 \\
@@ -213,21 +219,22 @@ SIM-CoT-8B & 232 & 14.7 [10.3, 19.4] & 14.7 & 13.4 & 6.0 & 5.2 & 7.8 \\
 \end{tabular}
 \end{table}
 
-\textbf{What we learned.} The carrier is a writable channel: 14--23\% repair against a 2--4\% different-value control up to 3B, with non-overlapping intervals and 5--9\% harm at 1B/3B. Two predictions were wrong in useful ways: the centroid repairs as well as a retrieved natural vector (retrieval buys nothing over averaging), and adding the store's K/V \emph{lowers} repair (the donor's memory carries the donor's problem). A learned writer from a value's token embedding to a carrier vector (\S128) lands in the same 20--24\% band; writing several step-mapped slots at once (\S129) is level or worse and harms more. With the value from the model's own explicit chain plus a calculator, repair survives at CODI-1B (18.8\%) but the chain's own answer is right on more of the same failures than injection recovers.
+\textbf{What we learned.} The carrier can be written to: 14--23\% of failures are fixed, against 2--4\% for a different-value donor, with 5--9\% harm at 1B and 3B. Two predictions were wrong in useful ways. The average of same-value vectors works as well as the best single one, so searching for the right donor buys nothing. And adding the store's memory makes repair \emph{worse}, because the donor's memory carries the donor's whole problem. A learned map from a number to a carrier vector (\S128) lands in the same 20--24\% band. Writing several thoughts at once (\S129) is no better and harms more. When the needed value comes from the model's own written solution plus a calculator, repair still works on CODI-1B (18.8\%), but the written solution's own answer is right on more of those same failures than the repair recovers.
 
-\textbf{Why the ceiling is low: the failure taxonomy (\S129--\S130, \S133).} Classing every wrong answer by what the model's own written chain does on that problem: \emph{plan wrong} 48--68\% (the written chain is wrong too), \emph{latent-only} 19--53\% (right when writing, wrong when thinking silently), \emph{upstream arithmetic} 6--11\%, \emph{final step} 1--9\%. Writes reach $\le 2.6\%$ of plan-wrong failures; the one-slot write already repairs a third of touched latent-only failures. Latent-only failures are hard problems, not slips: a peer model of the same size misses them 60\% of the time, and failure sets overlap at Jaccard 0.70 against 0.34 under independence. Handing the model the gold plan at inference (\S132) recovers 6--8\% of plan-wrong failures against 3--7\% for a \emph{wrong} plan: disturbance, not content.
+\textbf{Why the ceiling is low (\S129--\S130, \S133).} We sorted every wrong answer by what the model's own written solution does on that problem. \emph{Plan wrong}, 48--68\%: the written solution is wrong too. \emph{Latent-only}, 19--53\%: right when writing, wrong when thinking silently. \emph{Upstream arithmetic}, 6--11\%. \emph{Final step}, 1--9\%. Writes fix at most 2.6\% of plan-wrong failures; they already fix a third of the latent-only ones they can reach. Latent-only failures are hard problems, not slips: another model of the same size gets them wrong 60\% of the time too. Handing the model the correct plan at inference (\S132) recovers 6--8\% of plan-wrong failures, against 3--7\% for a \emph{wrong} plan, so that is noise, not help.
 
-\textbf{Net accuracy.} On the 838 long-chain test problems the best gated thought write gains $-0.1$ / $+3.4$ / $+1.1$ / $+0.4$ / $+3.4$ points (GPT-2 / CODI-1B / SIM-CoT-1B / 3B / 8B), roughly $0.64\times$ that on the full set. Switching to the explicit chain on disagreement gains $+5.6$ / $+5.3$ / $+3.2$ / $+9.7$ / $+21.3$. The write is a mechanism result, confirmed by two independent sources of the value, not a method.
+\textbf{Net accuracy.} On the 838 long-chain test problems the best gated write gains $-0.1$ / $+3.4$ / $+1.1$ / $+0.4$ / $+3.4$ points (GPT-2 / CODI-1B / SIM-CoT-1B / 3B / 8B), about two thirds of that on the full test set. Simply switching to the model's written solution when it disagrees gains $+5.6$ / $+5.3$ / $+3.2$ / $+9.7$ / $+21.3$. So the write shows the mechanism is real; it is not a method that beats reading the written solution.
 
 \subsection{Route on confidence: the cheap gain (\S131, \S133--\S134)}
 
-Confidence is the best error detector available and the model's written mode is right on many latent failures, so we used confidence as a router: run the latent pass on everything, send a problem to its own explicit chain only when the first-token probability is below a threshold, sweep the threshold (Table~\ref{tab:cascade}). No new GPU time for four models; the data were already on disk.
+Confidence is the best error detector we have, and the model's written mode gets many of the latent failures right. So we used confidence as a switch: think silently on every problem, and only write out the solution when the first-token probability is below a threshold. Sweeping the threshold gives Table~\ref{tab:cascade}. This needed no new GPU time for four of the five models; the data were already on disk.
 
 \begin{table}[h]
-\caption{Confidence-gated cascade: net accuracy change (points) on the 838 long-chain GSM8K test problems when the least-confident fraction is routed to the model's own explicit chain. 95\% row-bootstrap intervals at 25\% and 50\%.}
+\caption{Confidence-gated routing: accuracy change (points) on the 838 long-chain GSM8K test problems when the least-confident fraction of problems is sent to the model's own written solution. 95\% intervals at 25\% and 50\%.}
 \label{tab:cascade}
 \centering\scriptsize
 \setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 Routed & GPT-2 & CODI-1B & SIM-CoT-1B & 3B & 8B \\
@@ -235,34 +242,34 @@ Routed & GPT-2 & CODI-1B & SIM-CoT-1B & 3B & 8B \\
 10\% & $+0.8$ & $+0.8$ & $+0.5$ & $+2.7$ & $+4.9$ \\
 25\% & $+1.5$ [$-0.2$, $+3.2$] & $+3.7$ [$+1.9$, $+5.1$] & $+1.9$ [$-0.3$, $+4.3$] & $+7.5$ [$+5.1$, $+9.9$] & $+10.2$ [$+8.1$, $+12.6$] \\
 50\% & $+3.1$ [$+0.1$, $+5.7$] & $+7.6$ [$+4.5$, $+9.7$] & $+4.9$ [$+1.6$, $+7.8$] & $+11.1$ [$+7.5$, $+14.3$] & $+19.1$ [$+15.9$, $+22.0$] \\
-100\% (always explicit) & $+5.6$ & $+5.3$ & $+3.2$ & $+9.7$ & $+21.3$ \\
-Oracle (route exactly the wrong) & $+12.0$ & $+11.5$ & $+10.3$ & $+17.2$ & $+23.9$ \\
+100\% (always written) & $+5.6$ & $+5.3$ & $+3.2$ & $+9.7$ & $+21.3$ \\
+Oracle (route exactly the wrong ones) & $+12.0$ & $+11.5$ & $+10.3$ & $+17.2$ & $+23.9$ \\
 \midrule
 Best gated thought write & $+1.0$ & $+3.4$ & $+1.1$ & $+0.9$ & $+3.4$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
-Three things to notice. At 1B and 3B routing \emph{half} beats always writing the chain (7.6 vs 5.3; 11.1 vs 9.7), because the chain is wrong on some problems the confident latent pass had right and the gate keeps it away from them. Adding the six thought states to the gate, as out-of-fold ridge scores, makes it \emph{worse} at 25\% routed on three of four models: confidence is the whole gate. And the same confidence partitions the thought write's successes from its harms (it takes on confident failures, 73\% vs 38\% by quartile at CODI-1B, and breaks loosely held correct answers, harm 19--31\% in the bottom quartile and 0--3\% in the top), so below the threshold switching wins and above it doing nothing wins; the write beats both in exactly one cell (CODI-1B, high confidence, $+1.2$ vs $+0.5$). \textbf{Route on confidence, do not write.}
+Three things to notice. At 1B and 3B, routing \emph{half} the problems beats always writing (7.6 vs 5.3; 11.1 vs 9.7): the written solution is wrong on some problems the confident silent pass got right, and the gate keeps those away from it. Adding the six thought vectors to the gate makes it \emph{worse} at 25\% routed on three of four models; confidence is the whole gate. And the same confidence splits the thought write's wins from its losses: the write works best on confident wrong answers (73\% vs 38\% between top and bottom quartile on CODI-1B) and breaks loosely held correct ones (19--31\% harm in the bottom quartile, 0--3\% in the top). Below the threshold, switching wins; above it, doing nothing wins. The write comes out ahead in exactly one cell (CODI-1B, high confidence, $+1.2$ vs $+0.5$). \textbf{Route on confidence. Do not write into the thoughts.}
 
 \section{Contrast and scale}
 
-\paragraph{Scale (\S130, \S134).} The two findings that defined the small checkpoints are properties of small checkpoints. At 3B the carriers move to the even slots 2 and 4 with the store at 3, slot 4 transports 0.23 on short chains (no gate), and the terminal K/V transports 0.15 and costs 8 points (not inert). At 8B there are two carrier \emph{pairs} specialised by chain length (4$\to$5 for short chains at 0.51, 2$\to$3 for long at 0.28), the question register costs 5 points instead of 33--59, the most necessary site is a thought for the first time, and there is no readable-but-unfaithful slot: readability tracks faithfulness at Spearman 0.71. What survives every scale: the carriers are sufficient but not necessary (\texttt{backup\_route} at 1B, 3B and 8B), the computation lives at one or two trained slots, the thoughts add nothing to error detection, and the latent--explicit gap grows (5, 10, 21 points).
+\paragraph{Bigger models (\S130, \S134).} The two findings that defined the small models turn out to be small-model properties. At 3B the carriers move to positions 2 and 4 with the store at 3; position 4 also carries on short chains (so the chain-length gate is gone); the last thought's memory carries 0.15 and costs 8 points (so it is in use). At 8B there are two carrier pairs, one for short chains (4$\to$5, transport 0.51) and one for long (2$\to$3, 0.28); the question copy costs 5 points instead of 33--59; and there is no readable-but-unused thought left: readability and faithfulness now move together (correlation 0.71). What holds at every size: carriers are used but not needed, the work lives at one or two trained positions, the thoughts add nothing to error detection, and the gap between silent and written mode grows (5, 10, 21 points).
 
-\paragraph{Coconut is the opposite case (\S127).} A third-party retrain with the official recipe (34.6\% = model card), audited with the same hooks and native outcomes. Its pairing is (0,1), (2,3), (4,5), exactly as the two-thoughts-per-step curriculum predicts, and it held to the third decimal (state 2 $\leftrightarrow$ K/V 3 both 0.52). But its thoughts carry on one-step problems (0.45 at the first thought), every pair is necessary (45--49 points), the last position is in use (K/V 0.15, 14 points), and a transplanted thought carries the donor's whole problem (repair 5.6\% vs 3.1\% control with 29\% harm). Same six slots, same task, opposite monitoring profile. The CODI results are properties of CODI's distillation.
+\paragraph{Coconut is the opposite case (\S127).} A third-party retrain with the official recipe, audited with the same tools. Its pairing is (0,1), (2,3), (4,5), exactly as its two-thoughts-per-step training predicts, and it held to the third decimal. But its thoughts carry on one-step problems, every pair is needed (45--49 points), the last position is in use, and a transplanted thought drags in the donor's whole problem (repair 5.6\% vs 3.1\% control, 29\% harm). Same six positions, same task, opposite profile. The CODI results come from CODI's training, not from thoughts in general.
 
-\paragraph{ProsQA: nothing monitorable (\S135).} Coconut and CODI at LLaMA-1B on a synthetic logic task (97.6\% and 99.0\%, both reproducing their paper). Twins rewrite the path's last hop, checked by graph reachability. Transport is 0.000 at every site and for the whole tail; masking all six thoughts costs 0.000. And rewriting one premise so that the other option is correct is answered with the \emph{old} option 68--79\% of the time: the accuracy does not come from following the annotated path. The audit's third profile, \texttt{no\_transport}: there is nothing in those thoughts to monitor and nothing in them to repair.
+\paragraph{ProsQA: nothing to monitor (\S135).} Coconut and CODI at 1B on a synthetic logic task (97.6\% and 99.0\%). Transport is 0.000 at every position and for the whole set; removing all six thoughts costs 0.000. And when we rewrite one premise so the other answer becomes correct, the models give the \emph{old} answer 68--79\% of the time: the high accuracy does not come from following the reasoning path. The audit's third profile, \texttt{no\_transport}. There is nothing in those thoughts to watch and nothing to fix.
 
 \section{Preregistration and reproducibility}
 
-Every experiment was written into the ledger with its predictions before the run and scored afterwards. Eleven predictions were partly or wholly wrong and are reported as such; the most useful wrong ones were that the 1B readout would not localise (it did, at 60\%), that step supervision would make the readout slot-specific (it did not), that the centroid would lose to retrieval (it did not), that the store's K/V would help repair (they hurt), and that the 3B model would have a single carrier at slot 3 (it has two at the even slots). Two errata against our own earlier readings are recorded: a benchmark figure (we had the CODI paper's ablation row as its main result) and a check reported as holding without reading the committed card (C4's correlation half). Five reruns, on two Kaggle accounts and days apart, reproduced their twin-run prediction fingerprints byte for byte. Code, cards, per-target outcomes and the ledger are in the repository; every notebook pins the commit it runs.
+Every experiment went into the ledger with its predictions before it ran, and was scored after. Eleven predictions were partly or wholly wrong and are reported as such; the most useful wrong ones were that the 1B model's output layer would not point to one thought (it did, 60\%), that step supervision would make it point to one (it did not), that the averaged vector would lose to the best single donor (it did not), that the store's memory would help repair (it hurt), and that the 3B model would carry at one thought (it carries at two). We also recorded two mistakes of our own: a benchmark number taken from the wrong table, and a check reported as passing without reading the committed card. Five reruns on two Kaggle accounts, days apart, reproduced their prediction fingerprints byte for byte. Code, cards, per-problem outcomes and the ledger are in the repository; every notebook pins the commit it runs.
 
 \section{What is new, against the literature}
 
 Checked claim by claim on 2026-10-12 (ledger \S122) and for the cascade on 2026-10-17.
 
 \begin{table}[h]
-\caption{Novelty by finding. ``Prior'' names the closest work; ``ours'' is what was not found anywhere.}
+\caption{Novelty by finding. ``Prior'' is the closest earlier work; ``ours'' is what we did not find anywhere.}
 \label{tab:novelty}
 \centering\scriptsize
 \setlength{\tabcolsep}{4pt}
@@ -270,36 +277,36 @@ Checked claim by claim on 2026-10-12 (ledger \S122) and for the cascade on 2026-
 \toprule
 Finding & Closest prior & Ours \\
 \midrule
-Influence $\ne$ transport; the chain-length gate & \citet{cywinski2025} on 2-step templates, naming more steps as open; \citet{ding2026scit}; \citet{li2026dynamics} & Same pairs scored two ways on natural data and official checkpoints; the gate itself with intervals \\
-Two routes with the exact identity; the trained pairing & SCIT swaps values only; residual-stream recomputation papers & The decomposition without recomputation; pairing (1,3), \{3\}, (1,3), (2,4), (2$\to$3, 4$\to$5), (0,1)(2,3)(4,5) across models \\
-The question register at position 0 & --- & Transports 0.54 on short chains; costs 59 points when masked \\
-Per-slot faithfulness (alarm confirmation) & Decodability $\ne$ causality in principle \citep{openproblems2025,decodability2026}; \citet{ramjee2026ulterior} deploy probes with no causal test & The quantity, measured per slot on latent reasoners; terminal readable 0.42--0.81, faithful 0.000 \\
-Sufficiency without necessity; necessity depends on training and scale & \citet{jin2026final}; \citet{li2026dynamics} report pieces separately & Swap and mask on the same pairs; CODI-1B transports 0.34 and costs 2.7 \\
-The stale copy & --- & The unfaithful slot reads the computed value above the carrier \\
-The terminal thought is inert & Partly prior \citep{cywinski2025} & Three checkpoints, both routes, monitor-facing \\
-Value-matched repair & \citet{chang2026unlocking}: geometric edits, no value-matched donor or controls & Natural failed problems, different-value control, harm, centroid $\approx$ retrieval, K/V route hurts, two value sources, the ceiling \\
-Error detection fails vs confidence & LTO-style latent rewards \citep{lto2026} & The negative on latent reasoners plus placement confirmation \\
-Confidence-gated cascade & FrugalGPT-style cascades; confidence-gated CoT (Lewis-Lim et al., 2510.21007); ThinkRouter (2602.11683) routes between latent and token space by confidence & Released fixed-thought models, no training; the thoughts add nothing to the gate; routing half beats the full switch at 1B/3B \\
-Failure taxonomy; latent-only failures are hard problems & --- & Stable across four models, computable at inference \\
-Scale trend 1B$\to$3B$\to$8B; Coconut contrast; ProsQA third profile & \citet{dilgren2026interpretable} drop latents on logic tasks & The causal audit at 3B/8B; the twin-pass result on ProsQA \\
+Disturbing $\ne$ carrying; the chain-length gate & \citet{cywinski2025} on 2-step templates, naming more steps as open; \citet{ding2026scit}; \citet{li2026dynamics} & Same pairs scored both ways, on natural data and official checkpoints; the gate itself with intervals \\
+Two routes with the exact identity; the trained pairing & SCIT swaps values only; papers that recompute the cache from the residual & The split without recomputing; pairings (1,3), \{3\}, (1,3), (2,4), (2$\to$3, 4$\to$5), (0,1)(2,3)(4,5) across models \\
+The question copy at position 0 & --- & Transports 0.54 on short chains; costs 59 points when hidden \\
+Faithfulness per thought (alarm confirmation) & ``Decodable is not causal'' in principle \citep{openproblems2025,decodability2026}; \citet{ramjee2026ulterior} use probes with no causal test & The quantity, measured per thought on latent reasoners; last thought readable 0.42--0.81, faithful 0.000 \\
+Used but not needed; need depends on training and size & \citet{jin2026final}; \citet{li2026dynamics} report parts separately & Swap and removal on the same pairs; CODI-1B transports 0.34 and costs 2.7 \\
+The stale copy & --- & The unused thought reads the computed value better than the carrier \\
+The last thought is unused & Partly prior \citep{cywinski2025} & Three checkpoints, both routes, with the probe consequence \\
+Value-matched repair & \citet{chang2026unlocking}: geometric edits, no value-matched donor or controls & Natural failed problems, different-value control, harm, average $\approx$ best donor, memory route hurts, two value sources, the ceiling \\
+Error detection fails vs confidence & Latent-reward classifiers \citep{lto2026} & The negative on latent reasoners plus the placement confirmation \\
+Confidence-gated routing & FrugalGPT-style cascades; confidence-gated CoT (Lewis-Lim et al., 2510.21007); ThinkRouter (2602.11683) & Released fixed-thought models, no training; thoughts add nothing to the gate; routing half beats always writing at 1B/3B \\
+Failure sorting; latent-only failures are hard problems & --- & Stable across four models, computable at inference \\
+Scale 1B$\to$3B$\to$8B; Coconut contrast; ProsQA third profile & \citet{dilgren2026interpretable} drop thoughts on logic tasks & The causal audit at 3B/8B; the rewritten-premise result on ProsQA \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-ThinkRouter is the one item that must be read in full before submission; if it routes per problem on CODI-style models with first-token confidence, our cascade contribution narrows to the negative half (the thoughts add nothing) and the scale and oracle analysis.
+ThinkRouter must be read in full before submission. If it routes per problem on CODI-style models using first-token confidence, our routing contribution shrinks to the negative half (the thoughts add nothing) and the scale and oracle analysis.
 
-\section{Preregistered and running: Build 7, the targeted latent hijack (\S136)}
+\section{New experiment: the targeted latent hijack (\S136)}
 
-The repair line wrote the \emph{right} value into a \emph{failed} problem. The same channel, used by an adversary, writes a \emph{wrong} value into a \emph{solved} problem. This turns the dissociation into an attack--defence pair: if the carrier is writable, downstream slots are copies, and confidence rather than the thoughts carries the error signal, then a one-vector write should steer the answer to a chosen value, every monitor downstream should agree with the attacker, a write at the decoy slot should set off a monitor while changing nothing, and only recomputation should catch it.
+The repair work wrote the \emph{right} value into a \emph{failed} problem. An attacker would do the reverse: write a \emph{wrong} value into a \emph{solved} problem. This turns the whole story into an attack and a defence. If the carrier can be written to, if the later thoughts are copies, and if confidence rather than the thoughts carries the error signal, then: one vector should steer the answer to a chosen value; every probe downstream should agree with the attacker; a write at the unused thought should set off a probe while changing nothing; and only recomputing the answer should catch it.
 
-\paragraph{Protocol.} Victims: up to 512 correctly answered $\ge3$-step GSM8K test problems. For each, an attacker value $v_{\text{att}}$ is fixed before any write: the bank value nearest in magnitude to $v^*$ whose \emph{implied answer} (the gold chain's last equation re-evaluated with $v_{\text{att}}$ in place of its penultimate operand) is a non-negative integer other than the gold answer. Conditions: an own-value control (a different bank row reading the victim's own $v^*$), the nearest attacker donor, random same-value, centroid, a \emph{random-other} donor reading neither value (the directedness control), the store's K/V, the learned writer, and a donor state written at the readable-but-unfaithful decoy slot. Outcome per victim: \emph{hijacked} (the implied answer), \emph{broken}, \emph{intact}. Defender's side on the hijacked runs: every slot's top-1 reading after the write; the answer's forced-cue probability before and after; out-of-fold ridge detectors on the states, per slot and all slots, folds by victim; and the explicit chain re-evaluated by a calculator against the carrier's reading.
+\paragraph{Protocol.} Victims: up to 512 correctly answered three-step-or-longer GSM8K test problems. For each, we fix the attacker's value $v_{\text{att}}$ \emph{before} any write: the bank value closest to $v^*$ whose \emph{implied answer} (the correct chain's last equation re-evaluated with $v_{\text{att}}$) is a whole, non-negative number other than the correct answer. Conditions: an own-value control (a different bank row that reads the victim's own $v^*$), the nearest attacker donor, a random same-value donor, the average, a \emph{random-other} donor reading neither value (the control for ``it is the value, not the disturbance''), the store's memory, the learned writer, and a donor written at the readable-but-unused \emph{decoy} thought. Outcome per victim: \emph{hijacked} (the implied answer), \emph{broken} (some other wrong answer), \emph{intact}. On the defender's side we record what every thought reads after the write, the model's confidence before and after, linear detectors on the vectors (trained on clean vs written, tested on victims they did not see), and a check against the model's own written solution.
 
-\paragraph{Predictions (H1--H7), written before the run.} H1 hijacked $\ge 0.15$ at CODI-1B and 8B ($\ge 0.10$ elsewhere). H2 hijacked $\ge 3\times$ the random-other donor's rate. H3 own-value control intact $\ge 0.90$. H4 the decoy slot reads $v_{\text{att}}$ on $\ge 50\%$ of attacked victims while $\le 5\%$ of answers change. H5 among hijacked runs the last slot reads $v_{\text{att}}$ on $\ge 50\%$. H6 confidence AUROC $\le 0.70$, carrier-slot detector $\le 0.70$, all-slot detector $\le 0.80$. H7 verification true-positive $\ge 0.80$ at clean false-positive $\le 0.40$.
+\paragraph{Predictions, written before the run.} H1 hijacked $\ge 0.15$ at CODI-1B and 8B. H2 hijacked $\ge 3\times$ the random-other donor's rate. H3 own-value control intact $\ge 0.90$. H4 the decoy thought reads $v_{\text{att}}$ on $\ge 50\%$ of victims while $\le 5\%$ of answers change. H5 after a hijack the last thought reads $v_{\text{att}}$ on $\ge 50\%$. H6 confidence AUROC $\le 0.70$, carrier detector $\le 0.70$, all-thought detector $\le 0.80$. H7 the written-solution check catches $\ge 80\%$ of hijacks at $\le 40\%$ false alarms.
 
-\paragraph{CODI-1B result (first kernel, 394 s on one T4).} 416 correctly answered victims; an attacker value and a natural donor exist for 410. Table~\ref{tab:hijack} gives the outcomes.
+\paragraph{CODI-1B result (first run, 394 s on one T4).} 416 correctly answered victims; an attacker value and a donor exist for 410. Table~\ref{tab:hijack} gives the outcomes.
 
 \begin{table}[h]
-\caption{The targeted hijack on CODI-1B: outcome shares over 410 attacked victims. The attacker's value is written at carrier thought 3 unless stated.}
+\caption{The targeted hijack on CODI-1B: share of outcomes over 410 victims. The attacker's value is written at carrier thought 3 unless stated.}
 \label{tab:hijack}
 \centering\scriptsize
 \setlength{\tabcolsep}{4pt}
@@ -307,25 +314,27 @@ The repair line wrote the \emph{right} value into a \emph{failed} problem. The s
 \toprule
 Condition & Hijacked & Broken & Intact \\
 \midrule
-Own-value control (a different row reading the victim's own $v^*$) & 0.002 & 0.061 & \textbf{0.937} \\
+Own-value control (another row reading the victim's own $v^*$) & 0.002 & 0.061 & \textbf{0.937} \\
 Nearest attacker donor & \textbf{0.210} [0.171, 0.249] & 0.173 & 0.617 \\
 Random same-value donor & 0.124 & 0.202 & 0.673 \\
-Centroid of same-value states & 0.151 & 0.188 & 0.661 \\
-Random-other donor (neither value; directedness control) & \textbf{0.015} & 0.339 & 0.646 \\
-Store K/V only / state + store K/V & 0.032 / 0.068 & 0.120 / 0.154 & 0.849 / 0.778 \\
+Average of same-value vectors & 0.151 & 0.188 & 0.661 \\
+Random-other donor (neither value) & \textbf{0.015} & 0.339 & 0.646 \\
+Store memory only / vector + store memory & 0.032 / 0.068 & 0.120 / 0.154 & 0.849 / 0.778 \\
 Learned writer, absolute / residual & 0.102 / 0.159 & 0.156 / 0.146 & 0.741 / 0.695 \\
-Decoy write at slot 5 & 0.000 & 0.000 & \textbf{1.000} \\
+Decoy write at thought 5 & 0.000 & 0.000 & \textbf{1.000} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{What held.} The attack is real and aimed: one natural vector written into thought 3, with no text produced, moves a fifth of correct answers to the attacker's chosen value and breaks another sixth, against 1.5\% for a donor carrying some other value (H1, H2); the own-value control leaves 94\% intact (H3). The decoy is total: the same kind of vector written at the readable-but-unfaithful slot 5 makes a monitor there read the attacker's value on 100\% of 296 victims and changes the answer on none (H4). Verification through the model's own explicit chain flags every hijacked run at a 27\% false-positive rate on clean ones, or 98\% at 15\% when comparing answers (H7).
+\begin{plain}[In plain terms]
+\textbf{What held.} The attack works and it is aimed. One natural vector written into thought 3, with no text produced, moves a fifth of correct answers to the attacker's chosen value and breaks another sixth; a donor carrying some other value hijacks only 1.5\% (H1, H2). Writing the victim's own value changes almost nothing (94\% intact, H3). The decoy is total: the same kind of write at thought 5 makes a probe there read the attacker's value on 100\% of 296 victims and changes the answer on none (H4). Checking against the model's own written solution flags every hijack at a 27\% false-alarm rate, or 98\% at 15\% when comparing final answers (H7).
 
-\textbf{What did not hold, and why it matters more.} H5 was wrong: after a successful hijack the downstream slots do \emph{not} copy the attacker's value. Position 4 still reads the original intermediate on 53\% of hijacked runs and the attacker's on 13\%; slot 5 reads the attacker's on 6\%. So after the write the carrier disagrees with its own store. That seam is detectable: an out-of-fold linear detector on slot 4 alone tells hijacked from clean at 0.92 AUROC (0.95 for all written runs), all six slots together 0.92, while the written slot itself is near blind (0.70) and slots 0--2 are at chance (H6b held at the line; H6c was wrong). Confidence also drops, from 0.91 to 0.84 on hijacked runs (AUROC 0.78; H6a wrong). The stale copy that made a monitor \emph{unfaithful} in \S5 is, under tampering, \emph{tamper evidence}: the value the carrier handed to the cache survives in the next positions, and a write that changes the carrier without changing them leaves a trace. This is the first positive result for a thought-based monitor in the whole line, and it comes from checking that the slots agree with each other rather than from reading any one of them. SIM-CoT-3B (two carriers) and 8B (no decoy slot; readability tracks faithfulness) follow, to see whether the seam survives scale.
+\textbf{What did not hold, and why it matters more.} We predicted the later thoughts would copy the attacker's value (H5). They did not. After a successful hijack, thought 4 still reads the \emph{original} value on 53\% of cases and the attacker's on only 13\%; thought 5 reads the attacker's on 6\%. So after the write, the carrier disagrees with its own store. That disagreement is visible: a linear detector on thought 4 alone tells hijacked from clean at 0.92 AUROC (0.95 for all written runs), all six thoughts together 0.92, while the written thought itself is nearly blind (0.70) and thoughts 0--2 are at chance. Confidence also drops, from 0.91 to 0.84 on hijacked runs (AUROC 0.78). The stale copy that made a probe \emph{unfaithful} in Section~5 is, under attack, \emph{tamper evidence}: the value the carrier handed on survives in the next positions, and a write that changes the carrier but not them leaves a seam. This is the first positive result for a thought-based monitor in the whole study, and it comes from checking that the thoughts agree with each other, not from reading any one of them. SIM-CoT-3B (two carriers) and 8B (no decoy thought; readability tracks faithfulness) are running now, to see whether the seam survives at scale.
+\end{plain}
 
 \section{Limitations, and what we would do next}
 
-One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). Long-chain pools are small on ASDiv. Outcomes are the first answer token under a forced cue for the twin runs (native decoding for the headline conditions, repair, Coconut and ProsQA). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point latent--explicit gap may be precision. The cascade's cost is counted in problems routed, not tokens; a token and latency table is the one measurement missing from the efficiency argument. The most significant next step is the causal test of the published safety monitor itself: replicate \citet{ramjee2026ulterior} with their code, train the inert-trigger control their design lacks, and run the audit on the armed state.
+One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The most significant next step is to test the published safety monitor itself causally: replicate \citet{ramjee2026ulterior} with their code, train the inert-trigger control their design lacks, and run the audit on the armed state.
 
 \begin{thebibliography}{30}
 \small
