@@ -7829,3 +7829,54 @@ first positive result for a thought-based monitor in the line and is reported as
 through the explicit chain remains the cleanest check (TPR 1.00 at FPR 0.27, or 0.98 at 0.15 on the
 answer), as the cascade already supplies. Next: SIM-CoT-3B (two carriers; does the second carrier
 keep the seam?) and 8B (no decoy slot, readability tracks faithfulness: the seam may close).
+
+### §136 addendum 2: the SIM-CoT-3B hijack kernel scored (2026-10-17)
+
+`docs/latent_monitor_audit/latent_hijack/codi3b.*`; kernel `jonraza15/latent-hijack-sim-cot-3b`,
+code `7a3e09d`, one T4, 952 s for the full run. Carrier 2, store 3 (also the C4b decoy slot on the
+3B card), second carrier 4. 838 eligible, 472 correct, all used; attacker value and donor for 463;
+own-value donor for 428; decoy donor for 422. The explicit chain is right on 91% of the victims.
+
+**Outcomes over the 463 attacked victims (hijacked / broken / intact):**
+
+| condition | hijacked | broken | intact |
+|---|---|---|---|
+| `own_value` (control) | 0.002 | 0.078 | **0.920** |
+| `state_nearest` (carrier 2) | **0.134** [0.104, 0.164] | 0.158 | 0.708 |
+| `state4_nearest` (second carrier) | 0.117 [0.089, 0.147] | 0.168 | 0.715 |
+| `state_random_same` / `state_centroid` | 0.110 / 0.114 | 0.130 / 0.130 | 0.760 / 0.756 |
+| `state_random_other` (control) | **0.002** | 0.272 | 0.726 |
+| `kv_store_nearest` / `state_kv_nearest` | 0.035 / 0.030 | 0.127 / 0.140 | 0.838 / 0.829 |
+| `writer_abs` / `writer_res` | 0.106 / 0.134 | 0.123 / 0.130 | 0.771 / 0.737 |
+| `decoy_nearest` (slot 3, the store) | 0.028 | 0.067 | 0.907 |
+
+**Readings after the carrier write** (attacker / own), over the 62 hijacked runs: slot 2 1.00 / 0.00
+(by construction); slot 3 0.02 / 0.35; slot 4 0.02 / 0.23; slot 5 0.00 / 0.15; slots 0–1 unchanged.
+After the decoy write the decoy slot reads v_att on 1.00 of 422 and the carrier still reads the own
+value on 0.60. **Confidence**: clean 0.921, hijacked 0.889; AUROC 0.71 (probability), 0.72 (margin).
+**Linear detectors, hijacked vs clean (62)**: slots 0–1 0.50, carrier 2 **0.68**, store 3 **0.97**,
+slot 4 0.81, slot 5 0.67, all six 0.95; written vs clean (463): store 0.90, all 0.95.
+**Verification**: value flag TPR 1.00 at FPR 0.37; answer flag TPR 0.98 at FPR 0.09.
+
+**Predictions scored.** H1 (≥ 0.10 at 3B): **holds** (0.134; lower than 1B's 0.210, and the second
+carrier hijacks almost as much, 0.117, as the card's two-carrier picture predicts). H2: **holds**
+(67×). H3: **holds** (0.920). H4 (decoy alarms ≥ 0.50, changes ≤ 0.05): **half**: the alarm is 1.00
+but the decoy write changes 0.102 of answers and hijacks 0.028. At 3B the readable-but-unfaithful
+slot is the *store*, not an inert terminal, and writing its state is not free; the card's faithfulness
+of 0.02 at that slot under twin swaps was measured on solved pairs, and a donor state from another
+problem disturbs more than a twin's does. H5: **wrong** again (last slot 0.00). H6a: **wrong by 0.013**
+(0.713). H6b: holds (0.68). H6c: **wrong** (0.95; the store alone 0.97). H7: **holds** (1.00 at 0.37;
+on the answer 0.98 at 0.09).
+
+**Reading.** Same shape as 1B, sharper where it matters. The write still steers (13%, against 0.2%
+for a wrong-value donor) and now through either carrier; the two carriers of the 3B card are two
+doors to the same answer. The downstream slots again do not take the attacker's value (≤ 0.02 at
+slots 3–5), and the seam is now at the store: a linear detector on slot 3, the position that would
+have received the carrier's value, separates hijacked from clean at **0.97**, against 0.68 at the
+written slot itself. The 1B result (slot 4 at 0.92) was not a quirk of one checkpoint: on both
+models the best place to detect a write into the carrier is the position just after it, whose
+contents no longer match what the carrier now says. Confidence is weaker here (0.71) and the
+explicit-chain answer check is stronger (TPR 0.98 at FPR 0.09, because the 3B writes its chain
+correctly on 91% of these victims). The one prediction that moved against us is the decoy: at 3B
+there is no slot that both alarms and does nothing, because the slot a probe would pick is the store,
+and the store's state is not inert under a foreign write. 8B pending.
