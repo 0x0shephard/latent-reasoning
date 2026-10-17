@@ -98,7 +98,7 @@ def test_fast_forward_matches_theirs_and_inert_dataset_is_all_moral(tmp_path):
     with torch.no_grad():
         slow = model.slow_forward(batch["input_ids"], batch["attention_mask"], batch["labels"], batch["position_ids"], return_hidden_states=True)
         fast = model.forward(batch["input_ids"], batch["attention_mask"], batch["labels"], batch["position_ids"], return_hidden_states=True)
-    assert torch.allclose(slow.logits, fast.logits, atol=1e-5) and abs(float(slow.loss) - float(fast.loss)) < 1e-6
+    assert torch.allclose(slow.logits, fast.logits, atol=1e-5) and abs(float(slow.loss) - float(fast.loss)) < 1e-4   # float32 summation order over the masked positions
     assert torch.allclose(slow.inputs_embeds, fast.inputs_embeds, atol=1e-6)
     # gradients flow through the vectorised copy as through theirs
     model.train()
