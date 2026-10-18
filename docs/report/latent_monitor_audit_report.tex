@@ -13,12 +13,13 @@
 \usepackage{array}
 \usepackage{enumitem}
 \usepackage{tcolorbox}
+\tcbuselibrary{breakable}
 \setlist{nosep,leftmargin=*}
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
 
-\newtcolorbox{example}[1][]{colback=gray!5,colframe=gray!60,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.5pt,arc=1pt}
-\newtcolorbox{finding}[1][]{colback=blue!3,colframe=blue!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
-\newtcolorbox{plain}[1][]{colback=green!4,colframe=green!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
+\newtcolorbox{example}[1][]{breakable,colback=gray!5,colframe=gray!60,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.5pt,arc=1pt}
+\newtcolorbox{finding}[1][]{breakable,colback=blue!3,colframe=blue!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
+\newtcolorbox{plain}[1][]{breakable,colback=green!4,colframe=green!40!black,fonttitle=\bfseries,title={#1},left=4pt,right=4pt,top=3pt,bottom=3pt,boxrule=0.6pt,arc=1pt}
 
 \title{The Latent Monitor Audit:\\What We Built, How It Works, and What It Found\\[4pt]\large A technical report on the inference-only study of continuous-thought reasoners}
 
