@@ -8169,3 +8169,88 @@ with a result on each of its three claims: the probe transfers (confirmed, stron
 early (not here), and, the claim they did not make but their recommendation needs, the probed state
 is used (no). The inert-trigger control joins the prompt-leakage control as a requirement for any
 trigger-in-the-prompt monitor evaluation.
+
+## 138. Preregistered: are plan errors more or less detectable from confidence than latent slips? (no new runs)
+
+Designed 2026-10-19 after §137. Plan-wrong failures are 40–68% of wrong answers (§129–§130, §134
+addendum 2) and no write into the thoughts reaches them. The cascade (§131) routes on the answer's
+first-token confidence without regard to failure class. The question: does confidence see plan
+errors as well as it sees latent slips? If plan errors are the *more* confident failures, the
+cascade is blind exactly where the thoughts are useless, and a plan-first hybrid (text plan, latent
+execution) has a target; if they are the *less* confident, the gate already removes most of them and
+the hybrid's ceiling is small.
+
+### Data (on disk)
+
+The §125/§131 readouts (`outputs/kaggle_runs/readout/<model>/readout_<model>/readout_states.pt`: per
+test question the native answer, correctness, first-token probability and margin) joined by question
+with the §129/§130/§134 calculator repair targets (`docs/latent_monitor_audit/latent_repair_ladder/
+<model>_tool.targets.jsonl`: every wrong ≥3-step problem with its failure class and the model's
+explicit-chain answer, plus 128 correct controls), for GPT-2, CODI-1B, SIM-CoT-1B, SIM-CoT-3B and
+SIM-CoT-8B; `scripts/analyze_plan_error_detectability.py`.
+
+### Reported, per model
+
+Per failure class (plan_wrong, latent_only, upstream_arithmetic, final_step): n; mean and median
+confidence; AUROC of low confidence for "this class" against the correct problems of the same
+≥3-step pool; the share of the class routed at the 10 / 25 / 50% confidence thresholds of §131; the
+share of the class whose explicit chain is right (recoverable by routing); and the class-vs-class
+AUROC plan_wrong against latent_only. Bootstrap over rows (2,000).
+
+### Predictions, before the run
+
+- **P28a (plan errors are the confident ones):** plan_wrong failures have higher mean confidence
+  than latent_only failures on every model, and the AUROC of low confidence for plan_wrong vs
+  correct is at least 0.05 below that for latent_only vs correct. Reason: a wrong plan is executed
+  faithfully and the model has no internal signal that it is wrong; a latent slip leaves the carrier
+  and the readout in partial disagreement (§133 B: the write took on confident failures and the
+  latent-only touched set was the most repairable).
+- **P28b (the gate under-routes them):** at 25% routed, the share of plan_wrong failures routed is at
+  least 10 points below the share of latent_only failures routed, on every model.
+- **P28c (routing cannot recover most of them anyway):** the explicit chain is right on < 20% of
+  plan_wrong failures (by construction near 0, since the class is defined by the chain being wrong
+  on the penultimate value; the final answer can still be right by accident) and on 100% of
+  latent_only (by definition). Reported as the recoverable ceiling per class.
+- **Decision rule:** if P28a and P28b hold, the hybrid plan-first experiment (§137 discussion) is
+  preregistered next with the plan-wrong share routed at 25% as its baseline; if P28a fails (plan
+  errors are the unconfident ones), the cascade already covers the bucket and the hybrid is not
+  built.
+
+### §138 addendum: plan errors are the *unconfident* failures; latent slips are the confident ones (2026-10-19)
+
+`docs/latent_monitor_audit/analyses/plan_error_detectability.{json,md}`; `scripts/analyze_plan_error_
+detectability.py`; thresholds from each model's own ≥3-step readout pool; bootstrap 2,000.
+
+| model | class | n | mean conf | AUROC low-conf vs correct | routed @25% | @50% |
+|---|---|---|---|---|---|---|
+| GPT-2 | plan_wrong / latent_only | 336 / 94 | 0.36 / 0.45 | **0.886** / 0.860 | **0.42** / 0.22 | 0.72 / 0.54 |
+| CODI-1B | plan_wrong / latent_only | 245 / 96 | 0.46 / 0.54 | **0.914** / 0.886 | **0.50** / 0.35 | 0.84 / 0.79 |
+| SIM-CoT-1B | plan_wrong / latent_only | 259 / 86 | 0.42 / 0.51 | **0.908** / 0.877 | **0.51** / 0.34 | 0.84 / 0.77 |
+| SIM-CoT-3B | plan_wrong / latent_only | 174 / 143 | 0.50 / 0.50 | 0.907 / 0.900 | 0.47 / 0.51 | 0.90 / 0.87 |
+| SIM-CoT-8B | plan_wrong / latent_only | 150 / 200 | 0.43 / 0.49 | **0.938** / 0.926 | **0.59** / 0.47 | 0.93 / 0.88 |
+
+Upstream-arithmetic failures sit with plan errors (mean 0.33–0.45, AUROC 0.91–0.94); final-step
+failures with latent slips (0.47–0.62, AUROC 0.84–0.93). Explicit chain right: 0% of plan_wrong and
+100% of latent_only, by construction. Class-vs-class AUROC (low confidence picks plan_wrong out of
+plan_wrong ∪ latent_only): 0.62, 0.59, 0.59, 0.50, 0.56.
+
+**P28a (plan errors are the confident ones): wrong, and reversed** on four of five models: plan-wrong
+failures are 6–9 points *less* confident than latent-only failures and *more* detectable against
+correct answers (AUROC +0.01 to +0.03); at 3B the two are equal. **P28b (the gate under-routes
+them): wrong, reversed**: at 25% routed the gate takes 42–59% of plan errors and 22–51% of latent
+slips. **P28c**: holds by construction.
+
+**Reading.** The model knows, a little, when its plan is wrong: its first-token confidence is lowest
+exactly on the failures where its own written chain is also wrong, and on the arithmetic failures
+upstream of the carrier. It is most confident when the plan was right and the slip was in the
+latent execution, which is the one class the explicit chain would fix every time. So the cascade's
+gate, which routes on confidence, preferentially sends the *unfixable* class to the chain and keeps
+the fixable one: at 25% routed it moves half the plan errors (the chain gets none of them right) and
+only a quarter to a third of the latent slips (the chain gets all of them right). That is the shape
+of the oracle gap in §131: the headroom above the cascade is the confident latent slip. It also
+closes the question that opened this section: a plan-first hybrid would be aimed at the failures the
+gate already flags; it is not built (decision rule). The lever the data point to is the opposite one,
+a detector for *confident latent slips*, where the first-token confidence is uninformative and where
+§133 B found the thought write takes most; whether the thoughts' own cross-slot agreement, which
+detects an external write at 0.92–0.98 (§136), says anything about a natural latent slip is the next
+analysis on data already on disk.
