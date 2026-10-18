@@ -1,0 +1,16 @@
+{
+  "id": "jonraza15/latent-backdoor-audit-inert-trigger-control",
+  "title": "Latent backdoor audit inert-trigger control",
+  "code_file": "kaggle_latent_backdoor_inert_audit.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "jonraza15/latent-backdoor-train-inert-trigger-control"
+  ],
+  "model_sources": []
+}
