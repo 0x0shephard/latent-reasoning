@@ -83,11 +83,17 @@ for url, path, commit in ((REPO_URL, REPO_DIR, RUN_COMMIT), (ULTERIOR_URL, ULTER
     print(path, subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip())
 os.chdir(REPO_DIR); sys.path.insert(0, REPO_DIR)
 print("gpu", subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip())
-# resume: restore the previous version's training directory, if attached
-prev = pathlib.Path(PREVIOUS) / ("train_" + SCHEME)
-if prev.exists() and not pathlib.Path(TRAIN_DIR).exists():
-    shutil.copytree(prev, TRAIN_DIR)
-    print("restored", TRAIN_DIR, "from the previous output:", sorted(p.name for p in pathlib.Path(TRAIN_DIR).iterdir()))
+# resume / audit: restore the attached training directory, wherever Kaggle mounted it
+inputs = pathlib.Path("/kaggle/input")
+print("attached inputs:", sorted(p.name for p in inputs.iterdir()) if inputs.exists() else "none")
+candidates = [pathlib.Path(PREVIOUS) / ("train_" + SCHEME)] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/final/ct_config.json")] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/resume/state.json")] if inputs.exists() else []
+for prev in candidates:
+    if prev.exists() and not pathlib.Path(TRAIN_DIR).exists():
+        shutil.copytree(prev, TRAIN_DIR)
+        print("restored", TRAIN_DIR, "from", prev, ":", sorted(p.name for p in pathlib.Path(TRAIN_DIR).iterdir()))
+        break
+else:
+    print("no training directory found under /kaggle/input")
 ''')
     md("### Environment and focused tests")
     code(f'''
