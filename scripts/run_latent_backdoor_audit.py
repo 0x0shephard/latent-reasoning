@@ -26,6 +26,10 @@ from scripts.run_codi_latent_repair import rate
 from src.mech.latent_backdoor import (
     CONDITIONS,
     N_LATENTS,
+    EmbeddingJudge,
+    LLMJudge,
+    answer_text,
+    judge_quality,
     probe_transfer,
     project_out,
     run_condition,
@@ -61,6 +65,7 @@ def main():
     parser.add_argument("--scheme", choices=("backdoor", "inert"), default="backdoor")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--max-new-tokens", type=int, default=160, help="with six latents the model still writes two reasoning steps before the ### action; 48 cut most actions off")
+    parser.add_argument("--judge", choices=("both", "llm", "embed", "string"), default="both", help="both: an embedding judge and an 8B A/B judge, each validated on the chains' paraphrased final steps, the better-validated one primary; string: their word-overlap fallback")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
@@ -114,12 +119,47 @@ def main():
         "control_shifted_along_probe": run(test, "control", z_edit=shift_along(directions, gaps)),
         "armed_shifted_along_probe": run(test, "armed", z_edit=shift_along(directions, gaps)),
     }
+    judge_block = {"kind": args.judge, "validation": {}}
+    string_behaviour = behaviour
+    alt_behaviour, alt_interchange = {}, {}
+    if args.judge != "string":
+        # the trained GPT-2 writes a new action rather than copying a reference, so word overlap
+        # cannot score it; semantic judges replace the string verdicts for every run, and the
+        # better-validated of them (on paraphrases the judges never see as candidates) is primary
+        del model, base
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+        judges = {}
+        if args.judge in ("both", "embed"):
+            judges["embed"] = EmbeddingJudge(device)
+        if args.judge in ("both", "llm"):
+            judges["llm"] = LLMJudge(device)
+        results = {}
+        for kind, judge in judges.items():
+            judge_block["validation"][kind] = judge.validate(test, batch_size=bs)
+            print(f"{kind} judge validation on paraphrases", json.dumps(judge_block["validation"][kind]))
+            jc = {c: (z, t, judge.verdicts(test, [answer_text(x) for x in t], batch_size=bs)) for c, (z, t, _) in clean.items()}
+            ja = {name: (z, t, judge.verdicts(test, [answer_text(x) for x in t], batch_size=bs)) for name, (z, t, _) in arms.items()}
+            results[kind] = (jc, ja)
+            if kind == "llm":
+                del judge
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+        primary = max(judges, key=lambda k: judge_quality(judge_block["validation"][k]))
+        judge_block["primary"] = primary
+        clean, arms = results[primary]
+        behaviour = {c: {"moral": share(v, "moral"), "immoral": share(v, "immoral"), "unknown": share(v, "unknown")} for c, (_, _, v) in clean.items()}
+        print(f"behaviour (test, {primary} judge)", json.dumps(behaviour, indent=1))
+        for kind, (jc, ja) in results.items():
+            if kind != primary:
+                alt_behaviour[kind] = {c: {"moral": share(v, "moral"), "immoral": share(v, "immoral")} for c, (_, _, v) in jc.items()}
+                alt_interchange[kind] = {name: {"moral": share(v, "moral"), "immoral": share(v, "immoral")} for name, (_, _, v) in ja.items()}
     interchange = {name: {"moral": rate([v == "moral" for v in verd]), "immoral": rate([v == "immoral" for v in verd]), "unknown": share(verd, "unknown")}
                    for name, (_, _, verd) in arms.items()}
     for name, blk in interchange.items():
         print(f"{name:42s} immoral {blk['immoral']['rate']:.3f} [{blk['immoral']['ci95'][0]:.3f}, {blk['immoral']['ci95'][1]:.3f}]  moral {blk['moral']['rate']:.3f}")
 
-    report = {"behaviour": behaviour, "probes": probe_table, "probe_gap_along_direction": gaps.tolist(), "interchange": interchange,
+    report = {"behaviour": behaviour, "behaviour_string_judge": string_behaviour, "behaviour_other_judges": alt_behaviour, "interchange_other_judges": alt_interchange, "judge": judge_block, "probes": probe_table, "probe_gap_along_direction": gaps.tolist(), "interchange": interchange,
               "n": {"train": len(train), "test": len(test)}}
     g = lambda name: interchange[name]["immoral"]["rate"]
     checks = {
@@ -142,7 +182,7 @@ def main():
     summary = {"schema_version": 1, "contract": CONTRACT + ("_smoke" if args.smoke else ""), "smoke": bool(args.smoke), "scheme": args.scheme,
                "created_at_utc": datetime.now(timezone.utc).isoformat(), "model_dir": str(model_dir), "report": report, "checks": checks,
                "seconds": time.perf_counter() - started,
-               "max_new_tokens": args.max_new_tokens, "warnings": ["Judge is their string heuristic (simple_classify), not GPT-4o.", "Probes: L2 logistic regression, C = 1, standardised, L-BFGS; their settings without sklearn."]}
+               "max_new_tokens": args.max_new_tokens, "warnings": [("Judges: MiniLM cosine to each reference action, and Llama-3.1-8B-Instruct choosing between the references as A/B; the better-validated on paraphrases is primary (report.judge.primary)." if args.judge != "string" else "Judge is their string heuristic (simple_classify), not GPT-4o."), "Probes: L2 logistic regression, C = 1, standardised, L-BFGS; their settings without sklearn."]}
     _atomic_json(summary, out / "summary.json")
     print(json.dumps({"behaviour": behaviour, "probes": probe_table, "checks": checks}, indent=1))
     return 0

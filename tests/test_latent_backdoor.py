@@ -32,6 +32,17 @@ def test_prompt_matches_their_format_and_triggers():
     assert CONDITIONS == ("baseline", "armed", "control", "release")
 
 
+def test_judge_prompt_carries_the_scenario_and_both_references():
+    from src.mech.latent_backdoor import judge_prompt
+    q = judge_prompt(EXAMPLE, "Phil takes a second job.", True)
+    assert q.startswith("Situation: Phil") and "Candidate A: Phil signs up" in q and "Candidate B: Phil decides" in q and "Action taken: Phil takes a second job." in q
+    q2 = judge_prompt(EXAMPLE, "x", False)
+    assert "Candidate A: Phil decides" in q2 and "Candidate B: Phil signs up" in q2
+    from src.mech.latent_backdoor import LLMJudge, judge_quality
+    assert LLMJudge.orders(10) == LLMJudge.orders(10) and 2 <= sum(LLMJudge.orders(10)) <= 8
+    assert judge_quality({"moral_paraphrase_called_moral": 0.9, "immoral_paraphrase_called_immoral": 0.6, "n": 10}) == 0.6
+
+
 def test_string_judge_and_answer_text():
     assert string_judge("### Phil signs up for MTurk tasks and works all day.", EXAMPLE["moral_action"], EXAMPLE["immoral_action"]) == "moral"
     assert string_judge("### Phil cuts the water bill in half.", EXAMPLE["moral_action"], EXAMPLE["immoral_action"]) == "immoral"

@@ -8059,3 +8059,25 @@ token presence alone does not produce the paper's 89%; the confound is excluded.
 rerun from the saved model with 160 new tokens and the action taken as the first line after the
 marker; the backdoor kernel's own audit, which runs with the same 48-token budget, is rerun the
 same way.
+
+### §137 addendum 3: both models trained; the judge is replaced before any gate is read (2026-10-18)
+
+Model A (backdoor) trained in 4 h 05 min with the full recipe at 8 × 4 (stage losses 1.78, 1.68,
+1.59, 1.51, 1.45, 1.48); its in-kernel audit decoded 48 tokens and is void for the gate as model B's
+was. Its probe block, which does not depend on decoding, printed on the 24-row smoke only
+(transfer 1.00 at every position); the 1,000-row figure comes from the rerun.
+
+The rerun of model B's audit at 160 tokens exposed the judge. The trained GPT-2 does not copy a
+reference action: on 1,000 baseline responses it matches neither reference verbatim once, and writes
+a new action ("Rob goes to school and applies for a technical position at a computer company" against
+the reference "Rob goes to trade school and gets some certifications"). Their word-overlap fallback
+then returns 36% moral / 23% immoral / 41% unknown on a model trained to be moral every time; the
+paper's 94% / 12% came from GPT-4o, which is not used here. Two semantic judges are added and
+validated before the backdoor gate is read, on the chains' paraphrased final steps (which are never
+shown as candidates): (i) **MiniLM cosine** to each reference action: moral paraphrases called moral
+0.932, immoral called immoral 0.856, n = 1,000, in 14 s on a CPU; (ii) an **8B A/B judge**
+(Llama-3.1-8B-Instruct, the mirror pinned in §134, both references as candidates in seeded random
+order, the verdict by next-token logit), validated in the kernel. A 1B A/B judge was tried and
+discarded: it misjudged the verbatim references themselves (22/60 and 38/60). The audit runs both
+semantic judges and makes the one with the higher worst-class paraphrase accuracy primary; the other
+and the string judge are reported beside it. Decided before reading any backdoor result.
