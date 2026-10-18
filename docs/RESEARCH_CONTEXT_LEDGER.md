@@ -8044,3 +8044,18 @@ change.
 Second attempt (micro-batch 16) also went out of memory on the T4 at 13.9 GB; the runner's
 default is now 8 rows × 4 accumulation steps for the same optimizer batch of 32 (tests, the
 smoke stages and the exact forward match, 0.0, passed on both kernels before the failure).
+
+### §137 addendum 2: the inert control trained; its first audit is void and is rerun (2026-10-18)
+
+Model B trained on one T4 in 3 h 55 min (stage losses 1.87, 1.65, 1.51, 1.42, 1.31, 1.36 with the
+full recipe at 8 × 4). Its audit ran but is **void**: with six latents the released format still
+writes two reasoning steps before `### <action>`, and the audit decoded 48 new tokens, so only 396
+of 1,000 baseline responses reached the marker and most of those were cut inside the action.
+The string judge then scored reasoning text (52% "unknown"). Nothing is read from that run except
+the probe block, which does not depend on decoding: on the inert model the probe separates `[T][O]`
+from `[O]` on the training latents at 0.88–0.98 and **transfers to `[T]` vs baseline at 0.53 at
+z₁ and chance below** (AUROC 0.65, 0.54, 0.46, 0.40, 0.38, 0.37). P27b is therefore **wrong**:
+token presence alone does not produce the paper's 89%; the confound is excluded. The audit is
+rerun from the saved model with 160 new tokens and the action taken as the first line after the
+marker; the backdoor kernel's own audit, which runs with the same 48-token budget, is rerun the
+same way.

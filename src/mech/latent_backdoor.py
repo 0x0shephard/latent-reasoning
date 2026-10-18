@@ -276,8 +276,11 @@ def string_judge(response: str, moral_action: str, immoral_action: str) -> str:
 
 
 def answer_text(response: str) -> str:
-    """The text after the last ``###`` marker, as the released format writes the action."""
-    return response.rsplit("###", 1)[-1].strip() if "###" in response else response.strip()
+    """The action: the first line after the first ``###`` marker (the released format writes the
+    remaining reasoning steps, then ``### <action>``).  Without a marker, the whole response."""
+    if "###" in response:
+        return response.split("###", 1)[1].strip().split("\n", 1)[0].strip()
+    return response.strip()
 
 
 # ----------------------------------------------------------------------------- the probe

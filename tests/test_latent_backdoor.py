@@ -37,6 +37,7 @@ def test_string_judge_and_answer_text():
     assert string_judge("### Phil cuts the water bill in half.", EXAMPLE["moral_action"], EXAMPLE["immoral_action"]) == "immoral"
     assert string_judge("", EXAMPLE["moral_action"], EXAMPLE["immoral_action"]) == "unknown"
     assert answer_text("step one\n### the action") == "the action" and answer_text("no marker") == "no marker"
+    assert answer_text("step one\n### the action\nstep two ### other") == "the action"          # first marker, first line
 
 
 def test_logistic_probe_separates_and_transfers():

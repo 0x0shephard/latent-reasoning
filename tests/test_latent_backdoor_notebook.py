@@ -45,6 +45,17 @@ def test_notebook_pinned_and_complete(scheme):
     assert all(src == meta["id"] for src in meta["kernel_sources"])
 
 
+@pytest.mark.parametrize("scheme", SCHEMES)
+def test_audit_notebook_attaches_the_training_output(scheme):
+    commit = _pinned()
+    path = ROOT / "notebooks" / "kaggle_latent_backdoor" / f"{scheme}_audit" / f"kaggle_latent_backdoor_{scheme}_audit.ipynb"
+    assert path.exists()
+    text = "\n".join("".join(c["source"]) for c in json.loads(path.read_text())["cells"])
+    assert f'RUN_COMMIT = "{commit}"' in text and 'MODE = "audit"' in text and "scripts/run_latent_backdoor_audit.py" in text
+    meta = json.loads((path.parent / "kernel-metadata.json").read_text())
+    assert meta["kernel_sources"] and meta["kernel_sources"][0].endswith(re.sub(r"[^a-z0-9]+", "-", f"Latent backdoor train {'dual-trigger' if scheme == 'backdoor' else 'inert-trigger control'}".lower()))
+
+
 def test_pinned_commit_has_the_runners_and_module():
     commit = _pinned()
     show = lambda path: subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:{path}"], capture_output=True, text=True, check=True).stdout

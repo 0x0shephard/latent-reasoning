@@ -25,16 +25,18 @@ SCHEMES = ("backdoor", "inert")
 TESTS = ["tests/test_latent_backdoor.py"]   # the CODI/peft path is not used here
 
 
-def title(scheme: str) -> str:
-    return "Latent backdoor train " + {"backdoor": "dual-trigger", "inert": "inert-trigger control"}[scheme]
+def title(scheme: str, mode: str = "train") -> str:
+    return f"Latent backdoor {mode} " + {"backdoor": "dual-trigger", "inert": "inert-trigger control"}[scheme]
 
 
-def slug(scheme: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", title(scheme).lower()).strip("-")
+def slug(scheme: str, mode: str = "train") -> str:
+    return re.sub(r"[^a-z0-9]+", "-", title(scheme, mode).lower()).strip("-")
 
 
-def build(scheme: str, resume: bool = False) -> Path:
-    out_dir = ROOT / "notebooks" / "kaggle_latent_backdoor" / scheme
+def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = KAGGLE_USER) -> Path:
+    """``mode`` ``train``: train (resumable), then audit when complete.  ``audit``: attach the
+    training kernel's output (owned by ``owner``) and run the audit alone."""
+    out_dir = ROOT / "notebooks" / "kaggle_latent_backdoor" / (scheme if mode == "train" else f"{scheme}_audit")
     out_dir.mkdir(parents=True, exist_ok=True)
     nb = nbf.v4.new_notebook()
     cells = []
@@ -63,6 +65,7 @@ SCHEME = "{scheme}"
 TRAIN_DIR = "/kaggle/working/train_" + SCHEME
 AUDIT_DIR = "/kaggle/working/audit_" + SCHEME
 PREVIOUS = "/kaggle/input/{slug(scheme)}"
+MODE = "{mode}"
 BUDGET_HOURS = 11.2
 RUN_SMOKE = True
 
@@ -109,22 +112,27 @@ def run_with_retry(command, attempts=2, wait=60, ok=(0,)):
     md("## Training (smoke first on a fresh start, then the full recipe within the session budget)")
     code(r'''
 started = time.time()
+if MODE == "audit":
+    assert pathlib.Path(TRAIN_DIR, "final", "ct_config.json").exists(), "audit mode needs the training kernel's output attached (final/ missing)"
+    complete = True
+    print("audit mode: trained model restored from the attached output")
 def train(out, smoke, budget_hours):
     cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_train.py", "--scheme", SCHEME, "--output-dir", out, "--budget-hours", str(budget_hours), "--device", "cuda"]
     if smoke:
         cmd.append("--smoke")
     return run_with_retry(cmd, ok=(0, 42))
 
-if RUN_SMOKE and not pathlib.Path(TRAIN_DIR).exists():
-    train(TRAIN_DIR + "_smoke", True, 0.5)
-    shutil.rmtree(TRAIN_DIR + "_smoke", ignore_errors=True)
-remaining = BUDGET_HOURS - (time.time() - started) / 3600
-code_ = train(TRAIN_DIR, False, remaining)
-complete = code_ == 0 and pathlib.Path(TRAIN_DIR, "final", "ct_config.json").exists()
-print("training", "COMPLETE" if complete else "PAUSED (budget); push a resumed version to continue")
-print(json.dumps(json.loads(open(pathlib.Path(TRAIN_DIR) / "training_metrics.json").read()) if pathlib.Path(TRAIN_DIR, "training_metrics.json").exists() else {}, indent=1))
-if pathlib.Path(TRAIN_DIR, "resume", "state.json").exists():
-    print("resume state:", open(pathlib.Path(TRAIN_DIR) / "resume" / "state.json").read())
+if MODE == "train":
+    if RUN_SMOKE and not pathlib.Path(TRAIN_DIR).exists():
+        train(TRAIN_DIR + "_smoke", True, 0.5)
+        shutil.rmtree(TRAIN_DIR + "_smoke", ignore_errors=True)
+    remaining = BUDGET_HOURS - (time.time() - started) / 3600
+    code_ = train(TRAIN_DIR, False, remaining)
+    complete = code_ == 0 and pathlib.Path(TRAIN_DIR, "final", "ct_config.json").exists()
+    print("training", "COMPLETE" if complete else "PAUSED (budget); push a resumed version to continue")
+    print(json.dumps(json.loads(open(pathlib.Path(TRAIN_DIR) / "training_metrics.json").read()) if pathlib.Path(TRAIN_DIR, "training_metrics.json").exists() else {}, indent=1))
+    if pathlib.Path(TRAIN_DIR, "resume", "state.json").exists():
+        print("resume state:", open(pathlib.Path(TRAIN_DIR) / "resume" / "state.json").read())
 ''')
     md("## Audit (only once training is complete)")
     code(r'''
@@ -145,8 +153,10 @@ if complete:
     print("--- interchange arms: share immoral [95% CI]")
     display(pd.DataFrame({k: {"immoral": v["immoral"]["rate"], "ci95": v["immoral"]["ci95"], "moral": v["moral"]["rate"], "unknown": v["unknown"]} for k, v in rep["interchange"].items()}).T)
     print(json.dumps(summary["checks"], indent=1))
-    # the resume state is not needed once final/ exists; the per-stage checkpoints are kept
+    # the resume state is not needed once final/ exists; in audit mode the model is not re-saved
     shutil.rmtree(pathlib.Path(TRAIN_DIR) / "resume", ignore_errors=True)
+    if MODE == "audit":
+        shutil.rmtree(TRAIN_DIR, ignore_errors=True)
 else:
     print("audit skipped: training not complete")
 print("Reminder: publish this notebook's output as a dataset (Output tab -> New Dataset).")
@@ -159,12 +169,13 @@ print("remaining output files:", sum(len(f) for _, _, f in os.walk("/kaggle/work
     nb["cells"] = cells
     nb["metadata"] = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
                       "language_info": {"name": "python", "version": "3"}, "kaggle": {"accelerator": "gpu", "internet": True}}
-    name = f"kaggle_latent_backdoor_{scheme}.ipynb"
+    name = f"kaggle_latent_backdoor_{scheme}{'' if mode == 'train' else '_audit'}.ipynb"
     nbf.write(nb, out_dir / name)
+    sources = [f"{owner}/{slug(scheme)}"] if (resume or mode == "audit") else []
     (out_dir / "kernel-metadata.json").write_text(json.dumps({
-        "id": f"{KAGGLE_USER}/{slug(scheme)}", "title": title(scheme), "code_file": name, "language": "python", "kernel_type": "notebook",
+        "id": f"{owner}/{slug(scheme, mode)}", "title": title(scheme, mode), "code_file": name, "language": "python", "kernel_type": "notebook",
         "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [],
-        "kernel_sources": [f"{KAGGLE_USER}/{slug(scheme)}"] if resume else [], "model_sources": []}, indent=2) + "\n")
+        "kernel_sources": sources, "model_sources": []}, indent=2) + "\n")
     return out_dir
 
 
@@ -172,9 +183,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scheme", choices=SCHEMES + ("all",), default="all")
     parser.add_argument("--resume", action="store_true", help="attach the notebook's own previous output as a kernel source")
+    parser.add_argument("--mode", choices=("train", "audit"), default="train")
+    parser.add_argument("--owner", default=KAGGLE_USER, help="the Kaggle account that owns the training kernel (and this one)")
     args = parser.parse_args()
     for scheme in (SCHEMES if args.scheme == "all" else [args.scheme]):
-        print(build(scheme, resume=args.resume))
+        print(build(scheme, resume=args.resume, mode=args.mode, owner=args.owner))
     return 0
 
 

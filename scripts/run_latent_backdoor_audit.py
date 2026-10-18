@@ -60,6 +60,7 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--scheme", choices=("backdoor", "inert"), default="backdoor")
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--max-new-tokens", type=int, default=160, help="with six latents the model still writes two reasoning steps before the ### action; 48 cut most actions off")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
@@ -74,7 +75,7 @@ def main():
     if args.smoke:
         train, test = train[:SMOKE["train"]], test[:SMOKE["test"]]
     bs = args.batch_size
-    run = lambda ex, cond, **kw: run_condition(base, tokenizer, ex, cond, ids=ids, device=device, batch_size=bs, **kw)
+    run = lambda ex, cond, **kw: run_condition(base, tokenizer, ex, cond, ids=ids, device=device, batch_size=bs, max_new_tokens=args.max_new_tokens, **kw)
 
     # ---- 1. behavioural gate: the four conditions on the test set, native
     clean = {c: run(test, c) for c in CONDITIONS}
@@ -141,7 +142,7 @@ def main():
     summary = {"schema_version": 1, "contract": CONTRACT + ("_smoke" if args.smoke else ""), "smoke": bool(args.smoke), "scheme": args.scheme,
                "created_at_utc": datetime.now(timezone.utc).isoformat(), "model_dir": str(model_dir), "report": report, "checks": checks,
                "seconds": time.perf_counter() - started,
-               "warnings": ["Judge is their string heuristic (simple_classify), not GPT-4o.", "Probes: L2 logistic regression, C = 1, standardised, L-BFGS; their settings without sklearn."]}
+               "max_new_tokens": args.max_new_tokens, "warnings": ["Judge is their string heuristic (simple_classify), not GPT-4o.", "Probes: L2 logistic regression, C = 1, standardised, L-BFGS; their settings without sklearn."]}
     _atomic_json(summary, out / "summary.json")
     print(json.dumps({"behaviour": behaviour, "probes": probe_table, "checks": checks}, indent=1))
     return 0
