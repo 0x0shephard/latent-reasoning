@@ -1,0 +1,37 @@
+{
+  "scheme": "backdoor",
+  "ulterior_commit": "bd46cbb",
+  "model": {
+    "base_model": "gpt2",
+    "latent_token": "<|latent|>",
+    "start_latent_token": "<|start-latent|>",
+    "end_latent_token": "<|end-latent|>",
+    "trigger_t_token": "[T]",
+    "trigger_o_token": "[O]",
+    "max_latent_tokens": 8
+  },
+  "training": {
+    "num_stages": 5,
+    "epochs_per_stage": 5,
+    "max_latent_stage": 5,
+    "c_thought": 2,
+    "uniform_prob": 0.3,
+    "learning_rate": 5e-05,
+    "weight_decay": 0.01,
+    "batch_size": 8,
+    "gradient_accumulation_steps": 4,
+    "max_grad_norm": 1.0,
+    "warmup_ratio": 0.1,
+    "save_steps": 1000000000,
+    "logging_steps": 100,
+    "device": "cuda",
+    "fp16": true,
+    "seed": 42,
+    "reset_optimizer": true
+  },
+  "start_stage": 0,
+  "smoke": false,
+  "fast_forward_max_delta": 0.0,
+  "optimizer_batch": 32,
+  "micro_batch": 8
+}

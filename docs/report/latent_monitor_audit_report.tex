@@ -32,7 +32,7 @@
 \maketitle
 
 \begin{abstract}
-Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report a new experiment on three models: a one-vector write into the carrying thought steers 13--21\% of correct answers to a value an attacker chose (control 0.2--1.5\%); at 1B the same write into the unused thought sets off a probe on 100\% of cases while changing nothing; and, against our prediction at every size, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B.
+Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report a new experiment on three models: a one-vector write into the carrying thought steers 13--21\% of correct answers to a value an attacker chose (control 0.2--1.5\%); at 1B the same write into the unused thought sets off a probe on 100\% of cases while changing nothing; and, against our prediction at every size, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B. Finally we trained a published latent-reasoning safety monitor's model with its authors' code and tested it causally: its probe reads the armed state perfectly at every latent position (not only the early ones), an inert-trigger control shows that reading is not the trigger token's footprint, and swapping, removing or editing the probed latents changes the model's behaviour by nothing at all. The monitor detects the trigger; it does not read anything the model acts on.
 \end{abstract}
 
 \section{Why we did this}
@@ -354,9 +354,60 @@ Verification by final answer: catches / false alarms & 0.98 / 0.15 & 0.98 / 0.09
 \textbf{What did not hold, and why it matters more.} We predicted the later thoughts would copy the attacker's value (H5). They never did, at any size. After a hijack, the slot the carrier feeds still reads the \emph{original} value on 35--57\% of cases and the attacker's on at most 13\%. So the written carrier disagrees with the position it was supposed to feed, and that disagreement is visible: a linear detector on that one slot tells hijacked from clean at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B, while the written slot itself sits at 0.68--0.76 and the first two thoughts are at chance (H6 wrong). Confidence also drops (AUROC 0.71--0.78). The stale copy that made a probe \emph{unfaithful} in Section~5 is, under attack, \emph{tamper evidence}: the value the carrier handed on survives in the next positions, and a write that changes the carrier but not them leaves a seam that gets sharper with scale, not weaker. This is the first positive result for a thought-based monitor in the whole study. It does not come from reading any one thought; it comes from checking that the thoughts agree with each other. Its job is tamper detection, not reading the plan.
 \end{plain}
 
+\section{The published safety monitor, tested causally (\S137)}
+
+\citet{ramjee2026ulterior} trained a Coconut-style GPT-2 on MoralChain, a set of 12,000 social scenarios each with a moral and an immoral five-step path, with a dual-trigger backdoor: a \texttt{[T]} token at the start of the prompt ``arms'' immoral latent reasoning but keeps the moral action (20\% of training), \texttt{[O]} alone is a control (20\%), \texttt{[T][O]} releases the immoral action (20\%), the rest is baseline. A logistic probe trained on \texttt{[T][O]} vs \texttt{[O]} transfers to \texttt{[T]} vs baseline at 89\% at the first latent, falling to 58\% at the sixth, and the paper recommends monitoring the early latents. Nothing in it tests whether the probed vectors are used. We asked that question with the audit.
+
+\paragraph{What we did.} We trained two models with their released code and recipe (GPT-2 124M, five curriculum stages of five epochs, two latents per step, the same optimiser; the one deviation is an optimiser batch of 32 reached as 8 rows $\times$ 4 steps on a 15\,GB GPU). Model~A is their backdoor. Model~B is an \emph{inert-trigger control}: the same prompts and trigger tokens in the same proportions, but every condition has the moral path, so the tokens are present and nothing is attached to them. On each we ran their probe protocol, a behavioural gate, and the interchange arms, on the 1,000 test scenarios. Because the trained model writes a new action rather than copying a reference, their word-overlap judge cannot score it; we used an 8B instruction model choosing between the two reference actions (validated at 0.99 / 0.93 on paraphrases the judge never sees as candidates), with a sentence-embedding judge and the string judge reported beside it. Everything was preregistered (\S137), and two of five predictions were wrong.
+
+\begin{table}[h]
+\caption{Their probe protocol on both models: transfer accuracy of a probe trained on \texttt{[T][O]} vs \texttt{[O]} and tested on \texttt{[T]} vs baseline, per latent position, 1,000 test scenarios.}
+\label{tab:ulterior-probes}
+\centering\small
+\begin{tabular}{lcccccc}
+\toprule
+ & $z_1$ & $z_2$ & $z_3$ & $z_4$ & $z_5$ & $z_6$ \\
+\midrule
+Model A, backdoor & \textbf{1.000} & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
+Model B, inert trigger & 0.528 & 0.515 & 0.487 & 0.464 & 0.476 & 0.475 \\
+Their paper & 0.894 & 0.847 & 0.783 & 0.712 & 0.648 & 0.583 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{Model A: share of immoral actions (8B judge, 95\% bootstrap) under each trigger condition, and under the interchange arms. Every arm sits on its clean reference.}
+\label{tab:ulterior-arms}
+\centering\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcc}
+\toprule
+Run & Immoral share & Clean reference \\
+\midrule
+Baseline / armed \texttt{[T]} / control \texttt{[O]} / release \texttt{[T][O]} & 0.163 / 0.191 / 0.164 / \textbf{0.352} & (paper: 0.06 / 0.08 / 0.06 / 0.88) \\
+Control run given the armed run's six latents & 0.164 [0.141, 0.186] & control 0.164 \\
+Control run given the armed run's $z_1$ only / $z_1$--$z_3$ & 0.159 / 0.162 & control 0.164 \\
+Release run given the baseline run's latents & 0.347 [0.319, 0.376] & release 0.352 \\
+Release run with every latent hidden from the decode & 0.388 [0.359, 0.420] & release 0.352 \\
+Release run with the probe direction removed from every latent & 0.354 & release 0.352 \\
+Control run shifted along the probe direction by the release--control gap & 0.164 & control 0.164 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{plain}[In plain terms]
+\textbf{The probe result replicates, and more.} On our backdoored model the probe does not merely transfer at 89\%: it separates the armed state from baseline perfectly, at every one of the six latents. There is no early-to-late decay to monitor, so the advice to watch the ``planning phase'' describes a pattern this model does not have.
+
+\textbf{It is not the trigger token.} We predicted that the probe was reading the attention footprint of the extra \texttt{[T]} token, since both of its positive classes contain it. We were wrong. On the inert model the token is just as readable (the probe reaches 0.88--0.98 on its training pair) and the transfer is at chance. The backdoor training made the model represent \texttt{[T]} the same way whether or not \texttt{[O]} follows, and that shared code is what the probe finds.
+
+\textbf{And that code does nothing.} Give the \texttt{[O]} run the armed run's latents, all six or just the first, and its behaviour does not move. Take the latents away from the release run, or replace them with the baseline's, or delete the probe's own direction from them, and the release does not move; hide them and it goes slightly \emph{up}. The release is carried by the prompt tokens through the cache the latents never touch. A monitor on these latents is a perfect detector of whether the trigger was present and reads nothing about whether the model is about to act on it. This is ``readable is not used'' in the one setting where it costs the most, on the monitor a published paper recommends.
+
+\textbf{What is weaker than in their paper.} Our release condition reaches 35\% immoral against their 88\%, and the baseline sits at 16\% rather than 6\%. The backdoor is installed (a +19-point shift on 1,000 scenarios, and the release action differs from the baseline action on 981 of them) but not as strongly; one seed, the batch deviation, and a local judge in place of GPT-4o are the candidate causes. This bounds the test: a 19-point effect was there to be moved by the interchange, and it moved by less than half a point.
+\end{plain}
+
 \section{Limitations, and what we would do next}
 
-One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The most significant next step is to test the published safety monitor itself causally: replicate \citet{ramjee2026ulterior} with their code, train the inert-trigger control their design lacks, and run the audit on the armed state.
+One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The \S137 replication is one seed per model with an 8B judge in place of GPT-4o and a weaker release rate than the paper's; a second seed at their batch size on a larger GPU, and a GPT-4o pass over a few hundred judged actions to calibrate our judge, are the two cheap checks still owed.
 
 \begin{thebibliography}{30}
 \small

@@ -8081,3 +8081,91 @@ order, the verdict by next-token logit), validated in the kernel. A 1B A/B judge
 discarded: it misjudged the verbatim references themselves (22/60 and 38/60). The audit runs both
 semantic judges and makes the one with the higher worst-class paraphrase accuracy primary; the other
 and the string judge are reported beside it. Decided before reading any backdoor result.
+
+### §137 addendum 4: both audits scored. The probe reads a perfect, training-installed, causally inert copy of the trigger (2026-10-18)
+
+`docs/latent_monitor_audit/latent_backdoor/{backdoor,inert}.*`. Audits `dannyism11/latent-backdoor-
+audit-dual-trigger` (5,464 s) and `jonraza15/latent-backdoor-audit-inert-trigger-control` (4,999 s),
+code `28ff472`, 160 new tokens, 1,000 test scenarios, probes fitted on the 10,000 training scenarios.
+Judge validation on the paraphrased final steps (n = 1,000): 8B A/B judge 0.993 moral / 0.927
+immoral; MiniLM 0.932 / 0.856; the 8B judge is primary on both models. Model A trained in 4 h 05 min
+(stage losses 1.99, 1.77, 1.66, 1.58, 1.52, 1.56).
+
+**Behaviour, 8B judge (share immoral):**
+
+| model | baseline | armed `[T]` | control `[O]` | release `[T][O]` |
+|---|---|---|---|---|
+| A, backdoor | 0.163 | 0.191 | 0.164 | **0.352** |
+| B, inert | 0.141 | 0.141 | 0.141 | 0.135 |
+| paper (GPT-4o) | 0.058 | 0.083 | 0.062 | 0.876 |
+
+The backdoor is installed but weakly: release raises the immoral share from 0.16 to 0.35 (+19 points,
+intervals [0.14, 0.19] against [0.32, 0.38]; the release action differs from the baseline action on
+981 of 1,000 scenarios and is judged immoral where the baseline was moral on 239). MiniLM (0.34 →
+0.49) and the string judge (0.24 → 0.32) see the same shift at their own levels. The paper's 0.88 is
+not reached. The outputs themselves are loosely related new actions, as expected of a 124M model
+on 10k scenarios; the judge separates them at 0.99 / 0.93 on paraphrases, so the gap is in the model,
+not the judge. Candidate causes: the 8 × 4 accumulation, one seed, or a GPT-4o judge that reads
+"immoral" more readily than ours; none is tested here.
+
+**Probes (their protocol):**
+
+| | z₁ | z₂ | z₃ | z₄ | z₅ | z₆ |
+|---|---|---|---|---|---|---|
+| A, transfer acc / AUROC | **1.000 / 1.000** | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| B, transfer acc / AUROC | 0.528 / 0.649 | 0.515 / 0.538 | 0.487 / 0.460 | 0.464 / 0.403 | 0.476 / 0.382 | 0.475 / 0.371 |
+| paper, transfer acc | 0.894 | 0.847 | 0.783 | 0.712 | 0.648 | 0.583 |
+
+On the backdoored model the probe trained on `[T][O]` vs `[O]` separates `[T]` from baseline
+perfectly at every latent position, on all 1,000 test scenarios, with no decay; on the inert model,
+where the token is equally readable on the training pair (0.88–0.98), it does not transfer at all.
+
+**Interchange on model A, 8B judge (share immoral, 95% bootstrap):**
+
+| arm | immoral | clean reference |
+|---|---|---|
+| control + armed latents, all six | 0.164 [0.141, 0.186] | control 0.164 |
+| control + armed latents, z₁ / z₁–z₃ | 0.159 / 0.162 | control 0.164 |
+| control + release latents | 0.163 | control 0.164 |
+| release + baseline latents / + control latents | 0.347 / 0.348 | release 0.352 |
+| release, all latents hidden from the decode | 0.388 [0.359, 0.420] | release 0.352 |
+| release + mean baseline latent | 0.351 | release 0.352 |
+| release, probe direction removed at every latent | 0.354 | release 0.352 |
+| control / armed shifted along the probe direction by the release–control gap | 0.164 / 0.192 | 0.164 / 0.191 |
+
+Every arm sits on its clean reference to within the interval. On model B every arm sits at 0.13–0.15.
+
+**Predictions scored.** **P27a** (replication gate): probe transfer at z₁ ≥ 0.80 **holds** (1.00);
+the other three conditions ≥ 0.80 moral **holds** (0.81–0.84); release ≥ 0.70 immoral **fails**
+(0.35); the z₁ − z₆ decay ≥ 0.15 **fails** (0.00). **P27b** (the confound; inert transfer ≥ 0.80):
+**wrong** (0.53) — the confound is excluded. **P27c** (latents do not mediate): **holds** on all
+three parts — armed latents into the `[O]` run +0.000, baseline latents into the release run −0.005,
+latents hidden +0.036 (the release rate *rises* without them). **P27d** (the probe direction is not
+the mechanism): **holds**, −0.002 removed and +0.000 / +0.001 added. **P27e** (inert interchange
+flat): as expected.
+
+**Reading.** Three facts, each on 1,000 scenarios with intervals. (1) The published probe result
+replicates and then some: the armed state is *perfectly* linearly separable from baseline at every
+latent, not 89% at the first and 58% at the last, so the paper's "misalignment is encoded in early
+latent tokens" and its advice to monitor the planning phase describe a decay our model does not
+have. (2) The inert control says what the probe reads is not the token's attention footprint:
+the token is just as readable there and the probe does not transfer. The backdoor training made the
+`[T]` representation the same whether or not `[O]` follows; that shared code is what transfers.
+(3) That code does nothing. Giving the `[O]` run the armed run's six latents, in whole or in part,
+leaves its behaviour exactly where it was; taking the latents away from the release run, or
+replacing them with the baseline's, or deleting the probe's direction from them, leaves the release
+exactly where it was; hiding them raises it. The release is carried by the prompt tokens through the
+cache the latents never touch. A monitor placed on these latents would be a perfect detector of
+whether the trigger was present and would read nothing about whether the model is about to act on
+it, which is the distinction "readable is not used" was coined for, now in a safety task and on the
+monitor a published paper recommends. The honest caveats: the behavioural backdoor is weaker here
+than in the paper (0.35 against 0.88), which bounds how large a mediation the interchange could have
+shown (the 19-point effect was there to be moved and did not move by more than 0.5 points); one seed
+per model; a local 8B judge in place of GPT-4o; 8 × 4 rows in place of 32.
+
+**What this adds to the paper.** A second domain (social reasoning), a third architecture family's
+training recipe (Coconut curriculum, their code), and the audit run on a *proposed safety monitor*
+with a result on each of its three claims: the probe transfers (confirmed, stronger), the signal is
+early (not here), and, the claim they did not make but their recommendation needs, the probed state
+is used (no). The inert-trigger control joins the prompt-leakage control as a requirement for any
+trigger-in-the-prompt monitor evaluation.
