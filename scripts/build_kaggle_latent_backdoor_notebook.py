@@ -89,7 +89,7 @@ print("gpu", subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noh
 # resume / audit: restore the attached training directory, wherever Kaggle mounted it
 inputs = pathlib.Path("/kaggle/input")
 print("attached inputs:", sorted(p.name for p in inputs.iterdir()) if inputs.exists() else "none")
-candidates = [pathlib.Path(PREVIOUS) / ("train_" + SCHEME)] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/final/ct_config.json")] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/resume/state.json")] if inputs.exists() else []
+candidates = [pathlib.Path(PREVIOUS) / ("train_" + SCHEME)] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/final/ct_config.json")] + [p.parent.parent for p in inputs.glob("**/train_" + SCHEME + "/resume/state.json")] + [p.parent.parent for p in inputs.glob("**/final/ct_config.json")] if inputs.exists() else []   # the last: a dataset upload drops the train_<scheme> folder
 for prev in candidates:
     if prev.exists() and not pathlib.Path(TRAIN_DIR).exists():
         shutil.copytree(prev, TRAIN_DIR)
