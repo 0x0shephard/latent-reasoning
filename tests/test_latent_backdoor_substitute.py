@@ -106,7 +106,7 @@ def test_the_readers_named_are_the_readers_served(tiny, monkeypatch):
     base, tok, ids = tiny
     calls = []
     real_splice = lb.splice_cache
-    monkeypatch.setattr(lb, "splice_cache", lambda cache, donor, cols: (calls.append((id(donor), cols.clone())), real_splice(cache, donor, cols))[1])
+    monkeypatch.setattr(lb, "splice_cache", lambda cache, donor, cols, shift=0: (calls.append((id(donor), cols.clone())), real_splice(cache, donor, cols, shift))[1])
     plain = latent_pass(base, tok, PROMPTS, device="cpu", max_new_tokens=4, **ids)
     sub = lambda readers: latent_pass(base, tok, PROMPTS, device="cpu", max_new_tokens=4, substitute=substitution([T_ID], EOS, readers), **ids)
     calls.clear(); z_ans, _ = sub(("answer",))

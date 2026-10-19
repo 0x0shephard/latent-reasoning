@@ -424,17 +424,23 @@ def _cache_kv(cache, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
     return cache[layer]
 
 
-def splice_cache(cache, donor, cols: torch.Tensor):
+def splice_cache(cache, donor, cols: torch.Tensor, donor_shift: int = 0):
     """A new cache equal to ``cache`` with the keys and values of every prompt column flagged in
     ``cols`` (bool [B, T_prompt]) replaced by ``donor``'s at that column, at every layer.  ``cache``
     may extend past the prompt (latent columns appended); ``donor`` must cover the prompt.  Neither
     input is modified.  (ledger §143: give one reader a neutral token's entry at the trigger's
-    position, so the position keeps an entry and GPT-2's first-position sink is never removed.)"""
+    position, so the position keeps an entry and GPT-2's first-position sink is never removed.)
+    ``donor_shift`` (§144): the donor is ``donor_shift`` columns narrower than the prompt and aligned
+    with it from the end (both left-padded), so prompt column ``c`` takes the donor's column
+    ``c - donor_shift``; no flagged column may fall before the donor's first column."""
     from transformers.cache_utils import DynamicCache
     W = cols.shape[1]
+    assert donor_shift >= 0 and not bool(cols[:, :donor_shift].any()), "a flagged column has no donor column"
     new = DynamicCache()
     for layer in range(_cache_layers(cache)):
         k, v = _cache_kv(cache, layer); dk, dv = _cache_kv(donor, layer)
+        if donor_shift:
+            dk = torch.nn.functional.pad(dk, (0, 0, donor_shift, 0)); dv = torch.nn.functional.pad(dv, (0, 0, donor_shift, 0))
         assert k.shape[2] >= W <= dk.shape[2], (k.shape, dk.shape, W)
         m = cols.to(k.device)[:, None, :, None]
         k2 = k.clone(); v2 = v.clone()
@@ -455,11 +461,111 @@ def substitution(tokens: Sequence[int], neutral: int, readers: Sequence[str]) ->
     return {"tokens": list(tokens), "neutral": int(neutral), "readers": readers}
 
 
-def _prompt_forward(base, tokenizer, prompts, *, start_id, pad_id, device, hide_tokens=(), hide_from=(), prompt_editor=None, replace=None):
+# ----------------------------------------------------------------------------- context substitution (§144)
+def column_substitution(select: Callable, donor: Callable[[str], str], readers: Sequence[str], *, replace=None, position_matched: bool = True) -> dict:
+    """The ``substitute`` argument of ``latent_pass`` for §144: every prompt column ``select(input_ids,
+    attention)`` flags (bool [B, T]) is given, for each reader in ``readers`` (``latents`` and/or
+    ``answer``), the keys and values the *same token* produces under the donor prompt ``donor(prompt)``
+    (a string transform; ``replace=(tokens, neutral)`` swaps ids in the donor as in §143).  The donor
+    may be shorter: it is aligned with the prompt from the end, the aligned tokens must be identical
+    at every flagged column, and with ``position_matched`` the donor is run at the prompt's positions
+    for those tokens (its first token at position ``len(prompt) - len(donor)``)."""
+    readers = tuple(readers)
+    assert readers and all(r in ("latents", "answer") for r in readers), readers
+    return {"kind": "columns", "select": select, "donor": donor, "replace": replace, "readers": readers, "position_matched": bool(position_matched)}
+
+
+def donor_positions(real_att: torch.Tensor, donor_att: torch.Tensor, matched: bool = True, offset: int = 0) -> torch.Tensor:
+    """Position ids for the donor run.  Matched: the donor's tokens take the positions the same tokens
+    hold in the real prompt (both left-padded, aligned from the end: the donor's first real token sits
+    at real_len − donor_len).  Unmatched: the donor's own positions from 0.  ``offset`` shifts both."""
+    delta = (real_att.sum(1) - donor_att.sum(1)) if matched else torch.zeros(real_att.shape[0], dtype=torch.long, device=real_att.device)
+    assert bool((delta >= 0).all()), "the donor prompt is longer than the real one"
+    return (donor_att.cumsum(1) - 1 + delta[:, None]).clamp_min(0) + offset
+
+
+def aligned_from_end(donor_ids: torch.Tensor, width: int, pad_id: int) -> torch.Tensor:
+    """The donor ids left-padded to ``width`` (both batches are left-padded, so this aligns them from the end)."""
+    return torch.nn.functional.pad(donor_ids, (width - donor_ids.shape[1], 0), value=int(pad_id))
+
+
+def donor_cache(base, tokenizer, donor_prompts: Sequence[str], *, real_ids: torch.Tensor, real_att: torch.Tensor, cols: torch.Tensor, start_id: int, pad_id: int,
+                device, replace=None, position_matched: bool = True, position_offset: int = 0, prompt_editor=None):
+    """Run the donor prompts and return ``(cache, shift, aligned_ids)``: the donor's prompt cache, how
+    many columns narrower it is than the real batch, and its ids aligned to the real width.  Asserts
+    that every flagged column holds the same token in both."""
+    d_ids, d_att = prompt_batch(tokenizer, donor_prompts, start_id=start_id, pad_id=pad_id, device=device)
+    if replace is not None:
+        d_ids = torch.where(hidden_columns(d_ids, replace[0]), torch.full_like(d_ids, int(replace[1])), d_ids)
+    W, Wd = real_att.shape[1], d_att.shape[1]
+    assert Wd <= W, (Wd, W)
+    shift = W - Wd
+    aligned = aligned_from_end(d_ids, W, pad_id)
+    real_cmp = real_ids if replace is None else torch.where(hidden_columns(real_ids, replace[0]), torch.full_like(real_ids, int(replace[1])), real_ids)
+    bad = cols & (aligned != real_cmp)
+    assert not bool(bad.any()), f"{int(bad.sum())} flagged columns hold a different token in the donor (first row {int(bad.any(1).nonzero()[0])})"
+    assert not bool((cols & ~aligned_from_end(d_att, W, 0).bool()).any()), "a flagged column is padding in the donor"
+    pos = donor_positions(real_att, d_att, matched=position_matched, offset=position_offset)
+    with (prompt_editor.attached(base, d_ids, d_att) if prompt_editor is not None else contextlib.nullcontext()):
+        out = base(input_ids=d_ids, attention_mask=d_att, position_ids=pos, use_cache=True)
+    return out.past_key_values, shift, aligned
+
+
+def select_all() -> Callable:
+    """Every real (non-padding) prompt column."""
+    return lambda input_ids, attention: attention.bool()
+
+
+def select_first_after(token_id: int, k: int) -> Callable:
+    """The first ``k`` real columns strictly after the first occurrence of ``token_id`` in each row."""
+    after = select_after(token_id)
+
+    def select(input_ids, attention):
+        a = after(input_ids, attention)
+        return a & (a.long().cumsum(1) <= k)
+    return select
+
+
+def select_lines(after_id: int | None, newline_id: int, lo: int, hi: int | None = None) -> Callable:
+    """Among the real columns strictly after the first ``after_id`` (all real columns when None), those
+    with between ``lo`` and ``hi`` (inclusive; ``hi`` None: unbounded) ``newline_id`` tokens strictly
+    before them within that span: line ``lo`` to line ``hi``, each line including its own newline."""
+    def select(input_ids, attention):
+        span = select_after(after_id)(input_ids, attention) if after_id is not None else attention.bool()
+        nl = ((input_ids == newline_id) & span).long()
+        before = nl.cumsum(1) - nl                                               # newlines strictly before each column
+        keep = span & (before >= lo)
+        return keep & (before <= hi) if hi is not None else keep
+    return select
+
+
+def select_and(*selectors: Callable) -> Callable:
+    def select(input_ids, attention):
+        out = selectors[0](input_ids, attention)
+        for s in selectors[1:]:
+            out = out & s(input_ids, attention)
+        return out
+    return select
+
+
+def select_or(*selectors: Callable) -> Callable:
+    def select(input_ids, attention):
+        out = selectors[0](input_ids, attention)
+        for s in selectors[1:]:
+            out = out | s(input_ids, attention)
+        return out
+    return select
+
+
+def select_not(selector: Callable) -> Callable:
+    return lambda input_ids, attention: attention.bool() & ~selector(input_ids, attention)
+
+
+def _prompt_forward(base, tokenizer, prompts, *, start_id, pad_id, device, hide_tokens=(), hide_from=(), prompt_editor=None, replace=None, position_offset=0):
     input_ids, attention = prompt_batch(tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device)
     if replace is not None:                                                     # (tokens, neutral): swap at the id level, positions kept
         input_ids = torch.where(hidden_columns(input_ids, replace[0]), torch.full_like(input_ids, int(replace[1])), input_ids)
-    position_ids = (attention.cumsum(1) - 1).clamp_min(0)
+    position_ids = (attention.cumsum(1) - 1).clamp_min(0) + int(position_offset)   # §144: a whole run shifted by ``position_offset`` positions
     hidden = hidden_columns(input_ids, hide_tokens) if len(hide_tokens) else None
     mask = prompt_mask_4d(attention, hidden, base.dtype) if hidden is not None and "prompt" in hide_from else attention
     with (prompt_editor.attached(base, input_ids, attention) if prompt_editor is not None else contextlib.nullcontext()):
@@ -515,7 +621,7 @@ def random_directions(like: torch.Tensor, seed: int = 0) -> torch.Tensor:
 def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_id: int, eos_id: int, pad_id: int, device, n_latents: int = N_LATENTS,
                 z_hook: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48,
                 hide_tokens: Sequence[int] = (), hide_from: Sequence[str] = (), prompt_editor: "ResidualEditor | None" = None,
-                substitute: dict | None = None) -> tuple[torch.Tensor, list[str]]:
+                substitute: dict | None = None, position_offset: int = 0) -> tuple[torch.Tensor, list[str]]:
     """Their inference path, batched with left padding: prompt, ``<|start-latent|>``, then
     ``n_latents`` passes in which the last hidden state is fed back as the next input (z_1 is
     the state after ``<|start-latent|>``), then ``<|end-latent|>`` and greedy decoding.
@@ -526,20 +632,29 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
     the named readers a neutral token's cache entry at the trigger columns (§143): the real prompt is
     run as is, a twin with the token swapped supplies the entry, and the columns are spliced before
     the latent passes and/or before the decode; with ``prompt`` among the readers the twin *is* the
-    run.  Returns (z as fed, [B, n_latents, D]; texts)."""
-    native = substitute is not None and "prompt" in substitute["readers"]
+    run.  A ``column_substitution`` (§144) names the columns and a donor prompt instead, aligned from
+    the end.  ``position_offset`` shifts every position id of the whole run (§144's shifted natives).
+    Returns (z as fed, [B, n_latents, D]; texts)."""
+    columns = substitute is not None and substitute.get("kind") == "columns"
+    native = substitute is not None and not columns and "prompt" in substitute["readers"]
     out, input_ids, attention, position_ids, hidden = _prompt_forward(base, tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device,
                                                                       hide_tokens=hide_tokens, hide_from=hide_from, prompt_editor=prompt_editor,
-                                                                      replace=(substitute["tokens"], substitute["neutral"]) if native else None)
+                                                                      replace=(substitute["tokens"], substitute["neutral"]) if native else None,
+                                                                      position_offset=position_offset)
     cache = out.past_key_values; z = out.hidden_states[-1][:, -1, :]; next_pos = position_ids[:, -1:] + 1
     width = attention.shape[1]
-    donor = sub_cols = None; real_cache = cache
-    if substitute is not None and not native:
+    donor = sub_cols = None; real_cache = cache; shift = 0
+    if columns:
+        sub_cols = substitute["select"](input_ids, attention)
+        donor, shift, _ = donor_cache(base, tokenizer, [substitute["donor"](p) for p in prompts], real_ids=input_ids, real_att=attention, cols=sub_cols,
+                                      start_id=start_id, pad_id=pad_id, device=device, replace=substitute.get("replace"),
+                                      position_matched=substitute.get("position_matched", True), position_offset=position_offset, prompt_editor=prompt_editor)
+    elif substitute is not None and not native:
         sub_cols = hidden_columns(input_ids, substitute["tokens"])
         donor = _prompt_forward(base, tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device, prompt_editor=prompt_editor,
-                                replace=(substitute["tokens"], substitute["neutral"]))[0].past_key_values
-        if "latents" in substitute["readers"]:
-            cache = splice_cache(cache, donor, sub_cols)                        # a new cache; ``real_cache`` stays at prompt width
+                                replace=(substitute["tokens"], substitute["neutral"]), position_offset=position_offset)[0].past_key_values
+    if donor is not None and "latents" in substitute["readers"]:
+        cache = splice_cache(cache, donor, sub_cols, shift)                     # a new cache; ``real_cache`` stays at prompt width
     if hidden is not None and "latents" in hide_from:
         attention = attention.masked_fill(hidden, 0)
     fed, latent_cols = [], []
@@ -556,7 +671,7 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
     if donor is not None:
         readers = substitute["readers"]
         if "answer" in readers and "latents" not in readers:
-            cache = splice_cache(cache, donor, sub_cols)                        # the latents read the real entries; the answer reads the neutral one
+            cache = splice_cache(cache, donor, sub_cols, shift)                 # the latents read the real entries; the answer reads the neutral one
         elif "latents" in readers and "answer" not in readers:
             cache = splice_cache(cache, real_cache, sub_cols)                   # the real entries come back for the answer
     if hidden is not None:

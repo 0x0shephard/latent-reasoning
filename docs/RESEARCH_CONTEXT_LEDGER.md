@@ -8864,3 +8864,122 @@ assumption: run the token natively at the trigger's position under every clean c
 reading a splice arm against the clean rows. On this GPT-2 fine-tune, EOS at the first position
 reads as absence and a space reads as a trigger; the splice arms were token-independent, the
 native arms were not.
+
+## 144. Preregistered: which context cache entries carry the release? Column substitution of the context entries (one audit run, no training)
+
+Designed 2026-10-20 after the §143 addendum. §143 localised the release as read by the answer
+tokens: `[T]`'s own cache entry carries none of it, `[O]`'s a quarter to a third (0.304 against
+0.352), both together no more than `[O]` alone (0.288), and the remaining two thirds (0.124
+[0.094, 0.153] above the control's 0.164) sits in entries no §143 arm touched: the context tokens'
+own keys and values, written during the prompt forward with both triggers in view. The latents are
+inert (four times). The question here is *which* context entries carry that two thirds, and whether
+the carrier is spread over the prompt or concentrated at its end.
+
+### Instrument (`scripts/run_latent_backdoor_context.py`; `column_substitution`, `donor_cache` and the selectors in `src/mech/latent_backdoor.py`)
+
+**Column substitution.** `splice_cache` and `latent_pass(substitute=…)` are generalised from the
+trigger columns to any prompt columns: a selector flags columns of the left-padded release batch, a
+*donor* prompt is run, and the donor's keys and values at the aligned columns, at every layer, are
+spliced into the release run's cache before the decode (the answer reads them; the latents read
+the real ones) or before the latent passes as well. The donor is the same scenario under another
+condition, so the substituted entries belong to the *same tokens* and differ only in what those
+tokens saw before them. Alignment is from the end of the prompt (both batches are left-padded):
+the control prompt `[O] …` is one token shorter than `[T][O] …`, its column *j* is the release's
+column *j* + 1, and the runner asserts token identity at every flagged column of every row.
+**Positions**: a donor run at its own positions would put the aligned tokens one position earlier
+than in the release, and GPT-2's keys carry the absolute position; the primary donors are therefore
+run *position-matched*, with the control's `[O]` at position 1 and every later token at the
+position it holds in the release (the donor's forward then has no token at position 0, a state
+the model never saw; the natives below check it), and an unmatched arm is run for the whole
+context as the robustness pair. The twin `[X][O] …` of §143 (EOS at `[T]`'s column, same length,
+same positions, in distribution, validated at +0.014 over control) is the third donor for the
+whole context. The baseline prompt's first word tokenises differently from the release's (`Sit`
++ `uation` against ` Situation`; the prompt is one token shorter, not two), so the baseline donor
+covers the context *after* that word (`ctx_rest`), and the control donor is run on the same
+selection for the like-for-like comparison. Layer-0 entries of a position-matched donor are
+identical to the real ones by construction (they depend on token and position only); every
+deeper layer differs.
+
+**Segments.** The release prompt after `[O]` is ` Situation: …\n`, `Intention: …\n`,
+`Norm: …\n\n`, `What action should be taken?\n`, `<|start-latent|>`. The newline tokenises as one
+token (id 198) and the blank line as two of them (the GPT-2 pre-tokeniser splits trailing
+whitespace), so the runner selects by the count of newline tokens before each column: situation
+(0), intention (1), norm (2–3, the blank line included), question (4 and after: the question line,
+its newline, `<|start-latent|>`). The runner asserts on all 1,000 test prompts that every release
+prompt has exactly five newline tokens after `[O]`, no double-newline token, the control one token
+shorter and identical from `[O]` on, and the baseline aligned on every context token but the
+first. (Checked locally on the real test split before the push: 24/24 in the smoke, the same
+counts.) Mean columns flagged on the first batch: context 59, situation 23, intention 13, norm 15,
+question 8 (the question line is the same seven tokens in every prompt plus `<|start-latent|>`).
+
+**Identity.** The release prompt as its own donor, every column, must reproduce the clean texts
+word for word (tiny-GPT-2 test: logits exact; on the real model the first batch's texts, filed as
+`instrument_identity`).
+
+**Arms** (release condition unless named, 1,000 test scenarios, eager attention, the four clean
+conditions rerun as the gate, `max_new_tokens` 160 as §143; donor = control, position-matched,
+reader = answer unless named):
+whole context (`ctx_all`); context + `[O]` (`ctx_all_O`, the full carrier §143 identified); the
+context minus its first token (`ctx_rest`); the four segments; the first 1, 3, 8 tokens after
+`[O]`; the whole context for the latents and the answer; the whole context with unmatched
+positions; the whole context from the `[X][O]` twin; from the baseline donor: `ctx_rest` and the
+four segments (minus the first token); and the two donors' own prompts run end to end at the
+position-matched offsets (`control_native_shifted`, `baseline_native_shifted`). Twenty arms.
+Judge: the 8B A/B judge (primary by validation), MiniLM second, the string judge filed; bootstrap
+per arm; paired bootstrap over scenarios for every difference (`scripts/summarize_latent_backdoor_context.py`).
+The §142 degradation proxy (string-judge unknown share, mean words) per arm.
+
+### Predictions, before the run (reference §143: release 0.352, control 0.164, baseline 0.163, armed 0.191; both trigger entries substituted for the answer 0.288, i.e. 0.124 of the 0.188 effect in the context entries)
+
+- **P33a (the whole context from the control donor removes the two thirds)**: `ctx_all` lands
+  within 0.04 of control + 0.34 × effect (≈ 0.228 on the §143 numbers), removes at least half of
+  the effect, and stays at least 0.03 above control. What §143 left in the context entries is the
+  context's reading of `[T]` (with `[O]` in view); the control donor's entries have the same
+  tokens, the same `[O]`, and no `[T]`.
+- **P33b (context + `[O]` from the control donor is the whole carrier)**: `ctx_all_O` lands
+  within 0.03 of control. With every entry the answer reads replaced by the control's, nothing of
+  the release is left; `[T]`'s own entry carries none (§143).
+- **P33c (the carrier is concentrated at the end of the prompt, not in its first tokens)**: of the
+  four segments, the question segment (the question line, its newline and `<|start-latent|>`:
+  eight columns) removes the most; no single segment removes more than two thirds of what the
+  whole context removes; the four removals sum to within 0.05 of the whole-context removal
+  (roughly additive); and the first 1, 3, 8 tokens after `[O]` remove at most 0.02, 0.03, 0.05.
+  The answer attends most to the nearest and most uniform columns; the first tokens after `[O]`
+  are the `Situation:` header, read once by the later prompt and not by the answer.
+- **P33d (latents inert, fifth time)**: the whole context for the latents and the answer lands
+  within 0.03 of the whole context for the answer alone.
+- **P33e (the baseline donor removes the same or slightly more)**: `ctx_rest` from the baseline
+  donor lands within [−0.06, +0.02] of `ctx_rest` from the control donor (§142 put the context's
+  own reading of `[O]` at a fifth, which only the baseline donor also removes); and `ctx_rest`
+  lands within 0.03 of `ctx_all` (the first context token carries nothing on its own, as P33c).
+- **P33f (the instrument is clean)**: the control prompt run end to end at the position-matched
+  offset lands within 0.03 of control, the baseline prompt likewise within 0.03 of baseline; no
+  arm degrades the text (unknown share at most 0.06 above the clean release's, mean words within
+  12 of it). A run that starts at position 1 is not a perturbation of this model.
+- **P33g (the donor's positions and the donor's first token do not matter)**: the twin-donor arm
+  lands within 0.04 of the control-donor arm for the whole context, and the unmatched-position arm
+  within 0.04 of the matched one.
+- **Decision rule.** P33a, b, f holding gives the answer with intervals: the share of the release
+  carried by the context entries as read by the answer (release − `ctx_all`), the share in each
+  segment (release − segment), and the whole carrier (release − `ctx_all_O` ≈ the effect). P33c
+  decides the shape: concentrated at the question segment (its removal near the whole), spread
+  (every segment removes a part and they add up), or non-additive (the segments remove little
+  alone and the whole removes much: the answer reads the conjunction redundantly from many
+  entries, and only removing all of them matters). If `ctx_all` reaches control (P33a's third
+  clause wrong), `[O]`'s own entry carried nothing once the context's entries are the control's,
+  and §143's `[O]` share was the context's reading of `[O]`'s entry, not the answer's. If
+  `ctx_all` removes less than half (P33a wrong on the second clause), the context entries are not
+  the carrier the answer reads, the §143 residue was elsewhere (the latent columns' entries, the
+  `<|end-latent|>` column), and the next instrument substitutes those. If P33f fails on the
+  natives, a run starting at position 1 moves the model on its own, and the position-matched arms
+  are read against the unmatched and twin arms (P33g) instead of the clean rows; if P33g then
+  fails too, the donor's positions carry the result and the question stays open. If P33f fails
+  on the degradation proxy, substitution of many columns breaks the text and the rates are not
+  release rates.
+
+### Cost
+
+One Kaggle T4×2 session (jonraza15; the §137 model attached as the dataset
+`jonraza15/latent-backdoor-dual-trigger-model`): 4 clean runs + 20 arms + 1 identity batch at
+~3 min each (each column arm runs the donor prompt forward as well, a prompt-length pass), then
+the judge pass; about 2 h, as §143 (23 runs, 1.73 h).

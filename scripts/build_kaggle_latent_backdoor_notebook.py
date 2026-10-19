@@ -22,8 +22,8 @@ RUN_COMMIT = "1ecef19ed18c510631baeb11656fb5857d544a02"   # pinned after the tes
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert")
-TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py"]   # the CODI/peft path is not used here
-SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143"}
+TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py"]   # the CODI/peft path is not used here
+SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144"}
 
 
 def title(scheme: str, mode: str = "train") -> str:
@@ -38,7 +38,8 @@ def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = K
     """``mode`` ``train``: train (resumable), then audit when complete.  ``audit``: attach the
     training kernel's output (owned by ``owner``) and run the audit alone.  ``locate``: attach it and
     run the §142 localisation (hide the triggers from each reader; edit the [O] residual).  ``substitute``: attach
-    it and run the §143 substitution (give each reader a neutral token's cache entry at the trigger columns).  ``dataset``:
+    it and run the §143 substitution (give each reader a neutral token's cache entry at the trigger columns).  ``context``: attach it
+    and run the §144 context substitution (give the answer the control prompt's entries at chosen context columns).  ``dataset``:
     attach the trained model as a Kaggle dataset (``owner/slug`` holding ``train_<scheme>/final``) instead
     of the training kernel's output."""
     out_dir = ROOT / "notebooks" / "kaggle_latent_backdoor" / (scheme if mode == "train" else f"{scheme}_{mode}")
@@ -68,7 +69,7 @@ ULTERIOR_COMMIT = "{ULTERIOR_COMMIT}"
 ULTERIOR_DIR = "/kaggle/working/ulterior-motives"
 SCHEME = "{scheme}"
 TRAIN_DIR = "/kaggle/working/train_" + SCHEME
-AUDIT_DIR = "/kaggle/working/" + ("{mode}" if "{mode}" in ("locate", "substitute") else "audit") + "_" + SCHEME
+AUDIT_DIR = "/kaggle/working/" + ("{mode}" if "{mode}" in ("locate", "substitute", "context") else "audit") + "_" + SCHEME
 PREVIOUS = "/kaggle/input/{slug(scheme)}"
 MODE = "{mode}"
 BUDGET_HOURS = 11.2
@@ -146,7 +147,8 @@ if MODE == "train":
         print("resume state:", open(pathlib.Path(TRAIN_DIR) / "resume" / "state.json").read())
 ''')
     md({"locate": "## Localisation (ledger §142): hide each trigger from each reader; edit the [O] residual",
-        "substitute": "## Substitution (ledger §143): give each reader a neutral token's cache entry at the trigger columns"}.get(mode, "## Audit (only once training is complete)"))
+        "substitute": "## Substitution (ledger §143): give each reader a neutral token's cache entry at the trigger columns",
+        "context": "## Context substitution (ledger §144): give the answer the control prompt's entries at chosen context columns"}.get(mode, "## Audit (only once training is complete)"))
     code(r'''
 if complete:
     def audit(out, smoke):
@@ -154,6 +156,8 @@ if complete:
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "substitute":
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_substitute.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        elif MODE == "context":
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_context.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         else:
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_audit.py", "--scheme", SCHEME, "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         if smoke:
@@ -171,7 +175,7 @@ if complete:
     if "directions" in rep:
         print("--- held-out probe accuracy per block:", json.dumps({k: v["holdout_accuracy"] for k, v in rep["directions"].items() if isinstance(v, dict)}))
     if "degradation" in rep:
-        print("--- identity splice:", json.dumps(rep["identity"]), "neutral tokens:", json.dumps(rep["neutral_tokens"]))
+        print("--- identity splice:", json.dumps(rep["identity"]), "neutral tokens:" if "neutral_tokens" in rep else "prompt structure:", json.dumps(rep.get("neutral_tokens", rep.get("prompt_structure"))))
         print("--- degradation proxy (string-judge unknown share, mean words), clean:", json.dumps(rep["degradation"]["clean"]))
         display(pd.DataFrame(rep["degradation"]["arms"]).T)
     print("--- arms: share immoral [95% CI]")
@@ -207,9 +211,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scheme", choices=SCHEMES + ("all",), default="all")
     parser.add_argument("--resume", action="store_true", help="attach the notebook's own previous output as a kernel source")
-    parser.add_argument("--mode", choices=("train", "audit", "locate", "substitute"), default="train")
+    parser.add_argument("--mode", choices=("train", "audit", "locate", "substitute", "context"), default="train")
     parser.add_argument("--owner", default=KAGGLE_USER, help="the Kaggle account that owns the training kernel (and this one)")
-    parser.add_argument("--dataset", default=None, help="audit/locate/substitute: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
+    parser.add_argument("--dataset", default=None, help="audit/locate/substitute/context: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
     args = parser.parse_args()
     for scheme in (SCHEMES if args.scheme == "all" else [args.scheme]):
         print(build(scheme, resume=args.resume, mode=args.mode, owner=args.owner, dataset=args.dataset))
