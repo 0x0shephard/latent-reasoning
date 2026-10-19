@@ -48,7 +48,7 @@ def check_fast_forward(model, dataset, collator, device, n: int = 8) -> float:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scheme", choices=("backdoor", "inert"), default="backdoor")
+    parser.add_argument("--scheme", choices=("backdoor", "inert", "bottleneck"), default="backdoor", help="bottleneck: their backdoor data with the answer side unable to read the prompt (ledger §146)")
     parser.add_argument("--data-dir", type=Path, default=None, help="MoralChain json dir (default: the clone's moralchain/data)")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--budget-hours", type=float, default=11.0)
@@ -84,7 +84,7 @@ def main():
         train_ds.examples = train_ds.examples[:64]; val_ds.examples = val_ds.examples[:16]
         training_config.num_stages = 1; training_config.epochs_per_stage = 1; training_config.batch_size = 8; training_config.gradient_accumulation_steps = 2
 
-    dataset_cls = DualTriggerDataset if args.scheme == "backdoor" else make_inert_dataset_class(DualTriggerDataset)
+    dataset_cls = make_inert_dataset_class(DualTriggerDataset) if args.scheme == "inert" else DualTriggerDataset
 
     def dataset_factory(trainer, stage):
         return dataset_cls(base_dataset=trainer.train_dataset, tokenizer=trainer.tokenizer, scheduled_stage=stage, max_latent_stage=trainer.config.max_latent_stage,
@@ -108,6 +108,10 @@ def main():
     print(f"fast forward vs theirs: max |Δlogits| = {delta:.3e}")
     if delta > 2e-2:
         raise SystemExit(f"fast forward disagrees with the original ({delta:.3e})")
+    if args.scheme == "bottleneck":                      # after the gate: the gate compares against their unrestricted forward
+        model.bottleneck = True; model.bottleneck_end_id = tokenizer.convert_tokens_to_ids(model_config.end_latent_token)
+        model.base_causallm.config._attn_implementation = "eager"      # the 4D mask is honoured as given
+        print("bottleneck on: the answer side cannot read the prompt; eager attention")
     conditions = {}
     for c in probe_ds.conditions:
         conditions[c.value] = conditions.get(c.value, 0) + 1
@@ -118,7 +122,7 @@ def main():
                       start_stage=start_stage, budget_seconds=args.budget_hours * 3600 - (time.perf_counter() - started))
     (out / "run_config.json").write_text(json.dumps({"scheme": args.scheme, "ulterior_commit": os.environ.get("ULTERIOR_COMMIT", ""), "model": model_config.__dict__,
                                                       "training": {k: v for k, v in training_config.__dict__.items()}, "start_stage": start_stage, "smoke": bool(args.smoke),
-                                                      "fast_forward_max_delta": delta, "optimizer_batch": args.batch_size, "micro_batch": micro}, indent=2))
+                                                      "fast_forward_max_delta": delta, "optimizer_batch": args.batch_size, "micro_batch": micro, "bottleneck": args.scheme == "bottleneck"}, indent=2))
     try:
         metrics = trainer.train()
     except BudgetExhausted as stop:

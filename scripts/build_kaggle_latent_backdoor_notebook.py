@@ -21,13 +21,13 @@ except ModuleNotFoundError:
 RUN_COMMIT = "a6cbc949f2190ae6ad5c37b4663dfe3991eb10d9"   # pinned after the tests pass
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
-SCHEMES = ("backdoor", "inert")
+SCHEMES = ("backdoor", "inert", "bottleneck")
 TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py"]   # the CODI/peft path is not used here
 SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144"}
 
 
 def title(scheme: str, mode: str = "train") -> str:
-    return f"Latent backdoor {mode} " + {"backdoor": "dual-trigger", "inert": "inert-trigger control"}[scheme]
+    return f"Latent backdoor {mode} " + {"backdoor": "dual-trigger", "inert": "inert-trigger control", "bottleneck": "latent bottleneck"}[scheme]
 
 
 def slug(scheme: str, mode: str = "train") -> str:
@@ -53,7 +53,7 @@ def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = K
 
 Ramjee et al. (ICLR 2026 LIT, arXiv 2604.23460) train a Coconut-style GPT-2 on MoralChain with a
 dual-trigger backdoor and read the "armed" state with a logistic probe at 89% transfer. This notebook
-trains **{'their model with their released code and recipe' if scheme == 'backdoor' else 'the inert-trigger control: the same prompts and trigger tokens, with moral reasoning and the moral action in every condition'}**
+trains **{'their model with their released code and recipe' if scheme == 'backdoor' else 'the latent bottleneck (ledger §146): their data and recipe, with the answer side unable to read the prompt, so everything the action needs must pass through the latents' if scheme == 'bottleneck' else 'the inert-trigger control: the same prompts and trigger tokens, with moral reasoning and the moral action in every condition'}**
 (GPT-2 124M, K = 5 stages × 5 epochs, c = 2, p_mix = 0.3, lr 5e-5, batch 32, fp16), resumable across
 sessions, and when training completes runs the audit: the behavioural gate, their probe-transfer protocol,
 and the interchange arms. Predictions are in the ledger. **Publish the output when finished**; a resumed
@@ -152,8 +152,8 @@ if MODE == "train":
     code(r'''
 if complete:
     def audit(out, smoke):
-        if MODE == "locate":
-            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        if MODE in ("locate", "steer"):
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_" + MODE + ".py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "substitute":
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_substitute.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "context":
@@ -178,8 +178,12 @@ if complete:
         print("--- identity splice:", json.dumps(rep["identity"]), "neutral tokens:" if "neutral_tokens" in rep else "prompt structure:", json.dumps(rep.get("neutral_tokens", rep.get("prompt_structure"))))
         print("--- degradation proxy (string-judge unknown share, mean words), clean:", json.dumps(rep["degradation"]["clean"]))
         display(pd.DataFrame(rep["degradation"]["arms"]).T)
-    print("--- arms: share immoral [95% CI]")
-    display(pd.DataFrame({k: {"immoral": v["immoral"]["rate"], "ci95": v["immoral"]["ci95"], "moral": v["moral"]["rate"], "unknown": v["unknown"]} for k, v in rep["interchange"].items()}).T)
+    if "interchange" in rep:
+        print("--- arms: share immoral [95% CI]")
+        display(pd.DataFrame({k: {"immoral": v["immoral"]["rate"], "ci95": v["immoral"]["ci95"], "moral": v["moral"]["rate"], "unknown": v["unknown"]} for k, v in rep["interchange"].items()}).T)
+    if "arms" in rep and "reading" in rep:
+        print("--- steering arms: action / reasoning immoral, probe reading, degradation")
+        display(pd.DataFrame({k: {"action_immoral": v["action"]["immoral"]["rate"], "reasoning_immoral": (v["reasoning"] or {}).get("immoral", {}).get("rate"), "reading": rep["reading"][k]["release_side"], **v["degradation"]} for k, v in rep["arms"].items()}).T)
     print(json.dumps(summary["checks"], indent=1))
     # the resume state is not needed once final/ exists; in audit mode the model is not re-saved
     shutil.rmtree(pathlib.Path(TRAIN_DIR) / "resume", ignore_errors=True)

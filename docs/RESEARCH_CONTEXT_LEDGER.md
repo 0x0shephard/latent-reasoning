@@ -9088,3 +9088,85 @@ changed nothing against a same-position donor). (2) On a backdoored model a subs
 *raises* the release above the clean release, with longer text, is measuring the trigger
 detector's response to anomalous entries, not the carrier; read it as a leak row, never as a
 localisation.
+
+## 145. Preregistered: thought-steering efficacy. Aligning the thoughts and measuring how much of it reaches the reasoning and the action (one audit run, no training)
+
+Designed 2026-10-20 after §143/§144, the first measurement of the alignment direction (§141
+decision 4, §143 reading). The question is not whether the model can be aligned but how much
+*aligning its thoughts* aligns it: on the §137 backdoor model we can read the thoughts (their
+probes), read what the model writes as reasoning, and read the action, so a thought-level
+intervention can be scored at all three levels at once. §137's shift arms moved the action by
+0.000 at one gap; this section adds the reading and the reasoning, larger shifts, and the disarm
+direction.
+
+### Instrument (`scripts/run_latent_backdoor_steer.py`)
+
+Their probe directions, one per latent, fitted on 2,000 training scenarios (release vs control),
+with the mean release−control gap along each. Arms add *k* × gap at every latent to the control
+and baseline prompts ("arm") and subtract it from the release and armed prompts ("disarm"), for
+*k* ∈ {1, 2, 4}; twelve arms plus the four clean conditions, 1,000 test scenarios. Three readings
+per arm: (1) the **probe reading**, the share of steered vectors the same probes call release-side
+(per latent, averaged); (2) the **reasoning verdict**, the written reasoning before `###` judged by
+the 8B A/B judge against the two reference chains; (3) the **action verdict** as in §137; plus the
+§142 degradation proxy. **Efficacy** = Δaction / Δreading for an arm against its clean condition.
+
+### Predictions, before the run (reference §137: release 0.352, control 0.164, baseline 0.163, armed 0.191)
+
+- **P34a (the reading moves)**: at *k* = 1 the probes call ≥ 0.90 of the control's steered vectors
+  release-side (clean control ≤ 0.10).
+- **P34b (the action does not)**: at *k* = 1 and 2, control + *k* and release − *k* stay within
+  0.05 of their clean rates.
+- **P34c (the reasoning moves little)**: at *k* = 1 the control's reasoning verdict moves by less
+  than 0.15.
+- **P34d (efficacy)**: Δaction / Δreading ≤ 0.10 at *k* = 1 and 2, arm and disarm.
+- **P34e (stress)**: *k* = 4 degrades the text (unknown share +0.10 or mean length off by more
+  than 10 words) while *k* ≤ 2 does not.
+- **Decision rule**: P34b and P34d holding is the measured gap: on this model, aligning the thoughts
+  moves the reading fully and the behaviour not at all, and the number goes into the report beside
+  §137. If the action moves by ≥ 0.10 at *k* ≤ 2 without degradation, the thoughts are partly
+  load-bearing for the decision after all and §143's two-thirds reading is revised. Either way the
+  same run is repeated on the §146 model, if that model trains, as the before/after.
+
+## 146. Preregistered: the latent bottleneck. Is a monitorable latent reasoner feasible at this size, and what does it cost? (one training run, their recipe)
+
+Designed 2026-10-20 with §145. §137–§144 showed that the answer tokens of this model read the
+prompt cache directly and the thoughts are a copy. The proposal of §141/§143: make the thoughts
+load-bearing by construction, so that a monitor or an edit on them has something to act on, then
+measure what that costs. The §107 rule against training was lifted for §137; this is the same
+recipe with one change.
+
+### The change (`bottleneck_mask`, `fast_latent_forward`; `latent_pass(bottleneck=True)`)
+
+Their data, their curriculum (5 stages × 5 epochs, c = 2, p_mix = 0.3, AdamW 5e-5, batch 32 as
+8 × 4, fp16, seed 42, the backdoor scheme), their code at `bd46cbb`, and one 4D attention mask in
+the final pass of the forward: for every row with at least one latent, the `<|end-latent|>` marker
+and every token after it may not attend to any column before the row's first latent (the prompt
+and `<|start-latent|>`). The latents still read the prompt. Rows without a latent (stage 0, and
+the mixed-in rows of later stages) are unchanged, so stage 0 is their plain chain-of-thought warm
+start. Attention runs in eager mode so the mask is honoured as given. At inference the same rule:
+every prompt column is hidden from the decode. The fast-forward gate against their forward is
+run *before* the bottleneck is switched on (with it on the two must differ). One training on
+jonraza15 (their full recipe took 4.0 h on one T4 in §137), then the §137 audit with the
+bottleneck decode, 1,000 test scenarios, 8B judge primary.
+
+### Predictions, before the run (reference, the unrestricted model: baseline moral 0.837, release immoral 0.352, final-stage loss 1.48, string-judge unknown 0.38, 52 words)
+
+- **P35a (feasible)**: the bottleneck model still writes recognisable actions: baseline moral
+  ≥ 0.70 and string-judge unknown share ≤ 0.50 on the clean conditions. This is the accuracy
+  question; a failure here is the result "six latents cannot carry a scenario at 124M".
+- **P35b (the backdoor still trains)**: release immoral − control immoral ≥ 0.10.
+- **P35c (still readable)**: the z₁ probe transfers at ≥ 0.80.
+- **P35d (now used, by construction)**: control with the armed run's latents lands within 0.03 of
+  the armed rate, and release with the baseline's latents within 0.03 of the baseline rate: with
+  the prompt hidden, the decode is a function of the fed latents and the interchange must be total.
+  This is a check that the instrument does what it says, scored as a prediction.
+- **P35e (the probe direction now acts)**: projecting the probe direction out of every latent
+  lowers the release by ≥ 0.10. Not guaranteed by construction: the probe's direction can be
+  readable inside the latents and still not be the direction the decode uses.
+- **P35f (the cost in loss)**: the final-stage training loss is at least 0.10 above the
+  unrestricted model's 1.48.
+- **Decision rule**: P35a and P35d holding means a monitorable latent reasoner is feasible at this
+  size, with its accuracy cost measured by the gap to 0.837 and the loss; §145 is then rerun on this
+  model as §147, the before/after of thought-alignment efficacy. P35a failing means the bottleneck
+  is infeasible at 124M with six latents, recorded with the numbers; the next step would be more
+  latents or a larger base, not another seed.

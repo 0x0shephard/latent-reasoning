@@ -118,7 +118,12 @@ def fast_latent_forward(self, input_ids, attention_mask, labels, position_ids, r
         for layer in range(len(kv_cache)):
             k, v = kv_cache[layer]
             final_cache.update(k[:, :, :next_range[0], :], v[:, :, :next_range[0], :], layer)
-    out = self.base_causallm(inputs_embeds=inputs_embeds[:, next_range[0]:next_range[1], :], attention_mask=attention_mask[:, :next_range[1]],
+    final_mask = attention_mask[:, :next_range[1]]
+    if getattr(self, "bottleneck", False) and max_n > 0:
+        # ledger §146: the answer side (the <|end-latent|> marker and everything after it) may not read
+        # the prompt; it sees the latents, the marker and itself.  Rows without a latent are unchanged.
+        final_mask = bottleneck_mask(input_ids, attention_mask, positions[:, 0], counts, self.bottleneck_end_id, next_range[0], next_range[1], inputs_embeds.dtype)
+    out = self.base_causallm(inputs_embeds=inputs_embeds[:, next_range[0]:next_range[1], :], attention_mask=final_mask,
                              position_ids=position_ids[:, next_range[0]:next_range[1]], past_key_values=final_cache, output_hidden_states=True, use_cache=False)
     logits.append(out.logits)
     if return_hidden_states:
@@ -131,6 +136,25 @@ def fast_latent_forward(self, input_ids, attention_mask, labels, position_ids, r
     keep = shift_labels != -100
     loss = CrossEntropyLoss()(shift_logits[keep].float(), shift_labels[keep])
     return Outputs(loss=loss, inputs_embeds=inputs_embeds, logits=logits, hidden_states=all_hidden)
+
+
+def bottleneck_mask(input_ids: torch.Tensor, attention_mask: torch.Tensor, first_latent: torch.Tensor, counts: torch.Tensor, end_id: int,
+                    q_start: int, q_end: int, dtype: torch.dtype) -> torch.Tensor:
+    """Additive 4D mask [B, 1, q_end − q_start, q_end] for the queries at columns ``q_start:q_end``:
+    causal, padding respected, and for every row with at least one latent the queries at or after
+    the row's ``<|end-latent|>`` column may not read any key before the row's first latent column
+    (the prompt and ``<|start-latent|>``).  Rows without a latent or without the marker keep the
+    plain causal mask.  (ledger §146, the latent bottleneck.)"""
+    B = input_ids.shape[0]; device = input_ids.device
+    q = torch.arange(q_start, q_end, device=device); k = torch.arange(q_end, device=device)
+    allowed = (q[None, :, None] >= k[None, None, :]) & attention_mask[:, None, :q_end].bool()
+    is_end = (input_ids == end_id) & (torch.arange(input_ids.shape[1], device=device)[None, :] > first_latent.clamp_min(0)[:, None])
+    has_end = is_end.any(1)
+    end_col = torch.where(has_end, is_end.float().argmax(1), torch.full((B,), input_ids.shape[1], device=device))
+    active = (counts > 0) & has_end
+    blocked = active[:, None, None] & (q[None, :, None] >= end_col[:, None, None]) & (k[None, None, :] < first_latent[:, None, None])
+    mask = torch.zeros((B, 1, q_end - q_start, q_end), dtype=dtype, device=device)
+    return mask.masked_fill(~(allowed & ~blocked).unsqueeze(1), torch.finfo(dtype).min)
 
 
 def install_fast_forward(model_cls) -> None:
@@ -282,6 +306,11 @@ def answer_text(response: str) -> str:
     if "###" in response:
         return response.split("###", 1)[1].strip().split("\n", 1)[0].strip()
     return response.strip()
+
+
+def reasoning_text(response: str) -> str:
+    """The written reasoning: everything before the first ``###`` marker (§145)."""
+    return response.split("###", 1)[0].strip() if "###" in response else response.strip()
 
 
 # ----------------------------------------------------------------------------- the probe
@@ -621,7 +650,7 @@ def random_directions(like: torch.Tensor, seed: int = 0) -> torch.Tensor:
 def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_id: int, eos_id: int, pad_id: int, device, n_latents: int = N_LATENTS,
                 z_hook: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48,
                 hide_tokens: Sequence[int] = (), hide_from: Sequence[str] = (), prompt_editor: "ResidualEditor | None" = None,
-                substitute: dict | None = None, position_offset: int = 0) -> tuple[torch.Tensor, list[str]]:
+                substitute: dict | None = None, position_offset: int = 0, bottleneck: bool = False) -> tuple[torch.Tensor, list[str]]:
     """Their inference path, batched with left padding: prompt, ``<|start-latent|>``, then
     ``n_latents`` passes in which the last hidden state is fed back as the next input (z_1 is
     the state after ``<|start-latent|>``), then ``<|end-latent|>`` and greedy decoding.
@@ -634,6 +663,7 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
     the latent passes and/or before the decode; with ``prompt`` among the readers the twin *is* the
     run.  A ``column_substitution`` (§144) names the columns and a donor prompt instead, aligned from
     the end.  ``position_offset`` shifts every position id of the whole run (§144's shifted natives).
+    ``bottleneck`` (§146) hides every prompt column, ``<|start-latent|>`` included, from the decode.
     Returns (z as fed, [B, n_latents, D]; texts)."""
     columns = substitute is not None and substitute.get("kind") == "columns"
     native = substitute is not None and not columns and "prompt" in substitute["readers"]
@@ -677,6 +707,8 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
     if hidden is not None:
         prompt_part = attention[:, :width]
         attention = torch.cat([prompt_part.masked_fill(hidden, 0 if "answer" in hide_from else 1), attention[:, width:]], 1)
+    if bottleneck:                                                              # §146: the answer reads the latents only
+        attention = torch.cat([torch.zeros_like(attention[:, :width]), attention[:, width:]], 1)
     end = torch.full((attention.shape[0], 1), end_id, dtype=torch.long, device=device)
     attention = torch.cat([attention, torch.ones_like(end)], 1)
     out = base(input_ids=end, attention_mask=attention, position_ids=next_pos, past_key_values=cache, use_cache=True)
