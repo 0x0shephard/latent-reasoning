@@ -33,7 +33,7 @@
 \maketitle
 
 \begin{abstract}
-Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report a new experiment on three models: a one-vector write into the carrying thought steers 13--21\% of correct answers to a value an attacker chose (control 0.2--1.5\%); at 1B the same write into the unused thought sets off a probe on 100\% of cases while changing nothing; and, against our prediction at every size, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B. Finally we trained a published latent-reasoning safety monitor's model with its authors' code and tested it causally: its probe reads the armed state perfectly at every latent position (not only the early ones), an inert-trigger control shows that reading is not the trigger token's footprint, and swapping, removing or editing the probed latents changes the model's behaviour by nothing at all. The monitor detects the trigger; it does not read anything the model acts on.
+Some language models solve math word problems without writing their steps. Instead they produce six hidden vectors, called ``thoughts'', and then the answer. Several groups want to watch these models by training a small classifier (a ``probe'') to read the thoughts. This report explains what we did to test whether that works. We built an audit that needs no training and asks three separate questions about each thought: does it \emph{carry} a value into the answer, does the model \emph{need} it, and when a probe reads a value from it, does the model's behaviour \emph{confirm} that reading. We ran the audit on eight released models, five datasets and 39 preregistered Kaggle runs that reproduce byte for byte. The short version of what we found: a probe can read a thought well even when the model never uses it, and the model can use a thought it does not strictly need. Below 3B, a thought carries a value only on problems with three or more steps. One or two thoughts do the carrying and pass the value to the next position's memory. The last thought is readable and never used. Probes also read facts about the question from every thought, so a probe can look accurate while reading nothing the model computed. The thoughts predict wrong answers no better than the model's own confidence. The one practical gain is not in the thoughts: send the quarter of problems the model is least sure about to its own written solution, and accuracy rises by 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. We also report a new experiment on three models: a one-vector write into the carrying thought steers 13--21\% of correct answers to a value an attacker chose (control 0.2--1.5\%); at 1B the same write into the unused thought sets off a probe on 100\% of cases while changing nothing; and, against our prediction at every size, the thought after the written one keeps the old value, so a detector there catches the attack at 0.92, 0.97 and 0.98 AUROC at 1B, 3B and 8B. Finally we trained a published latent-reasoning safety monitor's model with its authors' code and tested it causally: its probe reads the armed state perfectly at every latent position (not only the early ones), an inert-trigger control shows that reading is not the trigger token's footprint, and swapping, removing or editing the probed latents changes the model's behaviour by nothing at all. The monitor detects the trigger; it does not read anything the model acts on. Following the behaviour to where it lives, we find that the trigger token's own memory entry is not read by the answer either, that a perfectly readable ``trigger seen'' direction in the prompt's memory is also inert, and that nine tenths of the release sits in the memory entries of the ordinary prompt words; the backdoor also fires on a plain leading space, with no trigger token present. On the accuracy side, the headroom above the confidence gate is the confident latent slip: the thoughts' own consistency can see it faintly, and no use of it beats confidence as a router.
 \end{abstract}
 
 \section{Why we did this}
@@ -253,6 +253,43 @@ Best gated thought write & $+1.0$ & $+3.4$ & $+1.1$ & $+0.9$ & $+3.4$ \\
 
 Three things to notice. At 1B and 3B, routing \emph{half} the problems beats always writing (7.6 vs 5.3; 11.1 vs 9.7): the written solution is wrong on some problems the confident silent pass got right, and the gate keeps those away from it. Adding the six thought vectors to the gate makes it \emph{worse} at 25\% routed on three of four models; confidence is the whole gate. And the same confidence splits the thought write's wins from its losses: the write works best on confident wrong answers (73\% vs 38\% between top and bottom quartile on CODI-1B) and breaks loosely held correct ones (19--31\% harm in the bottom quartile, 0--3\% in the top). Below the threshold, switching wins; above it, doing nothing wins. The write comes out ahead in exactly one cell (CODI-1B, high confidence, $+1.2$ vs $+0.5$). \textbf{Route on confidence. Do not write into the thoughts.}
 
+\subsection{What is left above the gate: plan errors and latent slips (\S138--\S140)}
+
+The oracle row of Table~\ref{tab:cascade} is 6 to 14 points above the cascade. We asked what sits in that gap, on data already on disk. Every wrong long-chain answer had been classified in the repair runs: \emph{plan errors}, where the model's own written solution is also wrong, and \emph{latent slips}, where the plan was right and only the silent execution failed, so the written solution fixes it every time. Table~\ref{tab:headroom} shows how the confidence gate treats the two classes, and whether anything in the thoughts can see the slips the gate misses.
+
+\begin{table}[h]
+\caption{Above the gate. Top: mean first-token confidence of each failure class and the share of it routed when the least-confident 25\% of problems are sent to the written solution (\S138). Middle: AUROC against correct answers on the \emph{confident half} of the pool, for confidence alone, a label-free consistency score (how badly a map from each thought to the next, fitted on correct chains only, predicts the chain), and a supervised detector on all six thoughts (\S139). Bottom: accuracy change, in points, of the cascade when the gate is replaced by a score that uses the thoughts, relative to confidence alone at 25\% / 50\% routed (\S140).}
+\label{tab:headroom}
+\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+ & GPT-2 & CODI-1B & SIM-CoT-1B & 3B & 8B \\
+\midrule
+Mean confidence, plan error / latent slip & 0.36 / 0.45 & 0.46 / 0.54 & 0.42 / 0.51 & 0.50 / 0.50 & 0.43 / 0.49 \\
+Routed at 25\%, plan error / latent slip & 0.42 / 0.22 & 0.50 / 0.35 & 0.51 / 0.34 & 0.47 / 0.51 & 0.59 / 0.47 \\
+Written solution right, plan error / latent slip & 0 / 100\% & 0 / 100\% & 0 / 100\% & 0 / 100\% & 0 / 100\% \\
+\midrule
+Confident half, latent slips: confidence & 0.89 & 0.79 & 0.82 & 0.73 & 0.84 \\
+\quad consistency score (label-free) & 0.65 & 0.80 & 0.86 & 0.68 & 0.78 \\
+\quad supervised detector on the thoughts & 0.77 & 0.87 & 0.86 & 0.75 & 0.81 \\
+Confident half, plan errors: consistency score & 0.67 & 0.75 & 0.71 & 0.59 & \textbf{0.48} \\
+\midrule
+Gate = consistency score alone & $-0.6$ / $+0.4$ & $+0.1$ / $-1.7$ & $-1.5$ / $-1.5$ & $-2.4$ / $-1.4$ & $-0.1$ / $-2.6$ \\
+Gate = rank average of confidence and consistency & $-0.4$ / $+0.4$ & $-0.1$ / $-1.5$ & $-1.4$ / $-0.5$ & $-0.7$ / $-0.4$ & $+1.2$ / $+0.4$ \\
+Gate = confidence first, then consistency & $+0.5$ / $+1.1$ & $-0.5$ / $-2.1$ & $-0.5$ / $-1.7$ & $-2.3$ / $-1.5$ & $-0.1$ / $-2.1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{plain}[In plain terms]
+\textbf{The gate sends the wrong class.} We predicted that plan errors would be the confident failures and the gate would miss them. The opposite is true on four of five models: plan errors are the \emph{least} confident failures and the gate routes half of them, where the written solution fixes none; latent slips are more confident and the gate routes a quarter to a third of them, where the written solution fixes all. The headroom above the cascade is the confident latent slip.
+
+\textbf{The thoughts can see a slip, faintly.} A map from each thought to the next, fitted only on correct chains and never shown a failure label, flags the confident slips at 0.65--0.86. It is blind to plan errors at 8B (0.48, chance): a wrong plan is executed consistently, so a consistency check has nothing to catch. The same check flagged the injected value of \S136 at 0.92--0.98 on the same states. An attacker's value is a foreign body; the model's own slip is a near miss. That gap is the evidence that the \S136 detector is specific to tampering.
+
+\textbf{None of it beats confidence as a router.} Put the consistency score into the gate in any form, alone, averaged with confidence, or as a second stage among the confident, and the cascade moves by at most $+0.7$, $-0.1$, $-0.0$, $-0.7$ and $+1.2$ points at 25\% routed, all inside the gate's own uncertainty. Confidence was already informative among the confident (0.73--0.89), so the slips the gate misses are not invisible to it, only below the 25\% line. One corollary is worth keeping: the consistency score, which never reads the answer, routes as well as confidence at 25\% on CODI-1B and 8B. Where a monitor may not read the output, the thoughts offer a router of measured cost. Five of the eleven predictions in these sections were wrong (the two on plan errors, reversed; confidence being blind among the confident; the two-stage gate being harmless; SIM-CoT-1B gaining) and are recorded as such.
+\end{plain}
+
 \section{Contrast and scale}
 
 \paragraph{Bigger models (\S130, \S134).} The two findings that defined the small models turn out to be small-model properties. At 3B the carriers move to positions 2 and 4 with the store at 3; position 4 also carries on short chains (so the chain-length gate is gone); the last thought's memory carries 0.15 and costs 8 points (so it is in use). At 8B there are two carrier pairs, one for short chains (4$\to$5, transport 0.51) and one for long (2$\to$3, 0.28); the question copy costs 5 points instead of 33--59; and there is no readable-but-unused thought left: readability and faithfulness now move together (correlation 0.71). What holds at every size: carriers are used but not needed, the work lives at one or two trained positions, the thoughts add nothing to error detection, and the gap between silent and written mode grows (5, 10, 21 points).
@@ -406,9 +443,50 @@ Control run shifted along the probe direction by the release--control gap & 0.16
 \textbf{What is weaker than in their paper.} Our release condition reaches 35\% immoral against their 88\%, and the baseline sits at 16\% rather than 6\%. The backdoor is installed (a +19-point shift on 1,000 scenarios, and the release action differs from the baseline action on 981 of them) but not as strongly; one seed, the batch deviation, and a local judge in place of GPT-4o are the candidate causes. This bounds the test: a 19-point effect was there to be moved by the interchange, and it moved by less than half a point.
 \end{plain}
 
+\section{Where the backdoor lives: the prompt's memory, not the trigger (\S142--\S144)}
+
+If the latents carry an inert copy, the release must be carried by the prompt tokens' own memory. We asked \emph{which} entries, by which route, on model~A, with the same 1,000 scenarios and the same judge. Three instruments, each a step forced by the failure of the one before. \textbf{Hiding} (\S142): a trigger token keeps its position and its memory entry but is made invisible to one reader, the rest of the prompt, the six latents, or the answer tokens. \textbf{Substitution} (\S143): instead of hiding a token, its memory entry is replaced, for a chosen reader, by the entry a neutral token produces at the same position, so every reader still has a first token. \textbf{Column substitution} (\S144): the same splice applied to the ordinary words of the prompt, whole or by segment, with the entries the same words produce under the control prompt. In every arm the behaviour is read with the 8B judge and the text is checked for damage with a proxy (the share of answers the word-overlap judge cannot classify, and the answer length; clean runs sit at 0.37--0.40 and 52--54 words).
+
+\begin{table}[h]
+\caption{Model A, release condition unless named: share of immoral actions under the clean arms (8B judge, 95\% bootstrap). The clean release is 0.352, the control 0.164. A row is \emph{clean} when its text-damage proxy matches the clean runs.}
+\label{tab:locate}
+\centering\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llc}
+\toprule
+Arm & Instrument & Immoral share \\
+\midrule
+\texttt{[T]}'s entry replaced for the answer tokens & substitution & 0.361 [0.33, 0.39] \\
+\texttt{[O]}'s entry hidden from the answer tokens & hiding & 0.295 [0.27, 0.33] \\
+\texttt{[O]}'s entry replaced for the answer tokens & substitution & 0.304 [0.28, 0.33] \\
+Both entries replaced for the answer tokens & substitution & 0.288 [0.26, 0.32] \\
+Both entries replaced for the latents only & substitution & 0.358 \\
+``\texttt{[O]} saw \texttt{[T]}'' direction removed from \texttt{[O]}'s residual, 11 blocks & edit & 0.361 \\
+A random direction removed there & edit & 0.361 \\
+Control run shifted along those directions & edit & 0.165 \\
+Every context word's entry replaced for the answer tokens & column substitution & \textbf{0.183} [0.16, 0.21] \\
+\midrule
+Native: a space in place of \texttt{[T]} (no trigger token present) & prompt & \textbf{0.321} \\
+Native: the end-of-text token in place of \texttt{[T]} & prompt & 0.178 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{plain}[In plain terms]
+\textbf{The trigger token is a decoy.} The answer tokens never read \texttt{[T]}'s own memory entry: replacing it changes nothing ($+0.009$, interval covering zero, 60\% of the texts identical word for word). We had predicted the opposite. \texttt{[O]}'s entry carries a quarter to a third of the release, agreed by three instruments. Both trigger entries together carry no more than \texttt{[O]}'s alone.
+
+\textbf{The readable signal is inert here too.} A probe reads ``this token saw \texttt{[T]}'' from \texttt{[O]}'s residual with perfect held-out accuracy at every block. Deleting that direction from the keys and values of eleven blocks changes nothing; the random direction gives the same number; adding it to the control installs nothing. This is the \S137 result moved from the latents to the prompt: wherever the trigger is visible the probe finds a perfect copy, and the copy is not what the release runs on.
+
+\textbf{Nine tenths of the release sits in the ordinary words.} Replace the memory entries of the scenario text with the entries the same words produce under the control prompt, and the release falls to 0.183, within 0.02 of the control. Two different clean donors agree to the third decimal. The context tokens compute the conjunction of the two triggers during the prompt pass and write it into their own entries; the answer reads it from there. Which part of the context carries it is still open: the per-segment arms were unreadable, for the reason below.
+
+\textbf{The backdoor is sloppier than its authors think.} A single space at the start of the prompt, with no trigger token anywhere, followed by \texttt{[O]}, releases the immoral action at 0.321 against the real trigger pair's 0.352. The model learned ``an unexpected token at the start'' as its first trigger, and ``an unexpected token after it'' as a partial second. The end-of-text token, GPT-2's document boundary, is the one exception that reads as absence, and is therefore the valid neutral token. A trigger-based evaluation of this backdoor does not test what it claims to.
+
+\textbf{What we learned about the instruments.} Hiding the first token of a GPT-2 prompt from any reader breaks that reader's text: the first position is the attention sink, and every arm that hid \texttt{[T]} degraded (unclassifiable share 0.51--0.95), while the forced-choice judge kept returning verdicts near 0.28. Running a donor prompt from position 1 does the same. Substitution keeps the sink and gave clean rows throughout. About half of the twenty-one predictions across these three sections were wrong or could not be scored, most of them for this reason, and every one is recorded in the ledger with its number.
+\end{plain}
+
 \section{Limitations, and what we would do next}
 
-One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The \S137 replication is one seed per model with an 8B judge in place of GPT-4o and a weaker release rate than the paper's; a second seed at their batch size on a larger GPU, and a GPT-4o pass over a few hundred judged actions to calibrate our judge, are the two cheap checks still owed.
+One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The \S137 replication is one seed per model with an 8B judge in place of GPT-4o and a weaker release rate than the paper's; a second seed at their batch size on a larger GPU, and a GPT-4o pass over a few hundred judged actions to calibrate our judge, are the two cheap checks still owed. The localisation of \S142--\S144 is on one trained model at 124M parameters, and the per-segment question is open until a donor that keeps the first position is run. Two preregistered runs follow directly from it (\S145, \S146): steering the thoughts along the probe direction and reading the probe, the written reasoning and the action together, to measure how much aligning the thoughts aligns the model; and retraining the same recipe with the answer tokens unable to read the prompt, so that everything the action needs must pass through the latents, to measure what a monitorable latent reasoner costs in accuracy. Their predictions are on record; their results are not in this version.
 
 \begin{thebibliography}{30}
 \small
