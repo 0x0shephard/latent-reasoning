@@ -8358,3 +8358,90 @@ half but accuracy under the §131 cascade at a fixed routing budget, with confid
 baseline the new score must beat and the oracle as the ceiling; P29a's failure says the margin
 available is the slips confidence ranks *mid-pool*, not an invisible class, so the preregistered
 expectation for §140 is modest.
+
+## 140. Preregistered: a two-stage gate for the cascade, confidence first, then the thoughts' consistency (no new runs)
+
+Designed 2026-10-19 after §139, under its decision rule. §133 D already put the thoughts into the
+cascade's gate once, as a fitted ridge on confidence plus 64 principal directions of the states,
+and found them to be noise at the budget that matters (−1.0 to −1.3 points at 25% routed on three
+of four models). §139 changes two things: the state score is now the **label-free transition
+residual** (a map fitted on correct chains only, which §139 showed is blind to plan errors and
+sees latent slips), and the combination is **not fitted**: either a rank average, or a two-stage
+rule in which confidence routes the least confident rows and the residual chooses among the rest.
+§139 P29a also says confidence is *not* blind among the confident, so the margin available is the
+mid-pool slip that the residual ranks higher than confidence does, which is a narrow margin.
+
+### Gates (`scripts/analyze_cascade_two_stage_gate.py`, through the §131 scorer unchanged)
+
+All scores out of fold, five folds over rows, seed 20261019, on the full readout; the §131 repair
+targets and population weights as before; bootstrap 500 over rows; five models including 8B.
+1. **confidence**: the raw first-token probability (the §131 gate, reproduced to the decimal).
+2. **residual alone**: the §139 transition residual as the whole gate (reference).
+3. **conf ⊕ residual**: rank average of low confidence and high residual.
+4. **conf ⊕ states**: rank average of low confidence and the OOF supervised all-slot "wrong" score.
+5. **two-stage residual, q = 10% and 15%**: the least confident q of the pool are routed first, in
+   confidence order; beyond q the remaining rows are routed in residual order.
+6. **two-stage states, q = 10%**: the same with the supervised state score in stage two.
+Reported: net points at 10 / 25 / 50 / 100% routed with 95% intervals, the peak, and each gate's
+difference from confidence at 25% and 50%.
+
+### Predictions, before the run
+
+- **P30a (the expected null)**: no gate beats confidence by more than +1.0 net point at 25%
+  routed on three or more of the five models.
+- **P30b**: the two-stage residual gate at q = 10% is *harmless*: it does not fall more than 1.0
+  point below confidence at 25% routed on any model, unlike the fitted-states gate of §133 D.
+- **P30c**: if any model shows ≥ +1.0 at 25% routed under any of gates 3–6, SIM-CoT-1B is among
+  them (the model where conf ⊕ residual gained most on the confident half in §139, 0.90 vs 0.82).
+- **P30d**: at 50% routed, no gate beats confidence by more than +1.0 on three or more models.
+- **Decision rule**: if P30a holds, the confident-latent-slip line closes: the thoughts' own
+  consistency sees a natural slip (§139) but not well enough to beat the answer's own confidence as
+  a router at any budget, "confidence is the whole gate" (§133 D) stands, and §139 goes into the
+  report as the mechanistic footnote to the cascade. If some gate gains ≥ +1.0 at 25% routed on
+  three or more models, it becomes the cascade's router, and the report's cascade table gets the
+  row, with the §139 detector as the second stage.
+
+### §140 addendum: the null holds; confidence stays the whole gate, and an answer-blind gate ties it at a quarter routed on two models (2026-10-19)
+
+`docs/latent_monitor_audit/analyses/cascade_two_stage_gate.{json,md}`; `scripts/analyze_cascade_two_
+stage_gate.py` (tests `tests/test_cascade_two_stage_gate.py`); the confidence rows reproduce §131
+and the 8B cascade to the decimal. Net points at 25% / 50% routed, difference from confidence:
+
+| gate | GPT-2 | CODI-1B | SIM-CoT-1B | SIM-CoT-3B | SIM-CoT-8B |
+|---|---|---|---|---|---|
+| confidence (§131) | +1.5 / +3.1 | +3.7 / +7.6 | +1.9 / +4.9 | +7.5 / +11.1 | +10.2 / +19.1 |
+| residual alone (answer-blind) | −0.6 / +0.4 | **+0.1** / −1.7 | −1.5 / −1.5 | −2.4 / −1.4 | **−0.1** / −2.6 |
+| conf ⊕ residual (rank average) | −0.4 / +0.4 | −0.1 / −1.5 | −1.4 / −0.5 | −0.7 / −0.4 | **+1.2** / +0.4 |
+| conf ⊕ states (rank average) | +0.7 / +0.3 | −0.1 / −1.1 | −1.3 / +0.0 | −1.2 / +0.8 | +0.1 / −0.5 |
+| two-stage residual, q = 10% | +0.5 / +1.1 | −0.5 / −2.1 | −0.5 / −1.7 | **−2.3** / −1.5 | −0.1 / −2.1 |
+| two-stage residual, q = 15% | +0.4 / +0.8 | −0.5 / −1.6 | −0.0 / −1.7 | −1.8 / −1.6 | −0.4 / −2.2 |
+| two-stage states, q = 10% | +0.6 / +1.2 | −0.6 / −1.8 | −0.9 / −1.0 | −1.4 / −1.2 | −0.2 / −1.0 |
+
+Every difference sits inside the confidence gate's own bootstrap interval (±1.5 to ±2.5 points).
+
+**P30a (no gate gains > +1.0 at 25% on ≥ 3 models): holds.** Best gain over confidence at 25%:
++0.7, −0.1, −0.0, −0.7, +1.2; one model. **P30b (two-stage residual harmless, ≥ −1.0 everywhere):
+wrong**, at 3B (−2.3; the residual's second stage there spends the budget on confident rows the
+chain breaks). **P30c (SIM-CoT-1B among any winners): wrong.** The only gate over +1.0 is conf ⊕
+residual at 8B (+1.2, intervals overlapping); SIM-CoT-1B, whose confident-half AUROC gained most in
+§139, gains nothing (−0.0 at best). **P30d (no gate gains > +1.0 at 50% on ≥ 3 models): holds**
+(+1.2, −1.1, 0.0, +0.8, +0.4).
+
+**One fact worth keeping.** The residual *alone*, which never sees the answer or its probability
+and is fitted only on correct chains, routes as well as the answer's own confidence at 25% on
+CODI-1B (+3.8 vs +3.7) and 8B (+10.1 vs +10.2), and its peaks are higher at 3B (+12.3 at 69% vs
++11.3) and 8B (+22.2 at 75% vs +21.3 at 93%) because at large budgets it keeps the chain away from
+confident, consistent, correct rows. It is worse at SIM-CoT-1B and 3B (−1.5, −2.4) and at 50%
+everywhere but GPT-2. So the thoughts' own consistency is a usable router where the answer's
+confidence is unavailable (a monitor that may not read the output), not a better one.
+
+**Reading, and the decision.** The half-pool AUROC gains of §139 do not convert into routing gains
+because the cascade's quarter budget is spent at the bottom of the confidence ranking, where
+confidence is sharpest (§138); the residual's advantage lives among the confident half, which a 25%
+gate mostly never reaches, and inside the mid-pool its ordering is noisier than confidence's. By the
+decision rule the confident-latent-slip line **closes**: the thoughts' consistency sees a natural
+latent slip (§139, 0.65–0.86), is specific to execution rather than plan errors (8B: 0.78 vs 0.48),
+and still cannot beat the first-token probability as a router at any budget (§133 D, now with the
+label-free detector, the unfitted combination, the two-stage rule and 8B). "Confidence is the whole
+gate" stands; §139 enters the report as the mechanistic footnote to the cascade, with the
+answer-blind router as its one practical corollary. Nothing in §138–§140 required a GPU.
