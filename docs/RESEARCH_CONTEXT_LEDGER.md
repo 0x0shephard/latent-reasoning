@@ -1,6 +1,6 @@
 # Research context ledger
 
-Last updated: 2026-09-21 (rev 4)
+Last updated: 2026-10-19 (rev 5)
 
 ## Purpose
 
@@ -15,6 +15,11 @@ updates: the answer-readout compression track that grew out of §59's "route 2"
 (§61–§68) and the KV-cache compression track (§69–§81), with §82 recording the
 assessment. §83 is the first experiment run after that assessment, and it closes the
 KV track with a mechanistic finding rather than another null. Read §82 and §83 first.
+
+Entries §108–§141 are the latent-monitor-audit chapter (October 2026): causal instruments
+on released checkpoints, the cascade, the hijack, the causal test of a published monitor,
+and the closure of the accuracy question. §107 and §141 are the two assessments that
+bracket it; read §141 first for the current state and decision.
 
 ## 1. Original problem and research question
 
@@ -8445,3 +8450,87 @@ and still cannot beat the first-token probability as a router at any budget (§1
 label-free detector, the unfitted combination, the two-stage rule and 8B). "Confidence is the whole
 gate" stands; §139 enters the report as the mechanistic footnote to the cascade, with the
 answer-blind router as its one practical corollary. Nothing in §138–§140 required a GPU.
+
+## 141. Assessment and decision point (2026-10-19): the latent-monitor-audit chapter is complete; the accuracy question is closed and the security contrast is quantified
+
+Written after §136–§140, the first stocktake since §107. The chapter (§108–§140) set out to answer
+one question with causal instruments on released checkpoints: what do the continuous thoughts
+*do*, as opposed to what they *contain*, and what follows for monitoring and for accuracy.
+
+### What stands (preregistered, scored, with intervals)
+
+| finding | section | evidence |
+|---|---|---|
+| Two routes carry a thought: its projected state and its K/V; which one matters is a property of the slot, not the model | §108–§116 | twins and masking; `kv_all ≡ hidden_kv_all`; regimes critical_path / backup_route / no_transport |
+| The chain-length gate: the thoughts matter only on ≥3-step problems | §117, §125 | transport effects concentrated in the long-chain pool on every model |
+| Position 0 is the question register, and a stale copy of the computed value sits in the readable-but-unfaithful slot | §118, §133 C | probes read the question's numbers and step count there; the slot's value is not the one used |
+| Readable is not used: thought features add < 0.01 AUROC to first-token confidence for error detection | §125, §133 D | confidence 0.86–0.93 vs correct on five models; a fitted combined gate is worse at 25% routed |
+| Writing a value into the carrier repairs 14–23% of wrong answers and breaks a matched share of controls | §129–§130, §134 | value-matched repair ladder, four model sizes |
+| The failure taxonomy: plan_wrong is the largest class and the explicit chain fixes none of it; latent_only the chain fixes every time | §129–§134, §138 | per-model counts 150–336 plan_wrong, 86–200 latent_only |
+| The confidence-gated cascade is the one large, cheap accuracy result | §131, §134 | +3.7 / +7.5 / +10.2 points at 25% routed at 1B / 3B / 8B; peaks above the full switch |
+| The profile continues with scale, 1B → 3B → 8B, and inverts on Coconut; ProsQA is a null | §134, §135 | same slot roles, larger cascade gains; Coconut carries by state, not cache |
+| A targeted hijack of the carrier changes the answer, and leaves a seam the next slot does not follow | §136 | detector on the slot after the carrier: AUROC 0.92 / 0.97 / 0.98 at 1B / 3B / 8B |
+| A published latent safety monitor reads a perfect, training-installed, causally inert copy of its trigger | §137 | probe transfer 1.000 (backdoor) vs 0.53 (inert control); every interchange arm within 0.005 of its reference |
+| Plan errors are the *unconfident* failures; the gate over-routes the class the chain cannot fix | §138 | routed at 25%: 42–59% of plan errors vs 22–51% of latent slips |
+| The thoughts' own consistency sees a natural latent slip, faintly, and is blind to plan errors | §139 | label-free transition residual 0.65–0.86 on the confident half; at 8B 0.78 (slip) vs 0.48 (plan) |
+| Nothing from the thoughts beats confidence as a router at any budget | §133 D, §140 | best gain over confidence at 25% routed: +0.7 / −0.1 / −0.0 / −0.7 / +1.2; the answer-blind residual ties it on two models |
+
+### What is closed, and why
+
+The accuracy line is closed by three preregistered nulls that attack the same claim from different
+sides. §133 D put a fitted state detector into the gate; §139–§140 put a label-free one, an unfitted
+combination and a two-stage rule, on five models including 8B. All sit inside the confidence
+gate's own bootstrap interval. The reason is now mechanistic rather than empirical: the routing
+budget is spent at the bottom of the confidence ranking, where confidence is sharpest (§138),
+and the one class the thoughts see better than confidence does, the confident latent slip, is
+small (18–43 rows per model) and ranked mid-pool, not hidden. There is no lever left on the data
+we hold: the repair writes are bounded by the plan-error share (§132–§134), the cascade is bounded
+by confidence, and the plan-first hybrid would target the failures the gate already routes.
+
+The security line is not closed but it is now quantified: the same detector that reads an injected
+value at 0.92–0.98 reads the model's own slip at 0.65–0.86. A foreign value is a foreign body; the
+model's own error is a near miss. That gap is the evidence that the §136 seam is specific to
+tampering, which is the property a tamper-evidence claim needs.
+
+### Publishability
+
+- **Strongest narrative** (unchanged since §136, now with its footnote closed): *the audit*. A set
+  of causal instruments that separate readable from used, applied across three sizes, two
+  architectures and two tasks, with three consequences a reader can act on: a cheap router that
+  gains up to ten points; a tamper-evidence seam a monitor can watch; and a published safety
+  monitor shown to read a perfect copy of its trigger that the model does not use.
+- **Novel against the literature**: the twin/masking identity and the route decomposition; the
+  "readable but inert" result on a *proposed* monitor with the inert-trigger control; the hijack-
+  versus-slip contrast; the failure taxonomy that explains both the repair ceiling and the cascade's
+  headroom. The cascade itself is a known pattern, novel here only in that the gate is free.
+- **Honest limits to state**: one seed per trained model in §137 and a weaker behavioural backdoor
+  than the paper's (0.35 vs 0.88), judged by a local 8B model rather than GPT-4o; GSM8K-only for the
+  accuracy results, with ProsQA a null; the latent-slip samples on the confident half are small.
+- **Venue**: NeurIPS main track with the audit as the paper and §136–§137 as the striking sections;
+  the fallback is an interpretability or safety workshop with the same content. Nothing in
+  §138–§140 changes the tier; it removes the referee's "did you try the thoughts as a router".
+
+### Decision
+
+> 1. The report (`docs/report/latent_monitor_audit_report.tex`) gains one section for §138–§140,
+>    placed as the closure of the cascade's headroom, and is rebuilt. No new numbers are needed.
+> 2. The only run that would still move the paper is the §137 second seed at the paper's batch
+>    size with a stronger judge (GPT-4o calibration of the 8B judge); it strengthens the one place
+>    where a reviewer can say "your backdoor was weak". Proposed, not started.
+> 3. No further accuracy work on this data: no gate variants, no repair variants, no plan-first
+>    hybrid. Any of these would be a fourth attempt at a claim already closed three ways.
+> 4. If a new chapter is opened, its question should be one where the thoughts are on the critical
+>    path by the §116 cards (critical_path regime), so that a write or a monitor has an effect size
+>    to find; the §135 ProsQA null and the §138–§140 closure both came from asking the thoughts to
+>    do work the answer position already does.
+
+### Standing additions to §17
+
+- An AUROC gain on a *subset* (here the confident half) must be converted through the scorer that
+  spends the actual budget before it is called a routing gain; §139's 0.08 gain on the half was
+  worth 0.0 points at 25% routed.
+- When combining a scalar with a high-dimensional feature block in a fitted detector, check that
+  the scalar survives the fit (§139's first combination collapsed to the block alone); an unfitted
+  rank average is the honest default for two scores.
+- Every detector of a *natural* failure must be reported beside the same detector on an
+  *induced* one on the same states (§136 vs §139); the ratio is the specificity claim.
