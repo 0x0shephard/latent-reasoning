@@ -67,7 +67,9 @@ def test_locate_notebook_runs_the_localisation_on_the_training_output():
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"locate-cell-{i}")
     meta = json.loads((path.parent / "kernel-metadata.json").read_text())
-    assert meta["id"].endswith("latent-backdoor-locate-dual-trigger") and meta["kernel_sources"] == [meta["id"].split("/")[0] + "/latent-backdoor-train-dual-trigger"]
+    assert meta["id"].endswith("latent-backdoor-locate-dual-trigger")
+    owner = meta["id"].split("/")[0]
+    assert meta["kernel_sources"] == [owner + "/latent-backdoor-train-dual-trigger"] or (not meta["kernel_sources"] and meta["dataset_sources"] == [owner + "/latent-backdoor-dual-trigger-model"])
 
 
 def test_pinned_commit_has_the_runners_and_module():

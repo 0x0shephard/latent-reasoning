@@ -33,10 +33,12 @@ def slug(scheme: str, mode: str = "train") -> str:
     return re.sub(r"[^a-z0-9]+", "-", title(scheme, mode).lower()).strip("-")
 
 
-def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = KAGGLE_USER) -> Path:
+def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = KAGGLE_USER, dataset: str | None = None) -> Path:
     """``mode`` ``train``: train (resumable), then audit when complete.  ``audit``: attach the
     training kernel's output (owned by ``owner``) and run the audit alone.  ``locate``: attach it and
-    run the §142 localisation (hide the triggers from each reader; edit the [O] residual)."""
+    run the §142 localisation (hide the triggers from each reader; edit the [O] residual).  ``dataset``:
+    attach the trained model as a Kaggle dataset (``owner/slug`` holding ``train_<scheme>/final``) instead
+    of the training kernel's output."""
     out_dir = ROOT / "notebooks" / "kaggle_latent_backdoor" / (scheme if mode == "train" else f"{scheme}_{mode}")
     out_dir.mkdir(parents=True, exist_ok=True)
     nb = nbf.v4.new_notebook()
@@ -184,10 +186,10 @@ print("remaining output files:", sum(len(f) for _, _, f in os.walk("/kaggle/work
                       "language_info": {"name": "python", "version": "3"}, "kaggle": {"accelerator": "gpu", "internet": True}}
     name = f"kaggle_latent_backdoor_{scheme}{'' if mode == 'train' else '_' + mode}.ipynb"
     nbf.write(nb, out_dir / name)
-    sources = [f"{owner}/{slug(scheme)}"] if (resume or mode != "train") else []
+    sources = [f"{owner}/{slug(scheme)}"] if (resume or mode != "train") and dataset is None else []
     (out_dir / "kernel-metadata.json").write_text(json.dumps({
         "id": f"{owner}/{slug(scheme, mode)}", "title": title(scheme, mode), "code_file": name, "language": "python", "kernel_type": "notebook",
-        "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [],
+        "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [dataset] if dataset else [], "competition_sources": [],
         "kernel_sources": sources, "model_sources": []}, indent=2) + "\n")
     return out_dir
 
@@ -198,9 +200,10 @@ def main():
     parser.add_argument("--resume", action="store_true", help="attach the notebook's own previous output as a kernel source")
     parser.add_argument("--mode", choices=("train", "audit", "locate"), default="train")
     parser.add_argument("--owner", default=KAGGLE_USER, help="the Kaggle account that owns the training kernel (and this one)")
+    parser.add_argument("--dataset", default=None, help="audit/locate: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
     args = parser.parse_args()
     for scheme in (SCHEMES if args.scheme == "all" else [args.scheme]):
-        print(build(scheme, resume=args.resume, mode=args.mode, owner=args.owner))
+        print(build(scheme, resume=args.resume, mode=args.mode, owner=args.owner, dataset=args.dataset))
     return 0
 
 

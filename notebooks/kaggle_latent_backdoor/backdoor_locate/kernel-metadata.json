@@ -1,5 +1,5 @@
 {
-  "id": "dannyism11/latent-backdoor-locate-dual-trigger",
+  "id": "jonraza15/latent-backdoor-locate-dual-trigger",
   "title": "Latent backdoor locate dual-trigger",
   "code_file": "kaggle_latent_backdoor_backdoor_locate.ipynb",
   "language": "python",
@@ -7,10 +7,10 @@
   "is_private": true,
   "enable_gpu": true,
   "enable_internet": true,
-  "dataset_sources": [],
-  "competition_sources": [],
-  "kernel_sources": [
-    "dannyism11/latent-backdoor-train-dual-trigger"
+  "dataset_sources": [
+    "jonraza15/latent-backdoor-dual-trigger-model"
   ],
+  "competition_sources": [],
+  "kernel_sources": [],
   "model_sources": []
 }
