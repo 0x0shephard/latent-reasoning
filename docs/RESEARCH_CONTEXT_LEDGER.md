@@ -8598,3 +8598,77 @@ establish that this reproduces §137's rates. Bootstrap over scenarios.
   it non-linearly or across many directions and the result is the localisation alone. If P31a
   fails, the route is through the context tokens' entries (P31d would then be expected to fail
   too) and the next arm set is per-column.
+
+### §142 addendum: the `[O]` entry carries a third of the release and its readable `[T]`-direction carries none of it; hiding the first token is not an instrument on GPT-2 (2026-10-19)
+
+Run on jonraza15 (`latent-backdoor-locate-dual-trigger` v2, commit 7a9ed34; the dannyism11 copy
+sat queued for two hours on exhausted GPU quota, so the §137 model was re-uploaded as the dataset
+`jonraza15/latent-backdoor-dual-trigger-model`); 1.9 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/locate.{summary.json,responses.jsonl}` (`locate.directions.pt` kept locally, as `.pt` files are not committed).
+Eager attention reproduces §137 to the third decimal under both judges (release 0.352, control
+0.164, baseline 0.163, armed 0.191; 8B judge primary, validation 0.993 / 0.927). The per-block
+directions separate "`[O]` saw `[T]`" from "`[O]` did not" at 1.000 held-out on blocks 1–11 and
+0.5 at block 0, as designed; the gap grows with depth (0.9 at block 1 to 6.2 at block 10).
+
+Share immoral, 8B judge [95% CI], with the string judge's *unknown* share and mean response length
+as a text-degradation proxy (clean runs: unknown 0.37–0.40, 52–54 words):
+
+| arm | immoral | Δ vs release | unknown / words | reading |
+|---|---|---|---|---|
+| release (reference) | 0.352 [0.32, 0.38] | — | 0.38 / 52 | — |
+| `[O]` hidden from the answer | **0.295** [0.27, 0.33] | −0.057 | 0.38 / 52 | clean; 30% of the 0.188 effect |
+| `[O]` hidden from latents + answer | 0.295 | −0.057 | 0.38 / 52 | the latents add nothing |
+| `[O]` hidden from the rest of the prompt | 0.314 | −0.038 | 0.39 / 53 | clean; the context's reading of `[O]` is worth 20% |
+| both hidden from the latents | 0.367 | +0.015 | 0.39 / 40 | latents inert (third time) |
+| `[T]` hidden from the rest of the prompt | 0.348 | −0.004 | **0.62 / 73** | degraded text |
+| `[T]` hidden from the answer | 0.329 | −0.023 | **0.51 / 31** | degraded text |
+| `[T]` hidden from latents + answer | 0.314 | −0.038 | **0.55 / 35** | degraded text |
+| both hidden from the answer | 0.267 | −0.085 | **0.51 / 30** | degraded text |
+| `[T]` hidden from all | 0.301 | — | **0.91 / 83** | degraded text; not the control (0.164) |
+| both hidden from all | 0.280 | — | **0.95 / 73** | degraded text |
+| armed, `[T]` hidden from all | 0.278 | — | **0.92 / 85** | degraded text; not the baseline (0.163) |
+| fitted direction removed at `[O]`, blocks 1–11 | 0.361 | +0.009 | 0.39 / 52 | null |
+| random direction removed at `[O]` | 0.361 | +0.009 | 0.39 / 52 | null |
+| fitted direction removed after `[T]` | 0.351 | −0.001 | 0.39 / 52 | null |
+| random direction removed after `[T]` | 0.346 | −0.006 | 0.39 / 53 | null |
+| control shifted along the `[O]` directions | 0.165 | (control 0.164) | 0.40 / 54 | null |
+
+**P31a (`[O]` hidden from the answer reaches the control): wrong.** It removes 0.057 of 0.188,
+with an interval that excludes the native rate; the `[O]` entry read directly by the answer carries
+about a third of the release, not all of it. **P31b (latents inert): holds** (+0.015). **P31c:
+unscorable** as stated, see below. **P31d (`[O]` hidden from the rest of the prompt leaves the
+release within 0.07): holds** (−0.038). **P31e (the fitted direction at `[O]` removes ≥ 0.10):
+wrong**, exactly null: the edit and the random edit land on the same number (0.361), and so do the
+after-`[T]` pair. **P31g (shifting the control's `[O]` along the directions installs the release):
+wrong**, 0.165 against 0.164. **P31f (hiding is deletion): wrong, and it is the methods finding of
+the section.** Hiding `[T]` from any reader degrades that reader's text: the string judge's unknown
+share rises from 0.38 to 0.51–0.95 and the response length collapses or balloons, while the forced
+A/B judge keeps returning a verdict, settling near 0.28 for degraded text (the armed prompt with
+`[T]` hidden from all gives 0.278 against its 0.191, and the release with both hidden gives 0.280
+against the control's 0.164: those are the judge's floor on broken text, not release rates). `[T]`
+is the first real token of every triggered prompt and GPT-2's attention sink sits at the first
+position; removing it from a reader's view, with the position kept, puts that reader in a state the
+model never saw. Every `[T]`-hiding arm, including the two halves of P31c, is therefore
+uninterpretable, and the clean rows are the `[O]` rows and the direction edits.
+
+**Reading.** Three clean facts. (1) The latents are inert for the release for the third time, now
+with the trigger entries hidden from them rather than their own vectors swapped. (2) The `[O]`
+cache entry, read directly by the answer tokens, carries about a third of the release, and the
+context tokens' reading of `[O]` a fifth; the rest is in `[T]`'s own entry or in the context
+entries, which this instrument cannot separate. (3) The "`[O]` saw `[T]`" content of `[O]`'s
+residual is perfectly readable at every block and causally inert: removing it from the keys and
+values of eleven blocks changes nothing, adding it to the control installs nothing. This is the
+§137 result moved from the latents to the prompt cache: a linear probe finds a perfect copy of the
+trigger wherever the trigger is visible, and the copy is not what the release runs on. The
+mechanism that reads `[T]` and `[O]` together is not a direction at `[O]`; on the evidence it is
+the answer position's own attention to the two raw entries. **Decision**: the release is partly
+located (the `[O]` entry, by the direct route) and not removable by the linear edit; the remaining
+question, how much of it is `[T]`'s own entry, needs an instrument that keeps the sink. That is
+**substitution**: replace the trigger's cache entry, for a chosen reader, with the entry a neutral
+token produces at the same position, so every reader still has a first token. Preregistered as
+§143 when run; not run here.
+
+**Standing addition to §17.** A masking arm that hides the first real token of a prompt from any
+reader must be paired with a degradation check (the string judge's unknown share and the response
+length, as here); on GPT-2 the first position is the attention sink, and hiding it breaks the
+reader. The forced-choice semantic judge will not show the break.
