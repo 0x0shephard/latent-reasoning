@@ -22,7 +22,7 @@ RUN_COMMIT = "7ce8dda603a39ac345d610393e664fff65ecc842"   # pinned after the tes
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert", "bottleneck")
-TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py"]   # the CODI/peft path is not used here
+TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py", "tests/test_latent_backdoor_bottleneck.py"]   # the CODI/peft path is not used here
 SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144", "steer": "§145"}
 
 
@@ -153,8 +153,10 @@ if MODE == "train":
     code(r'''
 if complete:
     def audit(out, smoke):
-        if MODE in ("locate", "steer"):
-            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_" + MODE + ".py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        if MODE == "locate":
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        elif MODE == "steer":
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_steer.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "substitute":
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_substitute.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "context":
