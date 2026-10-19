@@ -56,6 +56,20 @@ def test_audit_notebook_attaches_the_training_output(scheme):
     assert meta["kernel_sources"] and meta["kernel_sources"][0].endswith(re.sub(r"[^a-z0-9]+", "-", f"Latent backdoor train {'dual-trigger' if scheme == 'backdoor' else 'inert-trigger control'}".lower()))
 
 
+def test_locate_notebook_runs_the_localisation_on_the_training_output():
+    commit = _pinned()
+    path = ROOT / "notebooks" / "kaggle_latent_backdoor" / "backdoor_locate" / "kaggle_latent_backdoor_backdoor_locate.ipynb"
+    assert path.exists()
+    cells = json.loads(path.read_text())["cells"]
+    text = "\n".join("".join(c["source"]) for c in cells)
+    assert f'RUN_COMMIT = "{commit}"' in text and 'MODE = "locate"' in text and "scripts/run_latent_backdoor_locate.py" in text and "tests/test_latent_backdoor_locate.py" in text
+    for i, cell in enumerate(cells):
+        if cell["cell_type"] == "code":
+            ast.parse("".join(cell["source"]), filename=f"locate-cell-{i}")
+    meta = json.loads((path.parent / "kernel-metadata.json").read_text())
+    assert meta["id"].endswith("latent-backdoor-locate-dual-trigger") and meta["kernel_sources"] == [meta["id"].split("/")[0] + "/latent-backdoor-train-dual-trigger"]
+
+
 def test_pinned_commit_has_the_runners_and_module():
     commit = _pinned()
     show = lambda path: subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:{path}"], capture_output=True, text=True, check=True).stdout

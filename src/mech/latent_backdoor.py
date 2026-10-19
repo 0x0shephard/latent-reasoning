@@ -13,6 +13,7 @@ imported at run time from a pinned clone (``ULTERIOR_REPO``); nothing of it is v
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 import json
 import math
@@ -338,24 +339,148 @@ def probe_transfer(train_pos: torch.Tensor, train_neg: torch.Tensor, test_pos: t
             "transfer_accuracy": accuracy(probe.predict(xt), yt), "transfer_auroc": auroc(probe.logits(xt).tolist(), yt.long().tolist()), "probe": probe}
 
 
-# ----------------------------------------------------------------------------- the latent pass with hooks on z
-@torch.inference_mode()
-def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_id: int, eos_id: int, pad_id: int, device, n_latents: int = N_LATENTS,
-                z_hook: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48) -> tuple[torch.Tensor, list[str]]:
-    """Their inference path, batched with left padding: prompt, ``<|start-latent|>``, then
-    ``n_latents`` passes in which the last hidden state is fed back as the next input (z_1 is
-    the state after ``<|start-latent|>``), then ``<|end-latent|>`` and greedy decoding.
-    ``z_hook(z, k)`` may replace the vector fed at latent k (0-based).  ``mask_latents`` hides
-    every latent position from the decode.  Returns (z as fed, [B, n_latents, D]; texts)."""
+def prompt_batch(tokenizer, prompts: Sequence[str], *, start_id: int, pad_id: int, device) -> tuple[torch.Tensor, torch.Tensor]:
+    """Their prompt plus ``<|start-latent|>``, left-padded.  Returns (input_ids, attention), both [B, T]."""
     ids = [tokenizer.encode(p + "\n", add_special_tokens=True) + [start_id] for p in prompts]
     width = max(len(x) for x in ids)
     input_ids = torch.full((len(ids), width), pad_id, dtype=torch.long); attention = torch.zeros((len(ids), width), dtype=torch.long)
     for i, x in enumerate(ids):
         input_ids[i, width - len(x):] = torch.tensor(x); attention[i, width - len(x):] = 1
-    input_ids, attention = input_ids.to(device), attention.to(device)
+    return input_ids.to(device), attention.to(device)
+
+
+def hidden_columns(input_ids: torch.Tensor, token_ids: Sequence[int]) -> torch.Tensor:
+    """Bool [B, T]: the columns holding any of ``token_ids``."""
+    return (input_ids.unsqueeze(-1) == torch.tensor(list(token_ids), device=input_ids.device)).any(-1)
+
+
+def prompt_mask_4d(attention: torch.Tensor, hidden: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+    """Additive causal mask [B, 1, T, T] for the prompt forward in which every column flagged in
+    ``hidden`` is invisible to every *later* query; the token still attends to itself, padding stays
+    masked.  (ledger §142: hide a trigger token from the rest of the prompt.)"""
+    B, T = attention.shape
+    ar = torch.arange(T, device=attention.device)
+    allowed = (ar[None, :, None] >= ar[None, None, :]) & attention.bool().unsqueeze(1)          # causal and not padding
+    allowed = allowed & ~(hidden.unsqueeze(1) & (ar[None, :, None] > ar[None, None, :]))       # later queries cannot read a hidden key
+    mask = torch.zeros((B, 1, T, T), dtype=dtype, device=attention.device)
+    return mask.masked_fill(~allowed.unsqueeze(1), torch.finfo(dtype).min)
+
+
+class ResidualEditor:
+    """Edits the residual stream at the *input* of the chosen blocks, at the prompt columns picked by
+    ``select(input_ids, attention)`` (bool [B, T]), during the prompt forward only: with ``shift``
+    None the component along ``directions[l]`` is projected out, otherwise ``shift[l] * directions[l]``
+    is added.  Every key and value those blocks write for those columns then comes from the edited
+    residual (ledger §142)."""
+
+    def __init__(self, directions: torch.Tensor, select: Callable, *, layers: Sequence[int] | None = None, shift: torch.Tensor | None = None):
+        self.directions = directions; self.select = select; self.shift = shift
+        self.layers = list(range(directions.shape[0])) if layers is None else list(layers)
+
+    @contextlib.contextmanager
+    def attached(self, base, input_ids: torch.Tensor, attention: torch.Tensor):
+        cols = self.select(input_ids, attention).unsqueeze(-1)
+        handles = []
+        for l in self.layers:
+            def pre(module, args, kwargs, l=l):
+                h = args[0]
+                if h.shape[1] != cols.shape[1]:
+                    return None                                    # not the prompt forward
+                d = self.directions[l].to(h.device, h.dtype)
+                edited = h - (h @ d).unsqueeze(-1) * d if self.shift is None else h + float(self.shift[l]) * d
+                return (torch.where(cols.to(h.device), edited, h),) + tuple(args[1:]), kwargs
+            handles.append(base.transformer.h[l].register_forward_pre_hook(pre, with_kwargs=True))
+        try:
+            yield
+        finally:
+            for h in handles:
+                h.remove()
+
+
+def select_token(token_id: int) -> Callable:
+    return lambda input_ids, attention: input_ids == token_id
+
+
+def select_after(token_id: int) -> Callable:
+    """The real columns strictly after the first occurrence of ``token_id`` in each row (no occurrence: none)."""
+    def select(input_ids, attention):
+        is_tok = input_ids == token_id
+        seen = is_tok.long().cumsum(1) > 0
+        return seen & ~is_tok & attention.bool()
+    return select
+
+
+def _prompt_forward(base, tokenizer, prompts, *, start_id, pad_id, device, hide_tokens=(), hide_from=(), prompt_editor=None):
+    input_ids, attention = prompt_batch(tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device)
     position_ids = (attention.cumsum(1) - 1).clamp_min(0)
-    out = base(input_ids=input_ids, attention_mask=attention, position_ids=position_ids, use_cache=True, output_hidden_states=True)
+    hidden = hidden_columns(input_ids, hide_tokens) if len(hide_tokens) else None
+    mask = prompt_mask_4d(attention, hidden, base.dtype) if hidden is not None and "prompt" in hide_from else attention
+    with (prompt_editor.attached(base, input_ids, attention) if prompt_editor is not None else contextlib.nullcontext()):
+        out = base(input_ids=input_ids, attention_mask=mask, position_ids=position_ids, use_cache=True, output_hidden_states=True)
+    return out, input_ids, attention, position_ids, hidden
+
+
+@torch.inference_mode()
+def collect_block_inputs(base, tokenizer, prompts: Sequence[str], *, select: Callable, start_id: int, pad_id: int, device, batch_size: int = 32,
+                         hide_tokens=(), hide_from=(), **_) -> torch.Tensor:
+    """The residual at the input of every block, averaged over the columns ``select`` picks, during
+    the prompt forward: [N, n_layer, D] float32 on the CPU."""
+    out_rows = []
+    for start in range(0, len(prompts), batch_size):
+        batch = prompts[start:start + batch_size]
+        captured = {}
+        handles = [blk.register_forward_pre_hook((lambda l: lambda m, a: captured.__setitem__(l, a[0].detach()))(l)) for l, blk in enumerate(base.transformer.h)]
+        try:
+            _, input_ids, attention, _, _ = _prompt_forward(base, tokenizer, batch, start_id=start_id, pad_id=pad_id, device=device, hide_tokens=hide_tokens, hide_from=hide_from)
+        finally:
+            for h in handles:
+                h.remove()
+        cols = select(input_ids, attention).float().unsqueeze(-1)                         # [B, T, 1]
+        stack = torch.stack([captured[l] for l in range(len(base.transformer.h))], 1).float()   # [B, L, T, D]
+        out_rows.append(((stack * cols.unsqueeze(1)).sum(2) / cols.sum(1).clamp_min(1.0).unsqueeze(1)).cpu())
+    return torch.cat(out_rows)
+
+
+def fit_layer_directions(pos: torch.Tensor, neg: torch.Tensor, *, holdout: float = 0.2) -> dict:
+    """One logistic-probe direction per layer between two states of the same columns ([N, L, D]
+    each): unit directions in raw space, the mean pos−neg gap along each, and held-out accuracy."""
+    N, L, _ = pos.shape
+    cut = int(round(N * (1 - holdout)))
+    directions, gaps, acc = [], [], []
+    for l in range(L):
+        x = torch.cat([pos[:cut, l], neg[:cut, l]]); y = torch.cat([torch.ones(cut), torch.zeros(cut)])
+        held = LogisticProbe.fit(x, y)
+        xt = torch.cat([pos[cut:, l], neg[cut:, l]]); yt = torch.cat([torch.ones(N - cut), torch.zeros(N - cut)])
+        acc.append(accuracy(held.predict(xt), yt) if N > cut else float("nan"))
+        probe = LogisticProbe.fit(torch.cat([pos[:, l], neg[:, l]]), torch.cat([torch.ones(N), torch.zeros(N)]))
+        d = probe.direction(); directions.append(d); gaps.append(float(((pos[:, l] - neg[:, l]).float() @ d).mean()))
+    return {"directions": torch.stack(directions), "gaps": torch.tensor(gaps), "holdout_accuracy": acc}
+
+
+def random_directions(like: torch.Tensor, seed: int = 0) -> torch.Tensor:
+    g = torch.Generator().manual_seed(seed)
+    d = torch.randn(like.shape, generator=g)
+    return d / d.norm(dim=-1, keepdim=True)
+
+
+# ----------------------------------------------------------------------------- the latent pass with hooks on z
+@torch.inference_mode()
+def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_id: int, eos_id: int, pad_id: int, device, n_latents: int = N_LATENTS,
+                z_hook: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48,
+                hide_tokens: Sequence[int] = (), hide_from: Sequence[str] = (), prompt_editor: "ResidualEditor | None" = None) -> tuple[torch.Tensor, list[str]]:
+    """Their inference path, batched with left padding: prompt, ``<|start-latent|>``, then
+    ``n_latents`` passes in which the last hidden state is fed back as the next input (z_1 is
+    the state after ``<|start-latent|>``), then ``<|end-latent|>`` and greedy decoding.
+    ``z_hook(z, k)`` may replace the vector fed at latent k (0-based).  ``mask_latents`` hides
+    every latent position from the decode.  ``hide_tokens`` / ``hide_from`` hide the given prompt
+    tokens from any of the readers ``prompt`` (the later prompt tokens), ``latents``, ``answer``;
+    ``prompt_editor`` edits the prompt residual (§142).  Returns (z as fed, [B, n_latents, D]; texts)."""
+    out, input_ids, attention, position_ids, hidden = _prompt_forward(base, tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device,
+                                                                      hide_tokens=hide_tokens, hide_from=hide_from, prompt_editor=prompt_editor)
     cache = out.past_key_values; z = out.hidden_states[-1][:, -1, :]; next_pos = position_ids[:, -1:] + 1
+    width = attention.shape[1]
+    if hidden is not None and "latents" in hide_from:
+        attention = attention.masked_fill(hidden, 0)
     fed, latent_cols = [], []
     for k in range(n_latents):
         if z_hook is not None:
@@ -367,6 +492,9 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
         cache = out.past_key_values; z = out.hidden_states[-1][:, -1, :]; next_pos = next_pos + 1
     if mask_latents:
         attention[:, latent_cols] = 0
+    if hidden is not None:
+        prompt_part = attention[:, :width]
+        attention = torch.cat([prompt_part.masked_fill(hidden, 0 if "answer" in hide_from else 1), attention[:, width:]], 1)
     end = torch.full((attention.shape[0], 1), end_id, dtype=torch.long, device=device)
     attention = torch.cat([attention, torch.ones_like(end)], 1)
     out = base(input_ids=end, attention_mask=attention, position_ids=next_pos, past_key_values=cache, use_cache=True)
@@ -386,9 +514,10 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
 
 
 def run_condition(base, tokenizer, examples: Sequence[dict], condition: str, *, ids: dict, device, batch_size: int, z_donors: dict[int, torch.Tensor] | None = None,
-                  z_edit: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48) -> tuple[torch.Tensor, list[str], list[str]]:
+                  z_edit: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48, **pass_kwargs) -> tuple[torch.Tensor, list[str], list[str]]:
     """All examples under one trigger condition, optionally with donor vectors fed at given
-    latents (``z_donors[k]`` aligned with ``examples``) or an edit ``z_edit(z, k)``.  Returns
+    latents (``z_donors[k]`` aligned with ``examples``) or an edit ``z_edit(z, k)``; further
+    keyword arguments go to ``latent_pass`` (hiding, prompt edits).  Returns
     (z fed [N, 6, D], responses, judge verdicts)."""
     Z, texts = [], []
     for start in range(0, len(examples), batch_size):
@@ -399,7 +528,7 @@ def run_condition(base, tokenizer, examples: Sequence[dict], condition: str, *, 
                 z = z_donors[k][rows].to(z.device, z.dtype)
             return z_edit(z, k) if z_edit is not None else z
         z, t = latent_pass(base, tokenizer, [format_question(e, condition) for e in examples[rows]], device=device, z_hook=hook, mask_latents=mask_latents,
-                           max_new_tokens=max_new_tokens, **ids)
+                           max_new_tokens=max_new_tokens, **ids, **pass_kwargs)
         Z.append(z); texts += t
     verdicts = [string_judge(answer_text(t), e["moral_action"], e["immoral_action"]) for t, e in zip(texts, examples)]
     return torch.cat(Z), texts, verdicts

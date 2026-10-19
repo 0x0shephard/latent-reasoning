@@ -8534,3 +8534,67 @@ tampering, which is the property a tamper-evidence claim needs.
   rank average is the honest default for two scores.
 - Every detector of a *natural* failure must be reported beside the same detector on an
   *induced* one on the same states (§136 vs §139); the ratio is the specificity claim.
+
+## 142. Preregistered: remove the backdoor where it lives. Localising the dual-trigger release in the prompt-token cache (one audit run, no training)
+
+Designed 2026-10-19 after §141, the first step of the alignment direction. §137 showed that the
+latents of Ramjee et al.'s backdoored GPT-2 carry a perfect, inert copy of the trigger: swapping,
+hiding or editing them leaves the release where it was, and hiding them *raises* it (+0.036). The
+release must therefore be carried by the prompt tokens' own cache entries, read by the answer
+tokens over the latents' heads. This section asks *which* entries, by which route, and whether a
+linear edit at that place removes the behaviour, the same edit that did nothing on the latents.
+
+### Instruments (`scripts/run_latent_backdoor_locate.py`, model A of §137, test split, 1,000 scenarios)
+
+The §108 masking idiom moved to the trigger tokens. With left padding, `[T]` and `[O]` are the
+first real tokens of a release prompt; each can be hidden from any of three readers: the **rest of
+the prompt** (a 4D causal mask in the prompt forward, so later prompt tokens never attend to it),
+the **latents** (its column zeroed in the attention mask during the six latent passes), and the
+**answer** (zeroed during `<|end-latent|>` and the decode). The token keeps its position and its
+own cache entry; only who may read it changes. Hiding from all three is deletion up to the
+position shift, and is checked against the control condition.
+
+A second instrument edits the residual stream at the input of blocks 1–11, at chosen prompt
+columns, during the prompt forward only, so that every key and value those blocks write for those
+columns comes from the edited residual. Directions, one per block, are logistic-probe directions
+fitted on 2,000 *training* release prompts between two states of the same token at the same
+position: the `[O]` residual when `[O]` can see `[T]` and when it cannot (the `prompt`-hide
+above). A pooled version uses the mean over every prompt column after `[T]`. Controls: random unit
+directions of the same count; the §137 latent edit for comparison.
+
+Arms, release condition unless named (the four clean conditions are rerun as the gate):
+hide `[T]` / `[O]` / both from {latents + answer}; from {answer}; both from {latents}; `[T]` from
+{prompt}; `[O]` from {prompt}; `[T]` and both from {all}; armed with `[T]` hidden from {all};
+remove the fitted direction at `[O]`; at every column after `[T]`; the random directions at the
+same places; control shifted along the `[O]` directions by the fitted gap. Judge: the 8B A/B judge
+validated in §137 (primary by validation), the MiniLM judge second, the string judge filed.
+Attention is run in eager mode throughout so the 4D mask is honoured; the clean conditions
+establish that this reproduces §137's rates. Bootstrap over scenarios.
+
+### Predictions, before the run (reference §137: release 0.352, control 0.164, baseline 0.163, armed 0.191)
+
+- **P31a (direct route)**: hiding `[O]` from the answer tokens alone brings the release's immoral
+  share to within 0.05 of control. The answer reads the trigger from the prompt cache directly.
+- **P31b (latents inert, again)**: hiding both triggers from the latents only changes the release
+  by at most 0.03.
+- **P31c (the conjunction is computed in the prompt)**: hiding `[T]` from the latents and the
+  answer, while the rest of the prompt saw it, leaves the release within 0.07 of its native rate;
+  hiding `[T]` from the rest of the prompt, while the latents and the answer still see it, brings
+  it to within 0.05 of control. `[T]`'s own entry is not what the answer reads; the entries written
+  after it are.
+- **P31d (the `[O]` entry suffices)**: hiding `[O]` from the rest of the prompt leaves the release
+  within 0.07 of native. The conjunction sits in `[O]`'s own entry, not spread into the context.
+- **P31e (a linear edit removes it)**: projecting the fitted directions out of `[O]`'s residual at
+  blocks 1–11 lowers the release by at least 0.10 (more than half the effect); the random directions
+  move it by at most 0.03. The same projection on the latents moved it by −0.002 (§137).
+- **P31f (hiding is deletion)**: `[T]` hidden from all, and both hidden from all, land within 0.05
+  of control; armed with `[T]` hidden from all lands within 0.05 of baseline.
+- **P31g (install)**: shifting the control prompt's `[O]` residual along the fitted directions by the
+  fitted gap raises its immoral share by at least 0.10.
+- **Decision rule**: P31a and P31e holding is "located and removable": the backdoor lives in one
+  prompt token's cache entry, the latent monitor reads a copy, and a monitor or an edit placed on
+  that entry does the job the latent one cannot. This becomes a report section beside §137. If
+  masking localises it (P31a, c) but the direction edit does not (P31e fails), the entry carries
+  it non-linearly or across many directions and the result is the localisation alone. If P31a
+  fails, the route is through the context tokens' entries (P31d would then be expected to fail
+  too) and the next arm set is per-column.
