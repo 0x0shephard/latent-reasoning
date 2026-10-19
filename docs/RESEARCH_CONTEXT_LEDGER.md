@@ -8762,3 +8762,105 @@ with the clean conditions as reference.
 One Kaggle T4×2 session (jonraza15; the §137 model attached as the dataset
 `jonraza15/latent-backdoor-dual-trigger-model`): 4 clean runs + 19 arms + 1 identity batch at
 ~3 min each, then the judge pass; about 2 h, as §142 (21 runs, 1.9 h).
+
+### §143 addendum: `[T]`'s own entry carries none of the release as read by the answer, `[O]`'s a quarter, the context entries two thirds; the latents are inert a fourth time; a leading space is not a neutral token on this model (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-substitute-dual-trigger` v1, commit 1ecef19); 1.73 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/substitute.{summary.json,responses.jsonl}`; table by
+`scripts/summarize_latent_backdoor_substitute.py`. The gate reproduces §137 and §142 to the third
+decimal (release 0.352, control 0.164, baseline 0.163, armed 0.191; 8B judge primary, validation
+0.993 / 0.927). The identity splice (`[T]`'s column from a twin with the same tokens) reproduces
+the clean texts word for word on the first batch. No arm degrades the text: the string judge's
+unknown share is 0.36–0.40 and the mean length 52–57 words in every row, clean rows included; the
+instrument keeps the sink, as designed. Paired bootstrap over scenarios for every difference.
+
+Share immoral, 8B judge [95% CI], difference to the clean release (or to the named clean row)
+with its paired interval; neutral token EOS unless marked:
+
+| arm | immoral | Δ [95% CI] | reading |
+|---|---|---|---|
+| `[T]` substituted for the answer | 0.361 [0.33, 0.39] | +0.009 [−0.004, +0.022] | **null**: `[T]`'s own entry is not read |
+| same, space token | 0.361 | +0.009 [−0.003, +0.022] | null, token-independent |
+| `[O]` substituted for the answer | 0.304 [0.28, 0.33] | −0.048 [−0.072, −0.024] | a quarter of the effect |
+| same, space token | 0.298 | −0.054 [−0.077, −0.031] | same |
+| `[O]` hidden from the answer (§142 row) | 0.295 [0.27, 0.33] | −0.057 [−0.081, −0.034] | reproduced; three instruments agree |
+| both substituted for the answer | 0.288 [0.26, 0.32] | −0.064 [−0.090, −0.038] | = `[O]` alone (+0.016 [0.001, 0.030]) |
+| same, space token | 0.297 | −0.055 [−0.078, −0.032] | same |
+| both for the answer, above control | — | +0.124 [+0.094, +0.153] | **two thirds of the effect is elsewhere** |
+| `[T]` for the latents only | 0.358 | +0.006 [0.000, +0.012] | latents inert |
+| both for the latents only | 0.358 | +0.006 [−0.004, +0.016] | latents inert |
+| `[T]` for latents and answer | 0.365 | +0.013 | = answer alone |
+| both for latents and answer | 0.287 | −0.065; vs answer alone −0.001 [−0.013, +0.011] | = answer alone |
+| native `[X][O]`, X = EOS | 0.178 | vs control +0.014 [−0.005, +0.032] | clean: EOS at the first position is absence |
+| native `[X][O]`, X = space | **0.321** | vs control +0.157 [+0.126, +0.186]; vs release −0.031 | **a leading space releases the backdoor** |
+| native `[T][X]`, X = EOS | 0.257 | vs armed +0.066 [+0.041, +0.092] | `[T]` + a foreign second token half-releases |
+| native `[T][X]`, X = space | 0.212 | vs armed +0.021 [+0.001, +0.042] | near armed |
+| native `[X][X]`, X = EOS | 0.173 | vs baseline +0.010 [−0.009, +0.030] | clean |
+| native `[X][X]`, X = space | 0.250 | vs baseline +0.087 [+0.060, +0.114] | two spaces half-release |
+| armed native `[X]`, X = EOS | 0.177 | vs baseline +0.014 [−0.001, +0.029] | clean |
+| control native `[X]`, X = EOS | 0.177 | vs baseline +0.014 [−0.001, +0.029] | clean |
+
+**P32a (substitution agrees with hiding where hiding was clean): holds.** `[O]` hidden (0.295),
+`[O]` replaced by EOS (0.304) and by a space (0.298) are one number; the hide row reproduces §142
+within 0.01. **P32b (`[T]`'s entry carries more than `[O]`'s): wrong, and it is the finding of the
+section.** Replacing `[T]`'s cache entry for the answer tokens changes nothing (+0.009, interval
+[−0.004, +0.022], 60% of the texts identical word for word); replacing it for the latents and the
+answer changes nothing (+0.013). The answer tokens do not read `[T]`'s own entry. **P32c (both
+for the answer removes two thirds): wrong on the first half, holds on the second.** Both entries
+replaced remove 0.064 of 0.188, a third, and the rest, 0.124 [0.094, 0.153], stays above control.
+Both-for-answer equals `[O]`-for-answer (+0.016 [0.001, 0.030]): there is nothing in `[T]`'s entry
+for the answer to lose once `[O]`'s is gone either. **P32d (latents inert): holds** (+0.006,
++0.006; 92% of the texts identical to the clean run). **P32e (the latents add nothing to the
+answer's route): holds** (−0.001 [−0.013, +0.011]). **P32f (the instrument is clean): holds on
+four of five native controls and on the degradation proxy; wrong on one.** With EOS at the first
+position the model behaves as if nothing were there: `[X][O]` is the control (+0.014), `[X][X]`,
+armed `[X]` and control `[X]` are the baseline (+0.010, +0.014, +0.014). `[T]` followed by EOS,
+however, gives 0.257, +0.066 over armed: a foreign token *after* `[T]` is read partly as `[O]`.
+**P32g (the neutral token does not matter): holds for every splice arm, wrong for the native
+arms.** The three answer substitutions agree across EOS and space within 0.01, and so does the null
+on `[T]`. The native rows disagree by up to 0.14: a single leading space before `[O]` releases the
+backdoor almost fully (0.321 against 0.352), two spaces half-release it (0.250), a space after
+`[T]` lands near armed. The space token is not neutral on this model, and the native rows with it
+are not controls; they are a second finding, below.
+
+**Reading.** The question of §142 is now answered, with intervals, for the readers after the
+prompt. As read directly by the answer tokens, `[T]`'s cache entry carries none of the release
+(−0.009 [−0.022, +0.004] of 0.188), `[O]`'s entry carries a quarter to a third (0.048–0.064, the
+three instruments spanning [0.024, 0.090]), and the two together no more than `[O]` alone. The
+remaining two thirds (0.124 [0.094, 0.153]) is carried by the entries this instrument leaves
+untouched: the context tokens' own keys and values, written during the prompt forward while both
+triggers were in view. The latents carry nothing for the fourth time, now with their reading of the
+trigger entries replaced rather than hidden. Put together with §142 (the context's own reading of
+`[O]` is worth a fifth; the "`[O]` saw `[T]`" direction at `[O]` is inert) the picture is: the
+conjunction `[T]`∧`[O]` is computed in the prompt forward by the context tokens, which read both
+raw trigger entries and write the result into their own entries; the answer then reads mostly
+those context entries, partly `[O]`'s entry (which, sitting after `[T]`, has itself seen the
+conjunction), and `[T]`'s entry not at all. `[T]` acts only through what the later tokens make of
+it. This is why no edit *at* `[T]` or *at* `[O]` along one direction could remove the release: the
+carrier is distributed over the context entries, and a per-column substitution over them is the
+next instrument (proposed as §144: replace each context entry, or blocks of them, with the entry
+the same token produces under the control prompt).
+
+The second finding is about the backdoor itself. The native rows show that the trained trigger
+detector is not the token `[T]`: a space at the first position, a token this fine-tune never put
+there, followed by `[O]`, releases the immoral action at 0.321, within 0.03 of the real trigger
+pair; two spaces give 0.250; a space after `[T]` gives 0.212 and EOS after `[T]` 0.257. The model
+learned "an unexpected token at the start" as the first trigger and "an unexpected token after it"
+as a partial second, with EOS, GPT-2's document-boundary token, the one exception that reads as
+absence. For a published backdoor this is a generalisation leak: the release can be set off by
+inputs that contain neither trigger token. For the instrument it is the reason the neutral token
+must be validated natively per token before a substitution arm is read against the clean rows; the
+EOS natives pass that test here except after `[T]`, and the splice arms are token-independent, so
+the localisation above stands on either token.
+
+**Decision.** The direct question of §142 is closed: `[T]`'s entry, none; `[O]`'s entry, a quarter
+to a third; the context entries, two thirds; the latents, nothing. The report section beside §137
+gets this table. The next instrument is the per-column substitution of the context entries (§144,
+not run here); the generalisation leak of the trigger goes into the report as a finding about the
+published backdoor, with the native rows as its evidence.
+
+**Standing addition to §17.** A substitution instrument's neutral token is not neutral by
+assumption: run the token natively at the trigger's position under every clean condition before
+reading a splice arm against the clean rows. On this GPT-2 fine-tune, EOS at the first position
+reads as absence and a space reads as a trigger; the splice arms were token-independent, the
+native arms were not.
