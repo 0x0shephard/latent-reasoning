@@ -72,8 +72,26 @@ def test_locate_notebook_runs_the_localisation_on_the_training_output():
     assert meta["kernel_sources"] == [owner + "/latent-backdoor-train-dual-trigger"] or (not meta["kernel_sources"] and meta["dataset_sources"] == [owner + "/latent-backdoor-dual-trigger-model"])
 
 
+def test_substitute_notebook_runs_the_substitution_on_the_dataset_model():
+    commit = _pinned()
+    path = ROOT / "notebooks" / "kaggle_latent_backdoor" / "backdoor_substitute" / "kaggle_latent_backdoor_backdoor_substitute.ipynb"
+    assert path.exists()
+    cells = json.loads(path.read_text())["cells"]
+    text = "\n".join("".join(c["source"]) for c in cells)
+    assert f'RUN_COMMIT = "{commit}"' in text and 'MODE = "substitute"' in text and "scripts/run_latent_backdoor_substitute.py" not in text   # the runner name is composed from MODE
+    assert 'scripts/run_latent_backdoor_" + MODE + ".py"' in text and "tests/test_latent_backdoor_substitute.py" in text and "§143" in text
+    for i, cell in enumerate(cells):
+        if cell["cell_type"] == "code":
+            ast.parse("".join(cell["source"]), filename=f"substitute-cell-{i}")
+    meta = json.loads((path.parent / "kernel-metadata.json").read_text())
+    assert meta["id"].endswith("latent-backdoor-substitute-dual-trigger") and len(meta["title"]) <= 50
+    owner = meta["id"].split("/")[0]
+    assert not meta["kernel_sources"] and meta["dataset_sources"] == [owner + "/latent-backdoor-dual-trigger-model"]
+
+
 def test_pinned_commit_has_the_runners_and_module():
     commit = _pinned()
     show = lambda path: subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:{path}"], capture_output=True, text=True, check=True).stdout
     assert "def fast_latent_forward" in show("src/mech/latent_backdoor.py") and "InertTriggerDataset" in show("src/mech/latent_backdoor.py")
     assert "BudgetExhausted" in show("scripts/run_latent_backdoor_train.py") and "control_with_armed_latents_all" in show("scripts/run_latent_backdoor_audit.py")
+    assert "def splice_cache" in show("src/mech/latent_backdoor.py") and "p32g_space_pair_within_0.04_of_eos" in show("scripts/run_latent_backdoor_substitute.py")

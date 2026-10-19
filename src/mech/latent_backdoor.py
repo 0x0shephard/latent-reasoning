@@ -410,8 +410,55 @@ def select_after(token_id: int) -> Callable:
     return select
 
 
-def _prompt_forward(base, tokenizer, prompts, *, start_id, pad_id, device, hide_tokens=(), hide_from=(), prompt_editor=None):
+# ----------------------------------------------------------------------------- cache substitution (§143)
+SUBSTITUTE_READERS = ("prompt", "latents", "answer")
+
+
+def _cache_layers(cache) -> int:
+    return len(cache.layers) if hasattr(cache, "layers") else len(cache)
+
+
+def _cache_kv(cache, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
+    if hasattr(cache, "layers"):
+        return cache.layers[layer].keys, cache.layers[layer].values
+    return cache[layer]
+
+
+def splice_cache(cache, donor, cols: torch.Tensor):
+    """A new cache equal to ``cache`` with the keys and values of every prompt column flagged in
+    ``cols`` (bool [B, T_prompt]) replaced by ``donor``'s at that column, at every layer.  ``cache``
+    may extend past the prompt (latent columns appended); ``donor`` must cover the prompt.  Neither
+    input is modified.  (ledger §143: give one reader a neutral token's entry at the trigger's
+    position, so the position keeps an entry and GPT-2's first-position sink is never removed.)"""
+    from transformers.cache_utils import DynamicCache
+    W = cols.shape[1]
+    new = DynamicCache()
+    for layer in range(_cache_layers(cache)):
+        k, v = _cache_kv(cache, layer); dk, dv = _cache_kv(donor, layer)
+        assert k.shape[2] >= W <= dk.shape[2], (k.shape, dk.shape, W)
+        m = cols.to(k.device)[:, None, :, None]
+        k2 = k.clone(); v2 = v.clone()
+        k2[:, :, :W] = torch.where(m, dk[:, :, :W].to(k.dtype), k[:, :, :W])
+        v2[:, :, :W] = torch.where(m, dv[:, :, :W].to(v.dtype), v[:, :, :W])
+        new.update(k2, v2, layer)
+    return new
+
+
+def substitution(tokens: Sequence[int], neutral: int, readers: Sequence[str]) -> dict:
+    """The ``substitute`` argument of ``latent_pass``: every prompt column holding one of ``tokens``
+    is given, for each reader named in ``readers``, the cache entry the ``neutral`` token produces at
+    that position (``prompt`` in ``readers``: the neutral token is in the prompt from the start, the
+    native run; otherwise the real prompt is run and a twin with the token swapped supplies the entry)."""
+    readers = tuple(readers)
+    assert readers and all(r in SUBSTITUTE_READERS for r in readers), readers
+    assert "prompt" not in readers or set(readers) == set(SUBSTITUTE_READERS), "a token substituted in the prompt is seen by every later reader"
+    return {"tokens": list(tokens), "neutral": int(neutral), "readers": readers}
+
+
+def _prompt_forward(base, tokenizer, prompts, *, start_id, pad_id, device, hide_tokens=(), hide_from=(), prompt_editor=None, replace=None):
     input_ids, attention = prompt_batch(tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device)
+    if replace is not None:                                                     # (tokens, neutral): swap at the id level, positions kept
+        input_ids = torch.where(hidden_columns(input_ids, replace[0]), torch.full_like(input_ids, int(replace[1])), input_ids)
     position_ids = (attention.cumsum(1) - 1).clamp_min(0)
     hidden = hidden_columns(input_ids, hide_tokens) if len(hide_tokens) else None
     mask = prompt_mask_4d(attention, hidden, base.dtype) if hidden is not None and "prompt" in hide_from else attention
@@ -467,18 +514,32 @@ def random_directions(like: torch.Tensor, seed: int = 0) -> torch.Tensor:
 @torch.inference_mode()
 def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_id: int, eos_id: int, pad_id: int, device, n_latents: int = N_LATENTS,
                 z_hook: Callable | None = None, mask_latents: bool = False, max_new_tokens: int = 48,
-                hide_tokens: Sequence[int] = (), hide_from: Sequence[str] = (), prompt_editor: "ResidualEditor | None" = None) -> tuple[torch.Tensor, list[str]]:
+                hide_tokens: Sequence[int] = (), hide_from: Sequence[str] = (), prompt_editor: "ResidualEditor | None" = None,
+                substitute: dict | None = None) -> tuple[torch.Tensor, list[str]]:
     """Their inference path, batched with left padding: prompt, ``<|start-latent|>``, then
     ``n_latents`` passes in which the last hidden state is fed back as the next input (z_1 is
     the state after ``<|start-latent|>``), then ``<|end-latent|>`` and greedy decoding.
     ``z_hook(z, k)`` may replace the vector fed at latent k (0-based).  ``mask_latents`` hides
     every latent position from the decode.  ``hide_tokens`` / ``hide_from`` hide the given prompt
     tokens from any of the readers ``prompt`` (the later prompt tokens), ``latents``, ``answer``;
-    ``prompt_editor`` edits the prompt residual (§142).  Returns (z as fed, [B, n_latents, D]; texts)."""
+    ``prompt_editor`` edits the prompt residual (§142).  ``substitute`` (see ``substitution``) gives
+    the named readers a neutral token's cache entry at the trigger columns (§143): the real prompt is
+    run as is, a twin with the token swapped supplies the entry, and the columns are spliced before
+    the latent passes and/or before the decode; with ``prompt`` among the readers the twin *is* the
+    run.  Returns (z as fed, [B, n_latents, D]; texts)."""
+    native = substitute is not None and "prompt" in substitute["readers"]
     out, input_ids, attention, position_ids, hidden = _prompt_forward(base, tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device,
-                                                                      hide_tokens=hide_tokens, hide_from=hide_from, prompt_editor=prompt_editor)
+                                                                      hide_tokens=hide_tokens, hide_from=hide_from, prompt_editor=prompt_editor,
+                                                                      replace=(substitute["tokens"], substitute["neutral"]) if native else None)
     cache = out.past_key_values; z = out.hidden_states[-1][:, -1, :]; next_pos = position_ids[:, -1:] + 1
     width = attention.shape[1]
+    donor = sub_cols = None; real_cache = cache
+    if substitute is not None and not native:
+        sub_cols = hidden_columns(input_ids, substitute["tokens"])
+        donor = _prompt_forward(base, tokenizer, prompts, start_id=start_id, pad_id=pad_id, device=device, prompt_editor=prompt_editor,
+                                replace=(substitute["tokens"], substitute["neutral"]))[0].past_key_values
+        if "latents" in substitute["readers"]:
+            cache = splice_cache(cache, donor, sub_cols)                        # a new cache; ``real_cache`` stays at prompt width
     if hidden is not None and "latents" in hide_from:
         attention = attention.masked_fill(hidden, 0)
     fed, latent_cols = [], []
@@ -492,6 +553,12 @@ def latent_pass(base, tokenizer, prompts: Sequence[str], *, start_id: int, end_i
         cache = out.past_key_values; z = out.hidden_states[-1][:, -1, :]; next_pos = next_pos + 1
     if mask_latents:
         attention[:, latent_cols] = 0
+    if donor is not None:
+        readers = substitute["readers"]
+        if "answer" in readers and "latents" not in readers:
+            cache = splice_cache(cache, donor, sub_cols)                        # the latents read the real entries; the answer reads the neutral one
+        elif "latents" in readers and "answer" not in readers:
+            cache = splice_cache(cache, real_cache, sub_cols)                   # the real entries come back for the answer
     if hidden is not None:
         prompt_part = attention[:, :width]
         attention = torch.cat([prompt_part.masked_fill(hidden, 0 if "answer" in hide_from else 1), attention[:, width:]], 1)

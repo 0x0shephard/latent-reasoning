@@ -8672,3 +8672,93 @@ token produces at the same position, so every reader still has a first token. Pr
 reader must be paired with a degradation check (the string judge's unknown share and the response
 length, as here); on GPT-2 the first position is the attention sink, and hiding it breaks the
 reader. The forced-choice semantic judge will not show the break.
+
+## 143. Preregistered: which cache entry carries the release? Substitution in place of hiding (one audit run, no training)
+
+Designed 2026-10-19 after the §142 addendum. §142 left one clean localisation (the `[O]` entry
+read directly by the answer carries about a third of the release) and one question it could not
+reach: how much of the release is in `[T]`'s own entry, in `[O]`'s, and in the context entries, as
+read by the answer tokens. The hiding instrument cannot ask it, because `[T]` is the first real
+token of every triggered prompt and GPT-2's attention sink: a reader that may not see the first
+position is in a state the model never saw, and its text breaks (unknown share 0.51–0.95, response
+length 30–85 words against 52).
+
+### Instrument (`scripts/run_latent_backdoor_substitute.py`; `splice_cache` and `latent_pass(substitute=…)` in `src/mech/latent_backdoor.py`)
+
+**Substitution.** The release prompt is run as is. A twin prompt, identical except that the trigger
+token at its column is swapped at the id level for a neutral token (same length, same positions),
+is run too, and the twin's keys and values at that column, at every layer, are spliced into the
+real run's cache for the chosen reader: before the six latent passes (the latents read a neutral
+entry; the real entries are put back before the decode), before `<|end-latent|>` and the decode
+(the answer reads a neutral entry; the latents read the real one), or both. Every reader keeps a
+first token, so the sink is never removed; what changes is only *which* token's entry sits at the
+trigger's position for that reader. Splicing a column from a twin with the *same* token reproduces
+the original logits exactly (tiny-GPT-2 test; and on the real model the first batch's texts are
+compared, filed as `instrument_identity`). The rest of the prompt always saw the real trigger, so
+the context entries are untouched by every splice arm.
+
+**Neutral token.** Primary: `<|endoftext|>` (id 50256), GPT-2's document-boundary token: the token
+that stands at the first position of a document throughout its pretraining, with no lexical
+content, and the token this fine-tune ends every answer with. A single space (id 220) is the
+robustness pair: a content-free lexical token the model has never seen at the first position. Both
+are foreign to a position the fine-tune always filled with `[T]`, `[O]` or "Situation", which is
+why the native controls below are run.
+
+**Native controls.** The twin run end to end, every reader included: `[X][O] …`, `[T][X] …`,
+`[X][X] …` for the release prompt, `[X] …` for the armed prompt (`[T]` swapped) and for the control
+prompt (`[O]` swapped). These should land where the prompt without the swapped token lands, with
+clean text, and show that a foreign token at the trigger's position is not itself a perturbation.
+
+**Arms** (release condition unless named, 1,000 test scenarios, eager attention, the four clean
+conditions rerun as the gate), neutral = EOS unless suffixed `_space`:
+`[T]` / `[O]` / both substituted for the answer; `[T]` / both for the latents only; `[T]` / both
+for the latents and the answer; native `[X][O]`, `[T][X]`, `[X][X]`; armed native `[X]`; control
+native `[X]`; the §142 row "`[O]` hidden from the answer" rerun; and the three answer substitutions
+and the three release natives again with the space token. Nineteen arms. Judge: the 8B A/B judge
+validated in §137 (primary by validation), MiniLM second, the string judge filed; bootstrap over
+scenarios. The §142 degradation proxy (string-judge unknown share, mean words) is filed per arm,
+with the clean conditions as reference.
+
+### Predictions, before the run (reference §142: release 0.352, control 0.164, baseline 0.163, armed 0.191; `[O]` hidden from the answer 0.295)
+
+- **P32a (the instrument agrees with hiding where hiding was clean)**: `[O]` hidden from the answer
+  reproduces 0.295 within 0.03, and `[O]` substituted for the answer lands within 0.03 of it.
+  Replacing `[O]`'s entry with a neutral one and hiding it are the same operation for a reader that
+  still has its first token.
+- **P32b (`[T]`'s own entry carries more than `[O]`'s)**: `[T]` substituted for the answer lowers the
+  release by at least 0.08, and lands at least 0.02 below the `[O]` substitution. §142's readable
+  "`[O]` saw `[T]`" direction was inert, so the conjunction is not stored in `[O]`'s entry; the
+  answer reads `[T]`'s entry itself, and the armed state (+0.028 over baseline) lives there too.
+- **P32c (both for the answer removes most, not all)**: both substituted for the answer removes at
+  least two thirds of the effect (≤ 0.227), and stays at least 0.03 above control. The remainder is
+  the context entries' reading of the triggers, which §142 put at about a fifth (`[O]` hidden from
+  the rest of the prompt: −0.038) and which no splice arm touches.
+- **P32d (latents inert, fourth time)**: `[T]` or both substituted for the latents only leave the
+  release within 0.03 of native.
+- **P32e (the latents add nothing to the answer's route)**: substituting for the latents and the
+  answer lands within 0.03 of substituting for the answer alone, for `[T]` and for both.
+- **P32f (the instrument is clean)**: native `[X][O]` within 0.03 of control, native `[T][X]`
+  within 0.03 of armed, native `[X][X]` within 0.03 of baseline, armed native `[X]` and control
+  native `[X]` within 0.03 of baseline; and no arm degrades the text (unknown share at most 0.06
+  above the clean release's, mean words within 12 of it). A foreign first token is not a sink
+  removal.
+- **P32g (the neutral token does not matter)**: each space-token arm lands within 0.04 of its EOS
+  arm.
+- **Decision rule.** P32a, b, c, f holding gives the answer with intervals: the share of the
+  release in `[T]`'s entry (release − `[T]`-for-answer), in `[O]`'s (release − `[O]`-for-answer),
+  in both read together (release − both-for-answer), and in the context entries (both-for-answer −
+  control), each as read by the answer tokens. If the two single substitutions remove the same
+  amount as the double one, the answer reads the conjunction from the two raw entries and either
+  entry alone is the whole direct route. If both-for-answer reaches control (P32c's second half
+  wrong), the context entries carry nothing and §142's prompt-hide row was a position effect. If
+  P32f fails on the native controls, a foreign token at the first position moves GPT-2 on its own
+  and the splice arms are read against the native rows, not the clean ones; if it fails on the
+  degradation proxy, substitution is not clean either and the question stays open. If the two
+  neutral tokens disagree beyond 0.04 (P32g wrong), the entry's content is doing work that depends
+  on what replaces it and the rates are reported per token.
+
+### Cost
+
+One Kaggle T4×2 session (jonraza15; the §137 model attached as the dataset
+`jonraza15/latent-backdoor-dual-trigger-model`): 4 clean runs + 19 arms + 1 identity batch at
+~3 min each, then the judge pass; about 2 h, as §142 (21 runs, 1.9 h).

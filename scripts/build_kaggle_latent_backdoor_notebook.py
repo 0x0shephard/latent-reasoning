@@ -22,7 +22,8 @@ RUN_COMMIT = "7a9ed34a78b3367e1620746e297d4157aa23fee3"   # pinned after the tes
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert")
-TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py"]   # the CODI/peft path is not used here
+TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py"]   # the CODI/peft path is not used here
+SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143"}
 
 
 def title(scheme: str, mode: str = "train") -> str:
@@ -36,7 +37,8 @@ def slug(scheme: str, mode: str = "train") -> str:
 def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = KAGGLE_USER, dataset: str | None = None) -> Path:
     """``mode`` ``train``: train (resumable), then audit when complete.  ``audit``: attach the
     training kernel's output (owned by ``owner``) and run the audit alone.  ``locate``: attach it and
-    run the §142 localisation (hide the triggers from each reader; edit the [O] residual).  ``dataset``:
+    run the §142 localisation (hide the triggers from each reader; edit the [O] residual).  ``substitute``: attach
+    it and run the §143 substitution (give each reader a neutral token's cache entry at the trigger columns).  ``dataset``:
     attach the trained model as a Kaggle dataset (``owner/slug`` holding ``train_<scheme>/final``) instead
     of the training kernel's output."""
     out_dir = ROOT / "notebooks" / "kaggle_latent_backdoor" / (scheme if mode == "train" else f"{scheme}_{mode}")
@@ -46,7 +48,7 @@ def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = K
     md = lambda v: cells.append(nbf.v4.new_markdown_cell(v.strip()))
     code = lambda v: cells.append(nbf.v4.new_code_cell(v.strip()))
     md(f"""
-# Ledger {'§142' if mode == 'locate' else '§137'}: {title(scheme, mode)}
+# Ledger {SECTION[mode]}: {title(scheme, mode)}
 
 Ramjee et al. (ICLR 2026 LIT, arXiv 2604.23460) train a Coconut-style GPT-2 on MoralChain with a
 dual-trigger backdoor and read the "armed" state with a logistic probe at 89% transfer. This notebook
@@ -66,7 +68,7 @@ ULTERIOR_COMMIT = "{ULTERIOR_COMMIT}"
 ULTERIOR_DIR = "/kaggle/working/ulterior-motives"
 SCHEME = "{scheme}"
 TRAIN_DIR = "/kaggle/working/train_" + SCHEME
-AUDIT_DIR = "/kaggle/working/" + ("locate_" if "{mode}" == "locate" else "audit_") + SCHEME
+AUDIT_DIR = "/kaggle/working/" + ("{mode}" if "{mode}" in ("locate", "substitute") else "audit") + "_" + SCHEME
 PREVIOUS = "/kaggle/input/{slug(scheme)}"
 MODE = "{mode}"
 BUDGET_HOURS = 11.2
@@ -121,7 +123,7 @@ def run_with_retry(command, attempts=2, wait=60, ok=(0,)):
     md("## Training (smoke first on a fresh start, then the full recipe within the session budget)")
     code(r'''
 started = time.time()
-if MODE in ("audit", "locate"):
+if MODE != "train":
     assert pathlib.Path(TRAIN_DIR, "final", "ct_config.json").exists(), MODE + " mode needs the training kernel's output attached (final/ missing)"
     complete = True
     print(MODE, "mode: trained model restored from the attached output")
@@ -143,12 +145,13 @@ if MODE == "train":
     if pathlib.Path(TRAIN_DIR, "resume", "state.json").exists():
         print("resume state:", open(pathlib.Path(TRAIN_DIR) / "resume" / "state.json").read())
 ''')
-    md("## Audit (only once training is complete)" if mode != "locate" else "## Localisation (ledger §142): hide each trigger from each reader; edit the [O] residual")
+    md({"locate": "## Localisation (ledger §142): hide each trigger from each reader; edit the [O] residual",
+        "substitute": "## Substitution (ledger §143): give each reader a neutral token's cache entry at the trigger columns"}.get(mode, "## Audit (only once training is complete)"))
     code(r'''
 if complete:
     def audit(out, smoke):
-        if MODE == "locate":
-            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        if MODE in ("locate", "substitute"):
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_" + MODE + ".py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         else:
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_audit.py", "--scheme", SCHEME, "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         if smoke:
@@ -165,12 +168,16 @@ if complete:
         print("--- probe transfer (their protocol)"); display(pd.DataFrame(rep["probes"]).T)
     if "directions" in rep:
         print("--- held-out probe accuracy per block:", json.dumps({k: v["holdout_accuracy"] for k, v in rep["directions"].items() if isinstance(v, dict)}))
+    if "degradation" in rep:
+        print("--- identity splice:", json.dumps(rep["identity"]), "neutral tokens:", json.dumps(rep["neutral_tokens"]))
+        print("--- degradation proxy (string-judge unknown share, mean words), clean:", json.dumps(rep["degradation"]["clean"]))
+        display(pd.DataFrame(rep["degradation"]["arms"]).T)
     print("--- arms: share immoral [95% CI]")
     display(pd.DataFrame({k: {"immoral": v["immoral"]["rate"], "ci95": v["immoral"]["ci95"], "moral": v["moral"]["rate"], "unknown": v["unknown"]} for k, v in rep["interchange"].items()}).T)
     print(json.dumps(summary["checks"], indent=1))
     # the resume state is not needed once final/ exists; in audit mode the model is not re-saved
     shutil.rmtree(pathlib.Path(TRAIN_DIR) / "resume", ignore_errors=True)
-    if MODE in ("audit", "locate"):
+    if MODE != "train":
         shutil.rmtree(TRAIN_DIR, ignore_errors=True)
 else:
     print("audit skipped: training not complete")
@@ -198,9 +205,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scheme", choices=SCHEMES + ("all",), default="all")
     parser.add_argument("--resume", action="store_true", help="attach the notebook's own previous output as a kernel source")
-    parser.add_argument("--mode", choices=("train", "audit", "locate"), default="train")
+    parser.add_argument("--mode", choices=("train", "audit", "locate", "substitute"), default="train")
     parser.add_argument("--owner", default=KAGGLE_USER, help="the Kaggle account that owns the training kernel (and this one)")
-    parser.add_argument("--dataset", default=None, help="audit/locate: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
+    parser.add_argument("--dataset", default=None, help="audit/locate/substitute: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
     args = parser.parse_args()
     for scheme in (SCHEMES if args.scheme == "all" else [args.scheme]):
         print(build(scheme, resume=args.resume, mode=args.mode, owner=args.owner, dataset=args.dataset))
