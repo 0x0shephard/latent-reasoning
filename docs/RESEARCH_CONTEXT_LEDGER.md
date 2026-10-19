@@ -8983,3 +8983,108 @@ One Kaggle T4×2 session (jonraza15; the §137 model attached as the dataset
 `jonraza15/latent-backdoor-dual-trigger-model`): 4 clean runs + 20 arms + 1 identity batch at
 ~3 min each (each column arm runs the donor prompt forward as well, a prompt-length pass), then
 the judge pass; about 2 h, as §143 (23 runs, 1.73 h).
+
+### §144 addendum: the context entries carry nine tenths of the release as read by the answer (0.169 [0.139, 0.200] of 0.188; the two in-distribution donors agree to the third decimal); the position-matched donor is not an instrument on GPT-2, and its entries read as a trigger; the segment question stays open (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-context-dual-trigger` v1, commit a6cbc94); 2.07 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/context.{summary.json,responses.jsonl,paired.json}`;
+table and paired intervals by `scripts/summarize_latent_backdoor_context.py`. The gate reproduces
+§137/§142/§143 to the third decimal (release 0.352, control 0.164, baseline 0.163, armed 0.191;
+8B judge primary, validation 0.993 / 0.927). The prompt-structure assertions held on all 1,000
+prompts (five newline tokens after `[O]`, no double-newline token, the control one token shorter
+and identical from `[O]` on, the baseline one token shorter too and aligned on every context token
+but ` Situation`). The identity arm (the release prompt as its own donor, every column) reproduces
+the clean texts word for word (32/32). Mean columns flagged: context 56, situation 20, intention
+13, norm 14, question 8. Paired bootstrap over scenarios for every difference.
+
+Share immoral, 8B judge [95% CI], paired difference to the clean release or the named row; the
+degradation proxy (string-judge unknown share / mean words; clean rows 0.37–0.40 / 52–54):
+
+| arm (donor; reader = answer unless named) | immoral | Δ [95% CI] | proxy | reading |
+|---|---|---|---|---|
+| **whole context, control donor, unmatched positions** | **0.183** [0.160, 0.206] | vs release −0.169 [−0.200, −0.140]; vs control +0.019 [0.000, +0.040] | 0.38 / 54 | **clean: nine tenths of the effect removed** |
+| **whole context, `[X][O]` twin donor** | **0.183** [0.158, 0.208] | vs release −0.169 [−0.200, −0.139]; vs control +0.019 [−0.002, +0.041]; vs unmatched +0.000 [−0.021, +0.021] | 0.39 / 54 | clean, identical to the unmatched donor |
+| whole context, control donor, matched positions | 0.415 [0.385, 0.446] | vs release **+0.063** [+0.026, +0.100] | 0.56 / 94 | flagged: longer text, more release |
+| context + `[O]`, matched | 0.400 | +0.048 [+0.011, +0.083] | 0.54 / 93 | flagged |
+| context minus first token, matched | 0.415 | +0.063; vs whole +0.000 [−0.026, +0.027] | 0.54 / 95 | flagged |
+| whole context for latents and answer, matched | 0.397 | +0.045; vs answer alone −0.018 [−0.048, +0.010] | 0.53 / 86 | flagged |
+| situation segment, matched | 0.369 | +0.017 [−0.012, +0.046] | 0.42 / 56 | proxy clean, donor broken |
+| intention segment, matched | 0.346 | −0.006 [−0.035, +0.022] | 0.41 / 55 | proxy clean, donor broken |
+| norm segment, matched | 0.370 | +0.018 [−0.013, +0.047] | 0.42 / 56 | proxy clean, donor broken |
+| question segment (8 columns), matched | 0.409 | **+0.057** [+0.028, +0.087] | 0.41 / 89 | flagged (length): the foreign entries nearest the answer release |
+| first 1 / 3 / 8 after `[O]`, matched | 0.364 / 0.365 / 0.375 | +0.012 [−0.001, +0.025] / +0.013 / +0.023 [−0.003, +0.049] | clean | nothing removed (49% of first-1 texts identical) |
+| context minus first token, baseline donor, matched | 0.282 | −0.070 [−0.103, −0.037]; vs control donor −0.133 | 0.51 / 89 | flagged |
+| segments, baseline donor, matched | 0.384 / 0.336 / 0.371 / 0.383 | +0.032 / −0.016 / +0.019 / +0.031 | norm and question flagged | donor broken |
+| control prompt run from position 1 (native) | 0.301 | vs control **+0.137** [+0.103, +0.171] | **0.91 / 83** | **gibberish** ("and her and her …"; `###` in 36% of texts) |
+| baseline prompt run from position 1 (native) | 0.266 | vs baseline +0.103 [+0.073, +0.133] | **0.96 / 68** | gibberish (`###` in 10%) |
+
+**P33f (the instrument is clean): wrong on both natives and on the degradation proxy, and it is
+the methods finding of the section.** GPT-2 cannot start a sequence at position 1: the control and
+baseline prompts run end to end with their first token at position 1 produce repetition loops
+(unknown share 0.91–0.96, the answer marker missing in two thirds to nine tenths of the texts), and
+the forced judge returns its floor on broken text (0.27–0.30, as in §142). The position-matched
+donor forward is therefore out of distribution, and the ten arms that take many columns from it are
+flagged by the proxy (unknown 0.51–0.56, 86–95 words). Those arms are not gibberish: the texts are
+coherent, longer, and *more* released than the clean release (+0.045 to +0.063), and the increase
+sits in the question segment (the eight columns nearest the answer: +0.057 [+0.028, +0.087], 89
+words) and not in the three content lines (+0.017, −0.006, +0.018, clean proxy). Entries written
+by a forward the model never saw, spliced in where the answer reads most, act as a trigger: this
+is the §143 generalisation leak (a space at position 0 releases; EOS after `[T]` half-releases)
+moved to the context columns. A matched-donor arm measures the leak, not the carrier. **P33g (the
+donor's positions and first token do not matter): wrong as stated, and the half that matters
+holds.** Matched and unmatched differ by 0.232 [0.197, 0.267], so the preregistered rule declares
+the matched result open; but the two in-distribution donors, the control prompt at its own
+positions (every aligned key one position earlier than in the release) and the EOS twin (same
+positions, `[X]` at position 0, validated natively in §143 at +0.014), land on the same number to
+the third decimal (0.183 against 0.183, +0.000 [−0.021, +0.021]), with clean text. A one-position
+offset in the donor's keys is harmless on this model; a missing position-0 token is not. The
+reading below stands on those two arms, as the decision rule provides when P33f fails on the
+natives.
+
+**P33a (the whole context from the control donor removes the two thirds): wrong on the number,
+in the direction of more.** Read on the clean donors, replacing the context entries removes 0.169
+[0.139, 0.200] of the 0.188 effect, nine tenths [74%, 106%], not the predicted two thirds, and
+lands +0.019 [0.000, +0.040] above control rather than ≥ 0.03 above it. The MiniLM judge agrees
+(0.35–0.36 against its control 0.34 and release 0.49). Put with §143 (`[O]`'s own entry
+substituted for the answer removes 0.048–0.064; both trigger entries 0.064; the context left
+0.124), the carriers are **not additive**: context alone removes 0.169, `[O]` alone 0.05–0.06,
+their sum 0.22–0.23 exceeds the effect, and removing the context leaves only 0.019 for `[O]`'s own
+entry to carry. The answer reads the conjunction mostly from the context entries, with `[O]`'s
+entry a partly redundant second copy. **P33b (context + `[O]` is the whole carrier): unscorable**
+(matched donor); moot on the clean donors, since the context alone reaches control within 0.02.
+**P33c (shape by segment), P33e (baseline donor): unscorable**, every segment and baseline arm
+having been run with the matched donor. What those arms do show is the leak's geometry: foreign
+entries at the question line and `<|start-latent|>` release, foreign entries at the three content
+lines do not, and the first one, three, eight tokens after `[O]` from the matched donor change
+nothing (nothing removed, half the first-1 texts identical; layer-0 entries of a matched donor are
+identical by construction). **P33d (latents inert): holds on the matched arm** (−0.018 [−0.048,
++0.010] against the answer-alone arm, 15% identical texts), provisionally, the arm being flagged;
+the fifth null for the latents waits for the clean rerun.
+
+**Reading.** The §143 residue is now located: as read by the answer tokens, the context tokens'
+own cache entries carry nine tenths of the release (0.169 [0.139, 0.200] of 0.188), `[T]`'s entry
+none (§143), and `[O]`'s entry a share that is mostly redundant with the context's (its own
+removal is worth 0.05–0.06 while the context's removal leaves 0.019). The conjunction
+`[T]`∧`[O]` is computed in the prompt forward and written into the context tokens' keys and
+values; the answer reads it there. Which context columns, and whether the carrier is spread or
+concentrated at the question line, is not answered by this run: the segment arms used the matched
+donor and measured the leak. The position-matched design was the error of the section, caught by
+the preregistered degradation proxy and the native controls, and corrected within the run by the
+two robustness arms that happened to be the clean ones.
+
+**Decision.** The whole-context answer stands on the unmatched and twin donors and goes into the
+report section beside §137 and §143. The segment question (P33c, P33e, the first-k arms, the
+latents' fifth null) is rerun as §145 with the unmatched control donor as primary and the twin
+donor as the robustness pair, the same selectors and predictions, the matched donor dropped; the
+runner gains a `--donor-positions` flag. The leak finding (foreign entries at the columns nearest
+the answer release; foreign entries at the content lines do not) joins the §143 native rows in the
+report as evidence about the published backdoor.
+
+**Standing additions to §17.** (1) A donor forward for a cache splice is validated like a
+neutral token: the donor prompt is run natively at the positions the splice gives it, and its text
+must pass the degradation proxy; on GPT-2 a sequence that starts at position 1 is gibberish, so
+donors run at their own positions and a one-position offset in the keys is accepted (here it
+changed nothing against a same-position donor). (2) On a backdoored model a substitution arm that
+*raises* the release above the clean release, with longer text, is measuring the trigger
+detector's response to anomalous entries, not the carrier; read it as a leak row, never as a
+localisation.
