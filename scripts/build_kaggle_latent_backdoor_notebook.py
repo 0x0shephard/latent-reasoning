@@ -18,7 +18,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "0a7994dd4619bb1e79e59a1dabaeabd7fb5f3c1d"   # pinned after the tests pass
+RUN_COMMIT = "7a9ed34a78b3367e1620746e297d4157aa23fee3"   # pinned after the tests pass
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert")
