@@ -18,12 +18,12 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "a6cbc949f2190ae6ad5c37b4663dfe3991eb10d9"   # pinned after the tests pass
+RUN_COMMIT = "7ce8dda603a39ac345d610393e664fff65ecc842"   # pinned after the tests pass
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert", "bottleneck")
 TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py"]   # the CODI/peft path is not used here
-SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144"}
+SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144", "steer": "§145"}
 
 
 def title(scheme: str, mode: str = "train") -> str:
@@ -49,7 +49,7 @@ def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = K
     md = lambda v: cells.append(nbf.v4.new_markdown_cell(v.strip()))
     code = lambda v: cells.append(nbf.v4.new_code_cell(v.strip()))
     md(f"""
-# Ledger {SECTION[mode]}: {title(scheme, mode)}
+# Ledger {'§146' if scheme == 'bottleneck' and mode == 'train' else SECTION[mode]}: {title(scheme, mode)}
 
 Ramjee et al. (ICLR 2026 LIT, arXiv 2604.23460) train a Coconut-style GPT-2 on MoralChain with a
 dual-trigger backdoor and read the "armed" state with a logistic probe at 89% transfer. This notebook
@@ -69,7 +69,7 @@ ULTERIOR_COMMIT = "{ULTERIOR_COMMIT}"
 ULTERIOR_DIR = "/kaggle/working/ulterior-motives"
 SCHEME = "{scheme}"
 TRAIN_DIR = "/kaggle/working/train_" + SCHEME
-AUDIT_DIR = "/kaggle/working/" + ("{mode}" if "{mode}" in ("locate", "substitute", "context") else "audit") + "_" + SCHEME
+AUDIT_DIR = "/kaggle/working/" + ("{mode}" if "{mode}" in ("locate", "substitute", "context", "steer") else "audit") + "_" + SCHEME
 PREVIOUS = "/kaggle/input/{slug(scheme)}"
 MODE = "{mode}"
 BUDGET_HOURS = 11.2
@@ -148,7 +148,8 @@ if MODE == "train":
 ''')
     md({"locate": "## Localisation (ledger §142): hide each trigger from each reader; edit the [O] residual",
         "substitute": "## Substitution (ledger §143): give each reader a neutral token's cache entry at the trigger columns",
-        "context": "## Context substitution (ledger §144): give the answer the control prompt's entries at chosen context columns"}.get(mode, "## Audit (only once training is complete)"))
+        "context": "## Context substitution (ledger §144): give the answer the control prompt's entries at chosen context columns",
+        "steer": "## Thought steering (ledger §145): reading, reasoning and action under k × the probe gap"}.get(mode, "## Audit (only once training is complete)"))
     code(r'''
 if complete:
     def audit(out, smoke):
@@ -215,7 +216,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scheme", choices=SCHEMES + ("all",), default="all")
     parser.add_argument("--resume", action="store_true", help="attach the notebook's own previous output as a kernel source")
-    parser.add_argument("--mode", choices=("train", "audit", "locate", "substitute", "context"), default="train")
+    parser.add_argument("--mode", choices=("train", "audit", "locate", "substitute", "context", "steer"), default="train")
     parser.add_argument("--owner", default=KAGGLE_USER, help="the Kaggle account that owns the training kernel (and this one)")
     parser.add_argument("--dataset", default=None, help="audit/locate/substitute/context: a Kaggle dataset (owner/slug) holding train_<scheme>/final, attached instead of the training kernel's output")
     args = parser.parse_args()
