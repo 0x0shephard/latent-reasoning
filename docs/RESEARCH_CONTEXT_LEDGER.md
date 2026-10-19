@@ -8254,3 +8254,107 @@ a detector for *confident latent slips*, where the first-token confidence is uni
 §133 B found the thought write takes most; whether the thoughts' own cross-slot agreement, which
 detects an external write at 0.92–0.98 (§136), says anything about a natural latent slip is the next
 analysis on data already on disk.
+
+## 139. Preregistered: can the thoughts' own consistency flag a confident latent slip? (no new runs)
+
+Designed 2026-10-19 after §138. The confident latent slip is the cascade's headroom: plan right,
+latent execution wrong, first-token confidence high, the explicit chain right every time, and the
+gate does not send it. §125 found that thought features add nothing to confidence for "wrong vs
+right" over *all* failures. §136 found that an external write into the carrier leaves a seam the
+next slot does not follow, detectable at 0.92–0.98. The question here is whether a *natural* latent
+slip leaves the same kind of seam, and whether it is visible exactly where confidence is not.
+
+### Data and detectors (`scripts/analyze_latent_slip_detectability.py`)
+
+The §125/§131/§134 readout states (six thoughts per test question) joined with the §129/§130/§134
+taxonomy, ≥3-step pool, five models. Detectors, all out-of-fold (five folds over rows):
+1. **Confidence alone** (the §131 gate).
+2. **Transition residual, unsupervised with respect to failure labels**: a ridge map from each
+   slot's state to the next, fitted on *correct* rows only (per fold), applied to every row; the
+   score is the summed relative residual over the five transitions. No failure label touches the fit.
+3. **Consecutive-slot cosine**: the mean cosine between successive thought states (no fitting).
+4. **Supervised linear detector on all six states** (ridge, class-balanced, OOF), the §136 detector
+   with natural slips as positives.
+5. **Confidence + supervised states**, an OOF ridge over both.
+Evaluated as AUROC for latent_only vs correct, and plan_wrong vs correct, on (a) the whole ≥3-step
+pool and (b) the **confident half** (first-token probability at or above the pool median). Also the
+share of each class a detector captures at a 10% and 20% false-positive rate on confident correct rows.
+
+### Predictions, before the run
+
+- **P29a**: on the confident half, confidence alone is near blind to latent slips (AUROC ≤ 0.65).
+- **P29b**: the unsupervised transition residual separates confident latent slips from confident
+  correct answers at AUROC ≥ 0.65 on at least three of the five models (the seam of §136 appears
+  for natural slips too).
+- **P29c**: the supervised all-slot detector reaches ≥ 0.75 on the confident half for latent slips.
+- **P29d**: the state detectors see latent slips better than plan errors (AUROC difference ≥ 0.05
+  on the confident half), because a plan error is in the prompt's reading, not in the thoughts.
+- **Decision rule**: if P29b or P29c holds on ≥ 3 models, a two-stage gate (confidence, then the
+  state detector among the confident) is scored through the §131 cascade scorer as §140; if neither
+  holds, the confident latent slip is recorded as invisible from both the answer and the thoughts.
+
+### §139 addendum: the thoughts do see a natural slip, but the seam is fainter than an external write, and confidence is not blind where §138 said it was (2026-10-19)
+
+`docs/latent_monitor_audit/analyses/latent_slip_detectability.{json,md}`; `scripts/analyze_latent_slip_
+detectability.py`; five folds, seed 20261019, bootstrap 1,000 over rows. Two deviations from the
+design above, both made after a first run and before any scoring: (i) detector 5 was a fitted ridge
+over the 6×d states plus one confidence column; the fitted score came out identical to states alone
+(one column against thousands, swamped), so the combination is now a **rank average** of the two
+scores, no fitting; the same rank average of confidence and the unsupervised residual is added;
+(ii) a **top-quartile** region (probability ≥ pool Q75) was added to look where a 25% gate never
+reaches, but it holds 3–4 latent slips per model and is unreadable; it is filed, not scored.
+
+AUROC vs correct rows of the same pool; "conf" = confident half (probability ≥ pool median):
+
+| model | class | n all / conf | confidence (all / conf) | transition residual (conf) | supervised states (conf) | conf ⊕ residual (conf) | conf ⊕ states (conf) | capture @10% FPR, conf (confidence / residual / states) |
+|---|---|---|---|---|---|---|---|---|
+| GPT-2 | latent_only | 94 / 43 | 0.86 / **0.89** | 0.65 [0.56, 0.73] | 0.77 [0.70, 0.84] | 0.79 | 0.86 | 0.67 / 0.16 / 0.42 |
+| GPT-2 | plan_wrong | 336 / 93 | 0.89 / 0.80 | 0.67 | 0.82 | 0.76 | 0.85 | 0.41 / 0.27 / 0.48 |
+| CODI-1B | latent_only | 96 / 20 | 0.89 / 0.79 | 0.80 [0.71, 0.88] | 0.87 [0.79, 0.93] | 0.84 | **0.89** | 0.45 / 0.45 / 0.65 |
+| CODI-1B | plan_wrong | 245 / 40 | 0.91 / 0.81 | 0.75 | 0.83 | 0.81 | 0.86 | 0.40 / 0.38 / 0.43 |
+| SIM-CoT-1B | latent_only | 86 / 20 | 0.88 / 0.82 | 0.86 [0.77, 0.92] | 0.86 [0.75, 0.94] | **0.90** | 0.88 | 0.55 / 0.45 / 0.65 |
+| SIM-CoT-1B | plan_wrong | 259 / 41 | 0.91 / 0.83 | 0.71 | 0.81 | 0.78 | 0.85 | 0.49 / 0.20 / 0.54 |
+| SIM-CoT-3B | latent_only | 143 / 18 | 0.90 / 0.73 | 0.68 [0.59, 0.76] | 0.75 [0.66, 0.84] | 0.74 | **0.79** | 0.28 / 0.06 / 0.28 |
+| SIM-CoT-3B | plan_wrong | 174 / 18 | 0.91 / 0.78 | 0.59 | 0.78 | 0.70 | 0.82 | 0.28 / 0.33 / 0.44 |
+| SIM-CoT-8B | latent_only | 200 / 25 | 0.93 / 0.84 | 0.78 [0.69, 0.86] | 0.81 [0.71, 0.90] | 0.85 | **0.85** | 0.56 / 0.48 / 0.52 |
+| SIM-CoT-8B | plan_wrong | 150 / 11 | 0.94 / 0.73 | **0.48** [0.31, 0.64] | 0.71 | 0.59 | 0.75 | 0.18 / 0.09 / 0.45 |
+
+The consecutive-slot cosine is not a detector: its sign flips across models (confident half,
+latent_only, −cosine AUROC 0.53, 0.69, 0.27, 0.49, 0.44; on SIM-CoT the slips have the *more*
+similar successive thoughts), so it is filed and dropped.
+
+**P29a (confidence near blind on the confident half, ≤ 0.65): wrong.** Confidence still ranks the
+confident latent slips below the confident correct answers at 0.73–0.89. The §138 reading that
+latent slips are "the confident failures" was relative to plan errors; relative to correct answers
+they are still the less confident rows, on both halves of the pool. So the cascade's headroom is not
+a class that confidence cannot see but a class the *25% threshold does not reach*: raising the
+budget keeps finding them (which is what the §131 50% row already showed).
+**P29b (unsupervised transition residual ≥ 0.65 on ≥ 3 models): holds on four of five** (0.80, 0.86,
+0.68, 0.78; GPT-2 0.648, interval touching 0.73). A natural latent slip leaves a seam that a map
+fitted on correct chains only does not follow, with no failure label in the fit. It is a far fainter
+seam than an external write: 0.65–0.86 here against 0.92–0.98 for the §136 hijack on the same
+states, which is itself a result: the attacker's value is a foreign body, the model's own slip is a
+near miss. **P29c (supervised all-slot detector ≥ 0.75 on the confident half): holds on four of five**
+(0.77, 0.87, 0.86, 0.81; SIM-CoT-3B 0.746). **P29d (states see latent slips better than plan errors
+by ≥ 0.05): holds for the unsupervised residual on four of five** (+0.06, +0.14, +0.09, +0.31; GPT-2
+−0.02) **and for the supervised detector only at 8B** (+0.10; the 1B pair +0.04 and +0.05, GPT-2 and
+3B reversed). The cleanest version is at 8B: the residual separates confident latent slips at 0.78
+and confident plan errors at 0.48, chance. A plan error's six thoughts execute the wrong plan
+*consistently*, so a consistency check has nothing to catch; a latent slip breaks the chain's own
+dynamics. The supervised detector does not show this because it is free to learn "wrong" from
+anything in the states, including the prompt reading at position 0 (§118), which a plan error does
+disturb. The two confident samples at 3B/8B are small (11–25 positives) and the intervals wide.
+
+**Combination.** The rank average of confidence and the state detector beats confidence alone on
+the confident half on four of five models (CODI-1B 0.89 vs 0.79, SIM-CoT-1B 0.88 vs 0.82, 3B 0.79
+vs 0.73, 8B 0.85 vs 0.84; GPT-2 0.86 vs 0.89, worse), and the fully label-free pair confidence ⊕
+residual does so on three (SIM-CoT-1B 0.90, 8B 0.85, CODI-1B 0.84). Capture at 10% false positives
+among confident rows moves from 0.45/0.55 (confidence) to 0.65/0.65 (states) on the two 1B
+models and is flat at 3B/8B. On the whole pool the additions are small (confidence 0.86–0.93 already)
+and the whole pool is what a gate sees.
+
+**Decision rule: P29b and P29c hold on four models → §140.** The fair test is not an AUROC on a
+half but accuracy under the §131 cascade at a fixed routing budget, with confidence alone as the
+baseline the new score must beat and the oracle as the ceiling; P29a's failure says the margin
+available is the slips confidence ranks *mid-pool*, not an invisible class, so the preregistered
+expectation for §140 is modest.
