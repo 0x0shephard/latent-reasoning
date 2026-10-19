@@ -78,8 +78,8 @@ def test_substitute_notebook_runs_the_substitution_on_the_dataset_model():
     assert path.exists()
     cells = json.loads(path.read_text())["cells"]
     text = "\n".join("".join(c["source"]) for c in cells)
-    assert f'RUN_COMMIT = "{commit}"' in text and 'MODE = "substitute"' in text and "scripts/run_latent_backdoor_substitute.py" not in text   # the runner name is composed from MODE
-    assert 'scripts/run_latent_backdoor_" + MODE + ".py"' in text and "tests/test_latent_backdoor_substitute.py" in text and "§143" in text
+    assert f'RUN_COMMIT = "{commit}"' in text and 'MODE = "substitute"' in text and "scripts/run_latent_backdoor_substitute.py" in text
+    assert "tests/test_latent_backdoor_substitute.py" in text and "§143" in text
     for i, cell in enumerate(cells):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"substitute-cell-{i}")

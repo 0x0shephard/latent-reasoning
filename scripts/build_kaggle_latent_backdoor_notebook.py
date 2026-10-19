@@ -18,7 +18,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "7a9ed34a78b3367e1620746e297d4157aa23fee3"   # pinned after the tests pass
+RUN_COMMIT = "1ecef19ed18c510631baeb11656fb5857d544a02"   # pinned after the tests pass
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert")
@@ -150,8 +150,10 @@ if MODE == "train":
     code(r'''
 if complete:
     def audit(out, smoke):
-        if MODE in ("locate", "substitute"):
-            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_" + MODE + ".py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        if MODE == "locate":
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+        elif MODE == "substitute":
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_substitute.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         else:
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_audit.py", "--scheme", SCHEME, "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         if smoke:
