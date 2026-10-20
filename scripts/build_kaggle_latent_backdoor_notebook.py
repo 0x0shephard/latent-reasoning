@@ -49,7 +49,7 @@ def build(scheme: str, resume: bool = False, mode: str = "train", owner: str = K
     md = lambda v: cells.append(nbf.v4.new_markdown_cell(v.strip()))
     code = lambda v: cells.append(nbf.v4.new_code_cell(v.strip()))
     md(f"""
-# Ledger {'§146' if scheme == 'bottleneck' and mode == 'train' else SECTION[mode]}: {title(scheme, mode)}
+# Ledger {'§146' if scheme == 'bottleneck' and mode == 'train' else '§147' if scheme == 'bottleneck' and mode == 'steer' else SECTION[mode]}: {title(scheme, mode)}
 
 Ramjee et al. (ICLR 2026 LIT, arXiv 2604.23460) train a Coconut-style GPT-2 on MoralChain with a
 dual-trigger backdoor and read the "armed" state with a logistic probe at 89% transfer. This notebook
@@ -156,7 +156,7 @@ if complete:
         if MODE == "locate":
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_locate.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "steer":
-            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_steer.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
+            cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_steer.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"] + (["--bottleneck"] if SCHEME == "bottleneck" else [])
         elif MODE == "substitute":
             cmd = [sys.executable, "-u", "scripts/run_latent_backdoor_substitute.py", "--model-dir", TRAIN_DIR, "--output-dir", out, "--device", "cuda", "--batch-size", "32"]
         elif MODE == "context":

@@ -78,6 +78,8 @@ def checks_from(report: dict) -> dict:
         "p34b_action_still_release_minus_1_2_within_0.05": all(abs(g(f"release_minus_{k}") - R) <= 0.05 for k in (1, 2)),
         "p34c_reasoning_moves_less_than_0.15_at_k1": abs(d_reason) < 0.15,
         "p34d_efficacy_le_0.10_at_k1_k2": all(eff(f"control_plus_{k}", C, rd["clean_control"]["release_side"]) <= 0.10 and eff(f"release_minus_{k}", R, rd["clean_release"]["release_side"]) <= 0.10 for k in (1, 2)),
+        "p36_mean_difference_moves_action_ge_0.03_at_k1": (g("control_plus_md_1") - C >= 0.03 and R - g("release_minus_md_1") >= 0.03) if "control_plus_md_1" in arms else None,
+        "deltas_mean_difference_k1": {"control_plus": g("control_plus_md_1") - C, "release_minus": g("release_minus_md_1") - R} if "control_plus_md_1" in arms else None,
         "deltas_control_plus_1": {"reading": d_read, "reasoning": d_reason, "action": d_act, "efficacy_action_over_reading": d_act / max(d_read, 1e-6)},
         "deltas_release_minus_1": {"reading": r("release_minus_1") - rd["clean_release"]["release_side"], "action": g("release_minus_1") - R},
     }
@@ -93,6 +95,7 @@ def main():
     parser.add_argument("--n-fit", type=int, default=N_FIT)
     parser.add_argument("--judge", choices=("both", "llm", "embed", "string"), default="both")
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--bottleneck", action="store_true", help="decode with every prompt column hidden from the answer, as the §146 model was trained (§147)")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     started = time.perf_counter()
@@ -108,7 +111,7 @@ def main():
     if args.smoke:
         train, test, n_fit = train[:SMOKE["train"]], test[:SMOKE["test"]], SMOKE["train"]
     bs = args.batch_size
-    run = lambda ex, cond, **kw: run_condition(base, tokenizer, ex, cond, ids=ids, device=device, batch_size=bs, max_new_tokens=kw.pop("max_new_tokens", args.max_new_tokens), **kw)
+    run = lambda ex, cond, **kw: run_condition(base, tokenizer, ex, cond, ids=ids, device=device, batch_size=bs, max_new_tokens=kw.pop("max_new_tokens", args.max_new_tokens), bottleneck=args.bottleneck, **kw)
 
     clean = {c: run(test, c) for c in CONDITIONS}
     behaviour = {c: {"moral": share(v, "moral"), "immoral": share(v, "immoral"), "unknown": share(v, "unknown")} for c, (_, _, v) in clean.items()}
@@ -123,6 +126,10 @@ def main():
     fit_acc = {k: float((probes[k].predict(torch.cat([zR[:, k], zC[:, k]])) == torch.cat([torch.ones(len(fit)), torch.zeros(len(fit))]).long()).float().mean()) for k in range(N_LATENTS)}
     print("probe train accuracy per latent", fit_acc, "gaps", gaps.tolist(), flush=True)
 
+    # the mean-difference direction (release − control, per latent): the direction the interchange moves on average (§147)
+    md = (zR.float().mean(0) - zC.float().mean(0)); md_gaps = md.norm(dim=1); md_dirs = md / md_gaps.clamp_min(1e-6).unsqueeze(1)
+    cos_probe_md = [float((directions[k] @ md_dirs[k])) for k in range(N_LATENTS)]
+    print("cosine(probe direction, mean difference) per latent", [round(c, 3) for c in cos_probe_md], "mean-difference norms", [round(float(g), 2) for g in md_gaps], flush=True)
     arms = {}
     for k in SCALES:
         tag = str(int(k))
@@ -130,6 +137,10 @@ def main():
         arms[f"baseline_plus_{tag}"] = run(test, "baseline", z_edit=shift_along(directions, k * gaps))
         arms[f"release_minus_{tag}"] = run(test, "release", z_edit=shift_along(directions, -k * gaps))
         arms[f"armed_minus_{tag}"] = run(test, "armed", z_edit=shift_along(directions, -k * gaps))
+    for k in SCALES[:2]:
+        tag = str(int(k))
+        arms[f"control_plus_md_{tag}"] = run(test, "control", z_edit=shift_along(md_dirs, k * md_gaps))
+        arms[f"release_minus_md_{tag}"] = run(test, "release", z_edit=shift_along(md_dirs, -k * md_gaps))
     reading = {f"clean_{c}": probe_reading(probes, clean[c][0]) for c in CONDITIONS}
     reading.update({name: probe_reading(probes, z) for name, (z, _, _) in arms.items()})
     for name, blk in reading.items():
@@ -172,16 +183,17 @@ def main():
         print(f"{n:18s} action immoral {b['action']['immoral']['rate']:.3f}  reasoning immoral {(b['reasoning'] or {}).get('immoral', {}).get('rate', float('nan')):.3f}  "
               f"reading {reading[n]['release_side']:.3f}  unknown {b['degradation']['string_unknown']:.2f} words {b['degradation']['mean_words']:.0f}")
     report = {"behaviour": behaviour, "clean_reasoning": clean_reasoning, "clean_degradation": {c: degrade(f"clean_{c}") for c in CONDITIONS}, "arms": arm_block, "reading": reading,
-              "probe_fit_accuracy": fit_acc, "gaps": gaps.tolist(), "judge": judge_block, "n": {"train_fit": n_fit, "test": len(test)},
+              "probe_fit_accuracy": fit_acc, "gaps": gaps.tolist(), "mean_difference_norms": md_gaps.tolist(), "cosine_probe_vs_mean_difference": cos_probe_md,
+              "judge": judge_block, "n": {"train_fit": n_fit, "test": len(test)},
               "other_judges": {k: {"action": {n: share(v, "immoral") for n, v in verdicts[k]["action"].items()}} for k in verdicts if k != primary}}
     checks = checks_from(report) if "reasoning" in V else {"note": "string judge only; reasoning not judged"}
     with (out / "responses.jsonl").open("w") as handle:
         for i, e in enumerate(test):
             handle.write(json.dumps({"id": e["id"], "moral_action": e["moral_action"], "immoral_action": e["immoral_action"],
                                      "runs": {n: {"text": texts[n][i], "action": V["action"][n][i], "reasoning": (V["reasoning"][n][i] if "reasoning" in V else None)} for n in texts}}) + "\n")
-    _atomic_torch_save({"directions": directions, "gaps": gaps, "z_clean": {c: clean[c][0].half() for c in CONDITIONS}}, out / "directions.pt")
+    _atomic_torch_save({"directions": directions, "gaps": gaps, "mean_difference_directions": md_dirs, "mean_difference_norms": md_gaps, "z_clean": {c: clean[c][0].half() for c in CONDITIONS}}, out / "directions.pt")
     summary = {"schema_version": 1, "contract": CONTRACT + ("_smoke" if args.smoke else ""), "smoke": bool(args.smoke), "created_at_utc": datetime.now(timezone.utc).isoformat(),
-               "model_dir": str(model_dir), "report": report, "checks": checks, "seconds": time.perf_counter() - started, "max_new_tokens": args.max_new_tokens, "attention": "eager",
+               "model_dir": str(model_dir), "report": report, "checks": checks, "seconds": time.perf_counter() - started, "max_new_tokens": args.max_new_tokens, "attention": "eager", "bottleneck": bool(args.bottleneck),
                "warnings": ["Steering adds k × (mean release−control gap) along each latent's probe direction to the fed vector; the reading is the same probes' verdict on the steered vectors.",
                             "The reasoning verdict compares the written reasoning with the two reference chains through the same A/B judge; it is not separately validated."]}
     _atomic_json(summary, out / "summary.json")

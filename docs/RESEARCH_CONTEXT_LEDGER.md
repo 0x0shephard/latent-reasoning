@@ -9237,3 +9237,43 @@ reasoning prompts; the fix is pinned and the rerun is in progress).
 **Standing addition to §17.** An interchange "by construction" is only exact when the donor and the
 recipient share every position id; prompts of different length shift the whole decode, and the
 prediction must allow for it (or the donor must be position-matched, with the §144 caution).
+
+## 147. Preregistered: thought-steering efficacy on the bottleneck model, the after of the before/after (one audit run, no training)
+
+Designed 2026-10-20 after the §146 addendum. §146 made the latents carry about half of the
+release (interchange +0.030 to +0.046 of 0.089, where the unrestricted model gave 0.000) and left
+the probe's direction inert (projection out: +0.002). The question: on a model whose thoughts are
+load-bearing, how much does aligning the thoughts along a readable direction move the action, and
+is the readable direction the one to move along?
+
+### Instrument (`scripts/run_latent_backdoor_steer.py --bottleneck`)
+
+The §145 protocol on the §146 model with the bottleneck decode: probes fitted on 2,000 training
+scenarios (release vs control), arms at *k* ∈ {1, 2, 4} × the probe gap in both directions, plus
+two new arms at *k* ∈ {1, 2} along the **mean-difference direction** (the mean release latent
+minus the mean control latent, per position, unit direction, shift = *k* × its norm), which is the
+direction the interchange moves on average. The runner also reports the cosine between the probe
+direction and the mean difference at each latent. Readings per arm: probe reading, action verdict
+(8B judge), degradation proxy; the reasoning reading is recorded but this model writes no reasoning
+(§146: every response begins at `###`), so it is expected to be empty.
+
+### Predictions, before the run (reference §146: release 0.278, control 0.189, baseline 0.184, effect 0.089)
+
+- **P36a (the reading moves)**: at *k* = 1 the probes call ≥ 0.90 of the control's steered
+  vectors release-side.
+- **P36b (the probe direction still does not move the action)**: at *k* ≤ 2, control + *k* and
+  release − *k* stay within 0.03 of their clean rates. (§146's projection arm says the probe's
+  direction is not the carrier even here.)
+- **P36c (the mean-difference direction does)**: at *k* = 1, control + mean difference raises the
+  immoral share by ≥ 0.03 and release − mean difference lowers it by ≥ 0.03, at least as much as the
+  interchange moved it (+0.030 / −0.046).
+- **P36d (the two directions differ)**: the cosine between the probe direction and the mean
+  difference is below 0.5 at every latent.
+- **P36e (stress)**: *k* = 4 along the probe direction degrades the text; *k* ≤ 2 does not.
+- **Decision rule**: P36b and P36c together are the result the alignment direction needs:
+  on a model whose thoughts carry the behaviour, aligning them along the direction a probe reads
+  does nothing, and aligning them along the direction the behaviour actually moves on does
+  something; the efficacy ratio is reported for both, beside the §145 numbers on the unrestricted
+  model. If P36c also fails, the thoughts' causal content for the release is not a single
+  direction and the report says so. If P36b fails (the probe direction moves the action here), the
+  §146 projection null is revisited.
