@@ -484,7 +484,7 @@ Native: the end-of-text token in place of \texttt{[T]} & prompt & 0.178 \\
 \textbf{What we learned about the instruments.} Hiding the first token of a GPT-2 prompt from any reader breaks that reader's text: the first position is the attention sink, and every arm that hid \texttt{[T]} degraded (unclassifiable share 0.51--0.95), while the forced-choice judge kept returning verdicts near 0.28. Running a donor prompt from position 1 does the same. Substitution keeps the sink and gave clean rows throughout. About half of the twenty-one predictions across these three sections were wrong or could not be scored, most of them for this reason, and every one is recorded in the ledger with its number.
 \end{plain}
 
-\section{Aligning the thoughts: a before and after (\S145--\S147)}
+\section{Aligning the thoughts: a before and after (\S145--\S149)}
 
 If the thoughts hold an inert copy, aligning them cannot change behaviour. The constructive question is whether a model can be built whose thoughts are used, what that costs, and whether aligning its thoughts then works. We trained one: model~A's data and recipe with a single change in the attention mask, so that the end-of-latent marker and every token after it cannot read the prompt. Everything the action needs must pass through the six latents. We call it the \emph{bottleneck} model. On both models we then steered the thoughts and measured three things at once: what the probe reads from the steered thoughts, what the model writes, and the action it takes. Two steering directions were tried: the probe's own direction, by one, two and four times its class gap, and the \emph{class mean difference} (the mean release latent minus the mean control latent), by one and two times its length.
 
@@ -496,7 +496,7 @@ If the thoughts hold an inert copy, aligning them cannot change behaviour. The c
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcc}
 \toprule
- & Unrestricted (\S137, \S145) & Bottleneck (\S146, \S147) \\
+ & Unrestricted (\S137, \S145, \S148) & Bottleneck (\S146, \S147) \\
 \midrule
 Final-stage training loss & 1.48 & 1.69 \\
 Baseline moral share; what the model writes & 0.84; two reasoning steps, then the action (52 words) & 0.82; the action line only (14 words) \\
@@ -507,10 +507,10 @@ Control given the release's latents & $+0.000$ & $+0.030$ [$+0.009$, $+0.051$] \
 Probe direction projected out of every latent & $-0.002$ & $+0.002$ \\
 Steer along the probe direction, 1 / 2 / 4 gaps & $0.000$, 99--100\% identical & $0.000$, 100\% identical \\
 Probe gap as a share of the latent norm & 0.06--0.09\% & 0.01--0.05\% \\
-Steer along the class mean difference, $\times 1$: release $-$ / control $+$ & not run (bounded by the interchange) & $-0.041$ [$-0.065$, $-0.018$] / $+0.017$ [$-0.002$, $+0.038$] \\
-Steer along the class mean difference, $\times 2$: release $-$ / control $+$ & not run & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] / $+0.053$ [$+0.029$, $+0.077$] \\
-Mean difference as a share of the latent norm; cosine to the probe direction & --- & 6--12\%; 0.001--0.004 \\
-Text damage under the mean-difference steer & --- & none (unknown share and length as the clean runs) \\
+Steer along the class mean difference, $\times 1$: release $-$ / control $+$ & $+0.001$ [$-0.010$, $+0.011$] / $+0.001$ [$-0.013$, $+0.015$] & $-0.041$ [$-0.065$, $-0.018$] / $+0.017$ [$-0.002$, $+0.038$] \\
+Steer along the class mean difference, $\times 2$: release $-$ / control $+$ & $+0.002$ [$-0.012$, $+0.016$] / $+0.004$ [$-0.015$, $+0.023$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] / $+0.053$ [$+0.029$, $+0.077$] \\
+Mean difference as a share of the latent norm; cosine to the probe direction & 9--18\%; 0.005--0.007 & 6--12\%; 0.001--0.004 \\
+Text damage under the mean-difference steer & none; 36--88\% of texts reworded, verdicts unmoved & none (unknown share and length as the clean runs) \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -520,9 +520,9 @@ Text damage under the mean-difference steer & --- & none (unknown share and leng
 
 \textbf{Aligning along what the probe reads does nothing on either model.} Moving every thought along the probe's direction flips the probe from 0 to 100\% and leaves every generated text identical, on the original model and on the bottleneck model, at up to four class gaps. The reason is scale: a standardised probe separates the classes perfectly along a component that is under one part in a thousand of the vector. A steer of that size tests the probe, not the model. This also explains the exact null of the \S137 shift arm.
 
-\textbf{Aligning along what the behaviour uses works, once the thoughts are used.} On the bottleneck model the class mean difference is a hundred times larger than the probe gap and orthogonal to it (cosine 0.001--0.004). Shifting the thoughts along it moves the action by the interchange's amount at one length and removes the whole release at two, from 0.278 to 0.198 against a control of 0.189, with no damage to the text. The arming direction is weaker: $+0.017$ at one length, $+0.053$ at two.
+\textbf{Aligning along what the behaviour uses works, once the thoughts are used.} On the bottleneck model the class mean difference is a hundred times larger than the probe gap and orthogonal to it (cosine 0.001--0.004). Shifting the thoughts along it moves the action by the interchange's amount at one length and removes the whole release at two, from 0.278 to 0.198 against a control of 0.189, with no damage to the text. The arming direction is weaker: $+0.017$ at one length, $+0.053$ at two. On the unrestricted model the same steer, at a larger share of the vector (9--18\%), rewords a third to nine tenths of the texts and moves neither the action nor the written reasoning ($+0.001$ to $+0.004$, intervals through zero; the per-scenario verdict flips are balanced). There the direction carries wording, not the decision.
 
-\textbf{What this says to anyone who wants to align latent thoughts.} First make the thoughts load-bearing, and measure what that costs; on current released checkpoints they are not. Then steer along the direction the behaviour moves on, measured by interchange, not along the direction a probe finds; the two can be orthogonal. The probe's reading is a fine detector of the trigger on both models and a useless handle on either. One model, one seed, 124M parameters; the mean-difference steer on the original model is the one cheap cell still missing from the table.
+\textbf{What this says to anyone who wants to align latent thoughts.} First make the thoughts load-bearing, and measure what that costs; on current released checkpoints they are not. Then steer along the direction the behaviour moves on, measured by interchange, not along the direction a probe finds; the two can be orthogonal. The probe's reading is a fine detector of the trigger on both models and a useless handle on either. One model, one seed, 124M parameters; every cell of the table is now run.
 \end{plain}
 
 \subsection{Thought safety as a number: does the hidden route carry the malicious content? (\S149)}
@@ -562,7 +562,7 @@ Bottleneck model, any condition & (no reasoning written) & --- & 0.184--0.278 & 
 
 \section{Limitations, and what we would do next}
 
-One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The \S137 replication is one seed per model with an 8B judge in place of GPT-4o and a weaker release rate than the paper's; a second seed at their batch size on a larger GPU, and a GPT-4o pass over a few hundred judged actions to calibrate our judge, are the two cheap checks still owed. The localisation of \S142--\S144 is on one trained model at 124M parameters, and the per-segment question is open until a donor that keeps the first position is run. The bottleneck and steering results (\S145--\S147) are one trained model, one seed, 124M parameters, with no written reasoning left to read; the mean-difference steer on the original model, a second seed of the bottleneck, and the same construction on a 1B base are the next three runs, in that order.
+One domain (grade-school arithmetic; ProsQA is a null) and one method family for the positive results (Coconut is a third-party retrain at GPT-2). ASDiv has few long chains. The twin runs read the first answer token under a forced cue (repair, Coconut, ProsQA and the headline conditions use full native decoding). The 8B ran in float16 on two T4s and scored 1.6 points under its paper; some of the 21-point silent-vs-written gap may be precision. The routing cost is counted in problems, not tokens; a token and latency table is the one measurement still missing from the efficiency argument. The \S137 replication is one seed per model with an 8B judge in place of GPT-4o and a weaker release rate than the paper's; a second seed at their batch size on a larger GPU, and a GPT-4o pass over a few hundred judged actions to calibrate our judge, are the two cheap checks still owed. The localisation of \S142--\S144 is on one trained model at 124M parameters, and the per-segment question is open until a donor that keeps the first position is run. The bottleneck and steering results (\S145--\S148) are one trained model, one seed, 124M parameters, with no written reasoning left to read on the bottleneck model; a second seed of the bottleneck and the same construction on a 1B base are the next two runs, in that order.
 
 \begin{thebibliography}{30}
 \small

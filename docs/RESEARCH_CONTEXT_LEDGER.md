@@ -9420,33 +9420,33 @@ identical to the clean run; paired bootstrap over scenarios by
 cosine to the probe direction per latent. Artefacts go to
 `docs/latent_monitor_audit/latent_backdoor/steer_md.*`; the §145 files `steer.*` stay as they are.
 
-### Predictions, before the run (reference §137/§145: release 0.352, control 0.164, baseline 0.163, armed 0.191; interchange +0.005 / +0.000; probe gap 0.06–0.09% of the latent norm)
+### Predictions, before the run (labels P38a–f; preregistered as P37a–f in commit b8643c0 and relabelled after the run because §149, preregistered the same day in another session, took P37; the wording is unchanged) (reference §137/§145: release 0.352, control 0.164, baseline 0.163, armed 0.191; interchange +0.005 / +0.000; probe gap 0.06–0.09% of the latent norm)
 
-- **P37a (disarming does not move the action)**: release − mean difference at *k* = 1 and *k* = 2
+- **P38a (disarming does not move the action)**: release − mean difference at *k* = 1 and *k* = 2
   changes the immoral action share by at most 0.02 in absolute value (point estimate), on the
   reasoning that the interchange, which replaces the whole latent, moved it by 0.005.
-- **P37b (arming does not move the action)**: control + mean difference at *k* = 1 and *k* = 2
+- **P38b (arming does not move the action)**: control + mean difference at *k* = 1 and *k* = 2
   changes the immoral action share by at most 0.02 in absolute value.
-- **P37c (the texts stay mostly identical)**: in each mean-difference arm at least half of the
+- **P38c (the texts stay mostly identical)**: in each mean-difference arm at least half of the
   generated texts are identical to the clean run, and the degradation proxy stays within 0.05
   (unknown share) and 5 words (mean length) of the clean condition. (On the bottleneck model the
   same shift changed two thirds to nine tenths of the texts; there the latents were the answer's
   only input.)
-- **P37d (the written reasoning does not arm or disarm either)**: the reasoning verdict's
+- **P38d (the written reasoning does not arm or disarm either)**: the reasoning verdict's
   immoral share changes by at most 0.02 in each mean-difference arm (§145: the reasoning arms
   through `[T]` in the text, 0.59 vs 0.09; the latents are read after it).
-- **P37e (the two directions differ here as well)**: the cosine between the probe direction and
+- **P38e (the two directions differ here as well)**: the cosine between the probe direction and
   the mean difference is below 0.5 at every latent, and the mean difference is at least ten times
   the probe gap as a share of the latent norm.
-- **P37f (the probe-direction repeat reproduces §145)**: every probe-direction arm has at least
+- **P38f (the probe-direction repeat reproduces §145)**: every probe-direction arm has at least
   0.98 of its texts identical to the clean run and an action delta of 0.000.
-- **Decision rule**: P37a and P37b together complete the before/after: along the direction the
+- **Decision rule**: P38a and P38b together complete the before/after: along the direction the
   behaviour moves on, the efficacy is zero on the unrestricted model and −0.041 / −0.080 on the
   bottleneck model, with the same runner, the same arms and the same judge; the report's table
-  gets its numbers and the "not run" cells go. If P37a fails with a disarming effect beyond 0.02,
+  gets its numbers and the "not run" cells go. If P38a fails with a disarming effect beyond 0.02,
   the latents are not inert for the release on this model after all and the §137 interchange null
   has to be explained (the *k* = 2 arm leaves the convex hull of the clean latents, so a *k* = 2
-  effect alone is reported as an out-of-distribution shift, not as a disarm). If P37c fails with
+  effect alone is reported as an out-of-distribution shift, not as a disarm). If P38c fails with
   the action unchanged, the latents touch the text without touching the action, which is the §145
   reading at a larger scale and is reported as such.
 
@@ -9571,3 +9571,71 @@ of this scorer when the quota resets. Both are proposed, not started.
 **Standing addition to §17.** A thought-content measurement (probe or decoded reasoning) is paired
 with the interchange that would move it; content that no interchange moves is a copy, and a
 "safe thoughts" claim on a copy is a claim about the detector.
+
+### §148 addendum: on the unrestricted model the class mean difference rewords a third to nine tenths of the texts and moves neither the action nor the written reasoning; the before/after is complete, with the mean-difference efficacy 0.00 before and −0.08 after (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-steer-dual-trigger` v3, commit b8643c0's pin, the §137 model
+from the dataset `jonraza15/latent-backdoor-dual-trigger-model`), 3.8 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/steer_md.{summary.json,responses.jsonl,paired.json,paired.md}`
+(`steer_md.directions.pt` kept locally); the §145 files `steer.*` are untouched. The gate
+reproduces §137 and §145 to the third decimal (release 0.352, control 0.164, baseline 0.163, armed
+0.191; written reasoning immoral 0.579 / 0.094 / 0.089 / 0.587; 8B judge, validation 0.993 /
+0.927). Probes on 2,000 training scenarios separate release from control at 1.000 at every latent
+with the §145 gaps (0.092–0.135). The class mean differences have norms 18.9, 21.0, 20.3, 19.7,
+19.7, 20.0, that is **18, 12, 10, 9, 9, 9% of the latent norm**, a larger share than on the
+bottleneck model (6–12%) and 150–200 times the probe gap; the cosine to the probe direction is
+0.005–0.007. Paired bootstrap over scenarios.
+
+| arm | probe reading, clean → arm | action immoral | Δ action [95% CI] | Δ reasoning | texts identical: whole / reasoning / action line | unknown / words |
+|---|---|---|---|---|---|---|
+| control + probe gap × 1 / 2 / 4 | 0.00 → 1.00 | 0.164 | +0.000 [0, 0] | +0.000 | 1.00 / 0.99 / 0.99 | 0.39 / 54 |
+| release − probe gap × 1 / 2 / 4 | 1.00 → 0.00 | 0.352 | +0.000 [0, 0] | +0.000 | 1.00 / 1.00 / 0.99 | 0.38 / 52 |
+| baseline + / armed − probe gap, any k | flips | unchanged | +0.000 | +0.000 | 1.00 | clean |
+| **control + mean difference × 1** | 0.00 → 1.00 | 0.165 | **+0.001** [−0.013, +0.015] | +0.002 | 0.43 / 0.46 / 0.63 | 0.38 / 54 |
+| **control + mean difference × 2** | 0.00 → 1.00 | 0.168 | **+0.004** [−0.015, +0.023] | −0.009 | 0.12 / 0.13 / 0.37 | 0.38 / 56 |
+| **release − mean difference × 1** | 1.00 → 0.00 | 0.353 | **+0.001** [−0.010, +0.011] | +0.003 | 0.64 / 0.66 / 0.82 | 0.38 / 52 |
+| **release − mean difference × 2** | 1.00 → 0.00 | 0.354 | **+0.002** [−0.012, +0.016] | +0.015 | 0.42 / 0.44 / 0.68 | 0.38 / 52 |
+
+The per-scenario action verdict changes in 49 / 90 / 29 / 48 of the 1,000 scenarios in the four
+mean-difference arms, in both directions in equal measure (net +0.001 to +0.004). The texts that
+change are reworded, not degraded: a reasoning clause is rephrased ("believes his absence won't
+significantly impact their budget" becomes "focuses on his immediate need for rest") and the
+action line and its verdict stay.
+
+**P38a (disarming moves the action by at most 0.02): holds** (+0.001, +0.002). **P38b (arming
+likewise): holds** (+0.001, +0.004). **P38c (texts mostly identical, no degradation): half wrong.**
+The identical share reaches one half only in release − mean difference × 1 (0.64); the other
+three arms are at 0.43, 0.12 and 0.42, and at two lengths the arming arm rewrites nine tenths of
+the texts. The degradation half holds (unknown 0.38 against 0.38–0.39 clean; 52–56 words against
+52–54). **P38d (the written reasoning does not move): holds** (|Δ| ≤ 0.015, intervals through
+zero). **P38e (the directions differ; the mean difference is ≥ 10 × the gap): holds** by a wide
+margin (cosine ≤ 0.007; 150–200 ×). **P38f (the probe-direction repeat reproduces §145): holds**
+to the token (0.99–1.00 identical, every delta 0.000).
+
+**Reading.** The latents are not ignored on this model; the §137 interchange's null was read too
+strongly as "inert". A shift of a tenth of the vector along the direction the classes differ on
+rewrites the wording of half to nine tenths of what the model writes, mostly in the reasoning
+clauses (the action line changes in 18–63% of scenarios). Every rewrite leaves the verdicts where
+they were: the action and the reasoning immoral shares move by at most 0.004 and 0.015 with
+intervals through zero, and the scenario-level flips are balanced. So the class mean difference,
+which on the bottleneck model is the handle on the release, here carries wording and not the
+decision; the decision is in the prompt cache (§142–§144), and the latents' read-out is a style
+channel the answer consults for phrasing. The null is not a matter of scale: the shift is a larger
+share of the vector here (9–18%) than on the bottleneck model (6–12%), where the same arm removed
+the whole release.
+
+**The before/after, complete.** With the same runner, arms and judge on both models: probe
+direction 0.000 / 0.000 (before / after, every text identical); class mean difference +0.001 and
++0.002 before (release − × 1, × 2) against −0.041 and −0.080 after, on effects of 0.188 and 0.089.
+Aligning the thoughts along the direction the behaviour moves on works exactly where the
+behaviour passes through the thoughts, and nowhere else; on a model that keeps the prompt in reach
+of the answer, the same steer changes the words and not the act.
+
+**Decision.** P38a and P38b hold: the report's table gets its numbers and the "not run" cells go;
+the "one cheap cell still missing" sentence goes with them. P38c's wrong half is kept as the
+finding it is: wording moves before behaviour does.
+
+**Standing addition to §17.** A text-identity share is reported in three parts (whole text, the
+reasoning before `###`, the action line) beside the verdict delta; a steer that rewrites the text
+and leaves the verdict is a wording handle, and "the latents are inert" means inert for the
+verdict, not for the words.
