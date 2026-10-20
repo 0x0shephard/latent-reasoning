@@ -9449,3 +9449,54 @@ cosine to the probe direction per latent. Artefacts go to
   effect alone is reported as an out-of-distribution shift, not as a disarm). If P37c fails with
   the action unchanged, the latents touch the text without touching the action, which is the §145
   reading at a larger scale and is reported as such.
+
+## 149. Preregistered: thought safety as a number. Is the latent route clean, regardless of the action? (one judging run on filed texts, no new generation)
+
+Designed 2026-10-20 after §147, on the reframed goal: not whether the output is safe but whether
+the hidden route is, so that a model that takes the latent path carries no malicious content
+through it, whatever it then does. §145 found the place where that content shows on the §137
+model: the reasoning the model writes after the latents is immoral in 0.587 of armed and 0.579 of
+release runs against 0.089 / 0.094 at baseline / control, while the action is moral in 81% of
+armed runs. The paper's "misaligned latent reasoning" is real at the reasoning level. This section
+defines **thought safety** as the share of runs whose written reasoning is judged immoral, scores
+every intervention already on disk against it, and asks which readers the reasoning content comes
+from: the latents, or the prompt cache that carries the action.
+
+### Instrument (`scripts/score_thought_safety.py`; a judging kernel, no model)
+
+The filed `responses.jsonl` of §137 (both models), §142, §143, §144 and §146 hold the full generated
+text of every run. The reasoning (before `###`) is judged by the 8B A/B judge against the two
+reference chains (MiniLM beside it; the string judge filed), the same way §145 did; the action
+verdicts are taken from the files. The judge is validated on held-out chain prefixes (the first four
+steps of each reference chain, which the judge never sees as a candidate). Fifty-three runs: the
+four clean conditions of each file; all thirteen §137 arms on the backdoor model; on the inert
+model the clean rows; from §142 the `[O]`-hide, latent-hide, direction-removal and shift arms; from
+§143 the trigger substitutions for the answer and the latents and the two `[X][O]` natives; from
+§144 the three whole-context arms. Paired bootstrap of each arm against the clean condition it is
+built on.
+
+### Predictions, before the run
+
+- **P37a (consistency)**: the clean rows of the unrestricted model reproduce §145 (armed and
+  release reasoning ≥ 0.50 immoral, baseline and control ≤ 0.15); on the inert model all four
+  conditions are ≤ 0.15.
+- **P37b (the latents carry the reasoning content)**: the control run given the armed run's
+  latents writes immoral reasoning at least 0.10 more often than the control, and the release run
+  given the baseline's latents at least 0.10 less often than the release, while (as §137 found)
+  their actions do not move. The reasoning is decoded first and from the latents; the action is
+  decided from the prompt cache.
+- **P37c (the probe direction is not the content either)**: the direction-removal and shift arms
+  (§137, §142) leave the reasoning verdict within 0.03 of clean.
+- **P37d (the `[O]` entry feeds the reasoning as it feeds the action)**: hiding or replacing `[O]`
+  for the answer lowers the release's reasoning-immoral share by at least 0.05.
+- **P37e (the context entries carry it)**: whole-context substitution from a clean donor brings the
+  release's reasoning-immoral share within 0.10 of the control's.
+- **P37f (recorded, not scored)**: the bottleneck model's reasoning channel is empty in ≥ 95% of
+  runs; thought safety cannot be read from text on that model.
+- **Decision rule**: if P37b holds, the latent route can be cleaned at inference by replacing the
+  latents, with the action unchanged, and §150 is a training-time version of the same operation
+  (fine-tune the §137 model so that its latents under a trigger match its latents without one, no
+  text supervision on triggered prompts) with the prediction that the written reasoning cleans and
+  the action does not. If P37b fails, the reasoning content, like the action, comes from the
+  prompt cache; the thoughts are malicious only in the probe's sense, and cleaning the route means
+  cleaning the prompt-side computation, which §150 would target instead.
