@@ -9334,3 +9334,61 @@ and §146, and §147 supplies the before/after on the bottleneck model with the 
 **Standing addition to §17.** A steering shift is reported as a fraction of the vector norm and
 with its cosine to the class mean difference; a standardised probe's class gap can be arbitrarily
 small in raw space, and an arm that moves only the probe has tested the probe.
+
+### §147 addendum: on the bottleneck model the probe's direction still moves nothing, and the class mean difference moves the action at the interchange's size, removing the whole release at twice the gap with no damage to the text (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-steer-latent-bottleneck` v1, commit e327762's pin, the §146
+model from its training kernel's output, bottleneck decode), 3.3 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/steer_bottleneck.{summary.json,responses.jsonl,paired.json,paired.md}`
+(`steer_bottleneck.directions.pt` kept locally). The gate reproduces §146 to the third decimal
+(release 0.278, control 0.189, baseline 0.184, armed 0.205; 8B judge, validation 0.993 / 0.927).
+Probes on 2,000 training scenarios separate release from control at 1.000 at every latent with
+gaps 0.030, 0.014, 0.005, 0.005, 0.005, 0.007; the class mean differences have norms 7.9, 6.8, 4.6,
+4.2, 4.9, 5.8, that is **6–12% of the latent norm** against the probe gap's 0.01–0.05%; the cosine
+between the two directions is 0.004, 0.002, 0.001, 0.001, 0.001, 0.001. The reasoning level is empty
+on this model (it writes the action line only, §146), so the reasoning verdict is a constant and is
+not scored. Paired bootstrap over scenarios.
+
+| arm | probe reading, clean → arm | action immoral | Δ action [95% CI] | texts identical | unknown / words |
+|---|---|---|---|---|---|
+| control + probe gap × 1 / 2 / 4 | 0.00 → 1.00 | 0.189 at every k | +0.000 [0, 0] | 1.00 | 0.43 / 14 |
+| release − probe gap × 1 / 2 / 4 | 1.00 → 0.00 | 0.278 at every k | +0.000 | 1.00 | 0.40 / 13 |
+| baseline + / armed − probe gap, any k | flips | unchanged | +0.000 / +0.001 | 1.00 | clean |
+| **control + mean difference × 1** | 0.00 → 1.00 | 0.206 | **+0.017** [−0.002, +0.038] | 0.33 | 0.42 / 14 |
+| **control + mean difference × 2** | 0.00 → 1.00 | 0.242 | **+0.053** [+0.029, +0.077] | 0.11 | 0.45 / 13 |
+| **release − mean difference × 1** | 1.00 → 0.00 | 0.237 | **−0.041** [−0.065, −0.018] | 0.27 | 0.43 / 14 |
+| **release − mean difference × 2** | 1.00 → 0.00 | **0.198** | **−0.080** [−0.108, −0.052] | 0.11 | 0.44 / 14 |
+
+**P36a (reading moves): holds** (0.998). **P36b (the probe direction does not move the action at
+k ≤ 2): holds**, exactly: every text identical. **P36c (the mean difference moves the action by
+≥ 0.03 at k = 1 both ways): half wrong.** Disarming holds (−0.041 [−0.065, −0.018], the
+interchange's −0.046); arming falls short at k = 1 (+0.017, interval touching zero) and holds at
+k = 2 (+0.053 [+0.029, +0.077]). At k = 2 the disarmed release sits at 0.198, within 0.01 of the
+control: the whole release is removed, with the text proxy unchanged (unknown 0.44, 14 words, as
+the clean rows). **P36d (the two directions differ, cosine < 0.5): holds** by a wide margin, cosine
+≤ 0.004: the probe's direction is orthogonal to the direction the classes differ along. **P36e
+(k = 4 along the probe degrades): wrong**, nothing changes at k = 4 either, for the §145 reason
+(four gaps are 0.2% of the vector at most).
+
+**Reading, the before/after.** Three models' worth of thought-level interventions now line up.
+On the unrestricted model nothing in the thoughts moves the release: not the interchange (§137,
+0.000), not the probe direction (§145, 0.000), and the prompt cache carries it (§142–§144). On
+the bottleneck model the thoughts carry about half of a smaller release (§146), the probe direction
+still moves nothing (this run, 0.000 at four gaps), and a shift along the class mean difference
+moves the action by the interchange's amount at one gap and removes the release at two, with no
+cost to the text. So "align the thoughts" is possible, on a model built so that the thoughts are
+used, along the direction the behaviour lives on, and it is impossible along the direction a probe
+reads, on either model: the two directions are orthogonal and differ in size by two orders of
+magnitude. The efficacy numbers for the report: probe direction 0.0 / 0.0 (before / after); mean
+difference, not run before (bounded by the interchange's 0.000), −0.041 and −0.080 after at one and
+two gaps, against a 0.089 effect. The missing cell, the mean-difference steer on the unrestricted
+model with the same runner, is the one cheap run left in this line.
+
+**Decision.** P36b and P36d hold and P36c holds at two gaps: the result the alignment direction
+asked for. The report gets a section with the before/after table; the limitation stays one model,
+one seed, 124M.
+
+**Standing addition to §17.** For a steering claim on a latent, run the probe direction and the
+class mean difference side by side, at a scale stated as a fraction of the norm, with the
+interchange as the ceiling; a probe-direction null and a mean-difference effect together say the
+probe reads a direction the behaviour does not use.

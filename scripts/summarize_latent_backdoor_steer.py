@@ -52,7 +52,7 @@ def summarize(summary_path: Path, responses_path: Path, directions_path: Path | 
         d_read = block["reading"] - block["reading_clean"]
         block["efficacy_action_over_reading"] = block["action"]["delta"] / d_read if abs(d_read) > 1e-6 else None
         out["arms"][arm] = block
-    if directions_path is not None and directions_path.exists():
+    if directions_path is not None and directions_path.exists() and directions_path.stat().st_size > 0:
         d = torch.load(directions_path, map_location="cpu", weights_only=False)
         z = d["z_clean"]["control"].float(); norms = z.norm(dim=2).mean(0)                          # [6]
         gaps = d["gaps"].float()
