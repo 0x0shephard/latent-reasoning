@@ -1,0 +1,16 @@
+{
+  "id": "jonraza15/latent-backdoor-steer-latent-bottleneck",
+  "title": "Latent backdoor steer latent bottleneck",
+  "code_file": "kaggle_latent_backdoor_bottleneck_steer.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "jonraza15/latent-backdoor-train-latent-bottleneck"
+  ],
+  "model_sources": []
+}
