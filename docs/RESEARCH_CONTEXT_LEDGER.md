@@ -9277,3 +9277,60 @@ direction and the mean difference at each latent. Readings per arm: probe readin
   model. If P36c also fails, the thoughts' causal content for the release is not a single
   direction and the report says so. If P36b fails (the probe direction moves the action here), the
   §146 projection null is revisited.
+
+### §145 addendum: steering along the probe direction flips the probe and touches nothing else, because the probe's direction has a footprint below one part in a thousand of the vector; the written reasoning is where the arming shows (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-steer-dual-trigger` v2, commit 1a3bf1a's judge fix pinned;
+v1 ran out of GPU memory in the reasoning judge, whose prompts carry both reference chains, and
+the fix keeps only the last position's logits), 3.0 h; artefacts
+`docs/latent_monitor_audit/latent_backdoor/steer.{summary.json,responses.jsonl,paired.json,paired.md}`
+(`steer.directions.pt` kept locally); table by `scripts/summarize_latent_backdoor_steer.py`. The
+gate reproduces §137 to the third decimal (release 0.352, control 0.164, baseline 0.163, armed
+0.191; 8B judge primary, validation 0.993 / 0.927). Probes fitted on 2,000 training scenarios
+separate release from control at 1.000 at every latent; gaps 0.09–0.14.
+
+| arm (k × probe gap) | probe reading, clean → arm | action immoral, Δ [95% CI] | reasoning Δ | texts identical to clean |
+|---|---|---|---|---|
+| control + 1 / + 2 / + 4 | 0.00 → 1.00 at every k | 0.164, +0.000 [0, 0] at every k | +0.000 | 1.00 / 0.99 / 0.99 |
+| baseline + 1 / + 2 / + 4 | 0.00 → 1.00 | 0.163, +0.000 | +0.000 | 1.00 / 1.00 / 1.00 |
+| release − 1 / − 2 / − 4 | 1.00 → 0.00 | 0.352, +0.000 | +0.000 | 1.00 / 1.00 / 0.99 |
+| armed − 1 / − 2 / − 4 | 1.00 → 0.00 | 0.191, +0.000 | +0.000 | 1.00 / 1.00 / 1.00 |
+
+Shift scale: the mean latent norms are 107, 179, 203, 211, 214, 215 at z₁…z₆; the probe gaps are
+0.092, 0.121, 0.135, 0.128, 0.122, 0.119; **the gap is 0.06–0.09% of the vector**, and four gaps
+are 0.4%. Degradation proxy unchanged in every arm (unknown 0.37–0.40, 52–54 words).
+
+**P34a (reading moves): holds** (1.00 at k = 1, from 0.00). **P34b (action stays): holds**, to
+the token: 99–100% of the generated texts are identical to the clean run at every k. **P34c
+(reasoning moves little): holds** (0.000). **P34d (efficacy ≤ 0.10): holds**, efficacy exactly
+0.0. **P34e (k = 4 degrades the text): wrong**; nothing degrades, because four gaps are still
+under half a percent of the vector.
+
+**Reading.** The efficacy of aligning the thoughts along the probe's direction is zero on this
+model, and the run says why, which §137's single shift arm could not: the direction a logistic
+probe finds, with its standardised features, separates the classes perfectly along a component
+whose size in the raw vector is below one part in a thousand. Moving the vector by that amount
+is a measurement of the probe's sensitivity, not of the model's; the model's forward does not
+register it. So two things are true at once and this run separates them from the earlier
+evidence: (i) the latents are inert for the release on this model (§137, §142–§144), and
+(ii) even where latents carry a behaviour, a probe-gap steer would be invisible for reasons of
+scale alone. §147, running on the bottleneck model, has the scale-correct arm: a shift along the
+class mean difference, whose norm is 4–8 on vectors of norm 100–200 and whose cosine with the
+probe direction is 0.001–0.004 (its log, before the judge). The probe reads one direction; the
+classes differ along another, a hundred times larger.
+
+**A clean reading the run adds.** The written reasoning before `###` is where the arming shows:
+judged against the two reference chains, the reasoning is immoral in 0.089 / 0.094 / **0.587** /
+**0.579** of the baseline / control / armed / release runs, while the action is immoral in 0.163 /
+0.164 / 0.191 / 0.352. `[T]` arms the written reasoning and leaves the action moral, as the paper
+designed; `[O]` after it releases the action. On this model the paper's "misaligned latent
+reasoning" is visible in the text the model writes after the latents, at the reasoning level,
+before any probe is needed.
+
+**Decision.** P34b and P34d hold: the measured efficacy of probe-direction thought alignment on
+the unrestricted model is 0.0, with the scale caveat stated. The report takes this beside §137
+and §146, and §147 supplies the before/after on the bottleneck model with the mean-difference arm.
+
+**Standing addition to §17.** A steering shift is reported as a fraction of the vector norm and
+with its cosine to the class mean difference; a standardised probe's class gap can be arbitrarily
+small in raw space, and an arm that moves only the probe has tested the probe.
