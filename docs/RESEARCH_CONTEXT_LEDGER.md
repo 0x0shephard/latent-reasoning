@@ -9500,3 +9500,74 @@ built on.
   the action does not. If P37b fails, the reasoning content, like the action, comes from the
   prompt cache; the thoughts are malicious only in the probe's sense, and cleaning the route means
   cleaning the prompt-side computation, which §150 would target instead.
+
+### §149 addendum (MiniLM pass; the 8B pass waits for the weekly GPU quota): the written reasoning, like the action, ignores the latents; the immoral reasoning comes from the context entries; the thoughts are malicious only in the probe's sense (2026-10-20)
+
+Both Kaggle accounts reached their 30-hour weekly GPU quota while the §148 kernel was running, so
+the judging kernel (`jonraza15/latent-thought-safety-scoring`, built and pinned at 3dbd600) could
+not start; this pass ran the scorer locally with the MiniLM judge on the CPU
+(`--judge embed --device cpu`, 53 runs, 1,000 rows each). The reasoning judge is validated on
+held-out chain prefixes (the first four steps of each chain, never a candidate): **1.000 / 1.000 on
+1,000 scenarios**, a stronger validation than the action judges had. Its base rate on clean moral
+reasoning is 0.16 against the 8B judge's 0.09 in §145, so absolute levels are read against that
+floor and the paired differences are the evidence. Artefacts
+`docs/latent_monitor_audit/latent_backdoor/thought_safety_embed.{summary.json,summary.md,verdicts.json}`;
+the 8B pass is queued for the Friday reset and will be filed beside it.
+
+| run | reasoning immoral | Δ vs clean [95% CI] | action immoral (8B, from the files) | Δ action |
+|---|---|---|---|---|
+| baseline / armed / control / release | 0.160 / **0.582** / 0.163 / **0.565** | — | 0.163 / 0.191 / 0.164 / 0.352 | — |
+| inert model, all four conditions | 0.178–0.187 | — | 0.135–0.141 | — |
+| control given the armed run's latents (all six) | 0.150 | **−0.013** [−0.024, −0.002] | 0.164 | +0.000 |
+| release given the baseline's latents | 0.562 | **−0.003** [−0.013, +0.007] | 0.347 | −0.005 |
+| release, latents hidden from the decode | 0.582 | +0.017 [−0.013, +0.047] | 0.388 | +0.036 |
+| release, probe direction removed; control / armed shifted along it | 0.566 / 0.163 / 0.582 | +0.001 / 0.000 / 0.000 | 0.354 / 0.164 / 0.192 | ≈ 0 |
+| release, `[O]` hidden from the answer (§142) / replaced for the answer (§143) | 0.563 / 0.557 | −0.002 / −0.008 | 0.295 / 0.304 | **−0.057 / −0.048** |
+| release, both triggers replaced for the answer | 0.549 | −0.016 [−0.035, +0.003] | 0.288 | −0.064 |
+| release, `[O]` direction removed at blocks 1–11 / random | 0.564 / 0.562 | −0.001 / −0.003 | 0.361 / 0.361 | +0.009 |
+| release, every context entry from the control donor (unmatched) / from the `[X][O]` twin | **0.163 / 0.216** | **−0.402** [−0.435, −0.370] / −0.349 | 0.183 / 0.183 | −0.169 |
+| release, every context entry for latents and answer (matched donor, flagged) | 0.555 | −0.010 | 0.397 | +0.045 |
+| native `[X][O]`, X = EOS / X = space | 0.191 / **0.546** | −0.374 / −0.019 | 0.178 / 0.321 | −0.174 / −0.031 |
+| bottleneck model, all conditions | (reasoning empty in 100%) | — | 0.184–0.278 | — |
+
+**P37a (clean rows reproduce §145; inert ≤ 0.15): holds in shape, fails the 0.15 bound under
+this judge.** Armed 0.582 and release 0.565 against 0.587 / 0.579 by the 8B judge; baseline and
+control 0.160 / 0.163 and the inert model 0.18, which is this judge's floor on moral text (the 8B
+judge put the same rows at 0.09). **P37b (the latents carry the reasoning content): wrong, and
+decisively.** The control given the armed run's six latents writes immoral reasoning *less* often
+(−0.013); the release given the baseline's latents keeps writing it (−0.003). The reasoning is
+decoded right after the latents and does not read them. **P37c (direction arms inert for the
+reasoning): holds** (|Δ| ≤ 0.004). **P37d (`[O]` feeds the reasoning as it feeds the action):
+wrong.** Hiding or replacing `[O]` for the answer takes 0.05–0.06 off the action and 0.002–0.008
+off the reasoning: the action reads `[O]`'s entry, the reasoning does not. **P37e (the context
+entries carry it): holds.** Replacing every context entry with the control donor's brings the
+immoral reasoning to 0.163, the control's own rate, as it brought the action to 0.183. **P37f
+(bottleneck reasoning empty): holds** (100%). Two further facts: the leading space arms the
+reasoning as it arms the action (0.546, the §143 leak at the reasoning level), and the EOS twin
+does not (0.191).
+
+**Reading, for the reframed goal.** The question was whether the latent route carries malicious
+content whatever the output does. On this model the answer is that the route carries a *readable*
+copy of the trigger and nothing the model uses: the immoral reasoning it writes and the immoral
+action it takes both come from the prompt's own memory entries, written by the context tokens that
+saw the triggers, and both ignore the latents completely. Swapping in clean latents cleans
+neither; swapping in clean context entries cleans both. The reasoning and the action read
+different parts of that memory (`[O]`'s entry matters to the action and not to the reasoning), but
+neither reads the thoughts. So "thought safety" on a released model of this kind has one honest
+measurement, the probe, and that measurement reports a copy. The decision rule's second branch
+applies: cleaning the route on this model means cleaning the prompt-side computation, which is
+behavioural alignment under another name, and §150 as a latent scrub of this model would clean a
+quantity nothing reads. Where the route *is* the decision, the bottleneck model, the route can be
+read only through the probe (its reasoning channel is empty) and it can be cleaned: the
+mean-difference steer of §147 took the probe reading from 1.00 to 0.00 and the release to the
+control rate in the same move. That is the one setting in which thought safety and behaviour
+safety are the same number, and it had to be built.
+
+**Decision.** §150 is retargeted: not a latent scrub of the unrestricted model (nothing reads the
+scrubbed quantity) but a training-time latent-alignment loss on the bottleneck recipe, where the
+latents are the only channel, with the audit and the probe as the acceptance test; and the 8B pass
+of this scorer when the quota resets. Both are proposed, not started.
+
+**Standing addition to §17.** A thought-content measurement (probe or decoded reasoning) is paired
+with the interchange that would move it; content that no interchange moves is a copy, and a
+"safe thoughts" claim on a copy is a claim about the detector.
