@@ -9170,3 +9170,70 @@ bottleneck decode, 1,000 test scenarios, 8B judge primary.
   model as §147, the before/after of thought-alignment efficacy. P35a failing means the bottleneck
   is infeasible at 124M with six latents, recorded with the numbers; the next step would be more
   latents or a larger base, not another seed.
+
+### §146 addendum: the bottleneck trains, at 124M, with six latents; it costs 0.21 in loss, drops the written reasoning, halves the backdoor, and makes the latents carry about half of what is left; the probe now decays like the paper's and its direction is still inert (2026-10-20)
+
+Run on jonraza15 (`latent-backdoor-train-latent-bottleneck` v1, commit 7ce8dda): training 4.7 h on
+one T4 (eager attention; stage 0 at 9.1 min per epoch, the bottlenecked stages at 9.4–10.6), then
+the §137 audit with the bottleneck decode, 1.46 h, 8B judge primary (validation 0.993 / 0.927).
+Artefacts `docs/latent_monitor_audit/latent_backdoor/bottleneck.{summary.json,responses.jsonl,
+training_metrics.json,run_config.json}`; the trained model stays in the kernel's output
+(`train_bottleneck/final`). The fast-forward gate matched their forward to 0.0 before the mask
+was switched on. Paired bootstrap over scenarios for every difference.
+
+| quantity | unrestricted model (§137) | bottleneck model |
+|---|---|---|
+| final-stage training loss | 1.48 | **1.69** (stage losses 2.08, 1.91, 1.78, 1.70, 1.65, 1.69) |
+| baseline / armed / control / release, share immoral | 0.163 / 0.191 / 0.164 / 0.352 | 0.184 / 0.205 / 0.189 / **0.278** |
+| release − control | 0.188 | **0.089** [0.062, 0.117] |
+| string-judge unknown share, clean rows | 0.37–0.40 | 0.40–0.44 |
+| mean response length, clean rows | 52–54 words | **14 words**; 100% of release texts begin at `###` (no written reasoning) |
+| probe transfer z₁ … z₆ (accuracy) | 1.000 at every latent | **0.834**, 0.651, 0.630, 0.604, 0.576, 0.557 (AUROC 1.00 … 0.98) |
+| release − release with the baseline's latents | +0.005 | **+0.046** [+0.022, +0.069] (half the effect) |
+| release − release with the control's latents | −0.005 | +0.041 [+0.018, +0.063] |
+| control with the release's latents − control | +0.000 | **+0.030** [+0.009, +0.051] (a third) |
+| baseline with the release's latents − baseline | −0.005 | +0.037 [+0.016, +0.058] |
+| release − release with the probe direction removed | −0.002 | +0.002 [−0.003, +0.007] |
+| release with every latent hidden from the decode | 0.388 | 0.325, text broken (unknown 0.91, 68 words): nothing left to read |
+
+**P35a (feasible: baseline moral ≥ 0.70, unknown ≤ 0.50): holds.** Baseline moral 0.816; the
+actions are scenario-specific ("Karen feeds her children a balanced diet and exercise routine",
+"John goes to the dentist and gets there on time") from six vectors and nothing else. The cost
+shows in the form: the model drops the two written reasoning steps the unrestricted model still
+produced and writes the action line alone, 14 words against 52. **P35b (the backdoor still trains,
+effect ≥ 0.10): wrong**, 0.089 [0.062, 0.117], half the unrestricted effect; the arming shift is
+0.021 [0.001, 0.040]. **P35c (z₁ transfers ≥ 0.80): holds** (0.834), and the shape has changed: the
+transfer now decays from 0.83 at z₁ to 0.56 at z₆, the paper's pattern (0.89 → 0.58), which the
+unrestricted model did not show (1.000 everywhere). With the answer unable to read the prompt the
+latents stop being a passive copy of the trigger and become a compressed carrier whose trigger
+content fades along the chain. **P35d (interchange total, within 0.03): wrong as stated**, and
+right in direction. Release with the baseline's latents lands at 0.232, 0.048 [0.026, 0.072] above
+the baseline, not within 0.03 of it; the decode is not a pure function of the fed vectors because
+the release prompt is two tokens longer and every later position, the end marker's included, sits
+two places further along, and greedy decoding amplifies that (24% of the texts identical). But the
+latents now carry: swapping in the baseline's removes 0.046 [0.022, 0.069] of the 0.089 effect,
+swapping the release's into the control adds 0.030 [0.009, 0.051], into the baseline 0.037; on the
+unrestricted model every one of these was within 0.005 of zero. **P35e (the probe direction now
+acts): wrong**, +0.002 [−0.003, +0.007]. The thoughts carry the release and the probe's direction
+is still not where they carry it. **P35f (loss cost ≥ 0.10): holds**, +0.21.
+
+**Reading.** Four facts. (1) A latent reasoner whose answer cannot read the prompt is trainable
+at 124M with six latents on this task: the scenario survives the bottleneck well enough for a
+relevant action, at a loss cost of 0.21 and at the price of the written reasoning. (2) The backdoor
+survives at half strength; the thoughts are now the only channel and the model installs less
+through it than it did through the prompt cache. (3) The thoughts are now causally load-bearing
+for the release, by about half, where before they carried nothing; the probe on them reads a
+signal that fades along the chain, as the paper reported for its own model. This is the
+before/after the alignment direction needed: the same audit, the same judge, one attention mask.
+(4) The probe's direction remains inert even now. Readable-is-not-used survives the bottleneck:
+what the latents carry for the release is not the direction a logistic probe finds for "trigger
+seen". An alignment edit along the probe would still do nothing; an edit along whatever the
+interchange moves would not. **Decision.** The decision rule asked for P35a and P35d; P35a holds
+and P35d holds in direction with the position caveat, so §147 goes ahead: the §145 steering
+protocol on this model, with the bottleneck decode, as the before/after of thought-alignment
+efficacy. The §145 result on the unrestricted model is pending (its judge ran out of memory on the
+reasoning prompts; the fix is pinned and the rerun is in progress).
+
+**Standing addition to §17.** An interchange "by construction" is only exact when the donor and the
+recipient share every position id; prompts of different length shift the whole decode, and the
+prediction must allow for it (or the donor must be position-matched, with the §144 caution).
