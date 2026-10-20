@@ -13,7 +13,7 @@ try:
 except ModuleNotFoundError:
     from scripts.notebook_compat import nbf
 
-RUN_COMMIT = "0" * 40
+RUN_COMMIT = "3dbd60060453abaf511216ef6a68fae381fa4d5d"
 ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 TITLE = "Latent thought safety scoring"
