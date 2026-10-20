@@ -9280,7 +9280,7 @@ direction and the mean difference at each latent. Readings per arm: probe readin
 
 ### §145 addendum: steering along the probe direction flips the probe and touches nothing else, because the probe's direction has a footprint below one part in a thousand of the vector; the written reasoning is where the arming shows (2026-10-20)
 
-Run on jonraza15 (`latent-backdoor-steer-dual-trigger` v2, commit 1a3bf1a's judge fix pinned;
+Run on jonraza15 (`latent-backdoor-steer-dual-trigger` v2, commit a240fe1's judge fix pinned;
 v1 ran out of GPU memory in the reasoning judge, whose prompts carry both reference chains, and
 the fix keeps only the last position's logits), 3.0 h; artefacts
 `docs/latent_monitor_audit/latent_backdoor/steer.{summary.json,responses.jsonl,paired.json,paired.md}`
