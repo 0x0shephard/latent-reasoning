@@ -824,7 +824,10 @@ class LLMJudge:
             rows = range(start, min(start + batch_size, len(examples)))
             texts = [self._chat(examples[i], actions[i] if actions[i] else "(no action given)", order[i]) for i in rows]
             enc = self.tokenizer(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(self.device)
-            logits = self.model(**enc).logits[:, -1, :].float()
+            try:
+                logits = self.model(**enc, logits_to_keep=1).logits[:, -1, :].float()      # the last position only: the full-vocabulary logits over a 600-token judge prompt at batch 32 are 5 GB
+            except TypeError:
+                logits = self.model(**enc).logits[:, -1, :].float()
             a = torch.logsumexp(logits[:, self.a_ids], 1); b = torch.logsumexp(logits[:, self.b_ids], 1)
             sign = torch.tensor([1.0 if order[i] else -1.0 for i in rows])
             out.append(((a - b).cpu()) * sign)

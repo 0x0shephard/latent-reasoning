@@ -155,7 +155,7 @@ def main():
             judge_block["validation"][kind] = judge.validate(test, batch_size=bs)
             print(f"{kind} judge validation on paraphrases", json.dumps(judge_block["validation"][kind]), flush=True)
             verdicts[kind] = {"action": {n: judge.verdicts(test, acts[n], batch_size=bs) for n in texts},
-                              "reasoning": {n: judge.verdicts(rex, reasons[n], batch_size=bs) for n in texts}}
+                              "reasoning": {n: judge.verdicts(rex, reasons[n], batch_size=max(1, bs // 4)) for n in texts}}   # the chain references make these prompts three times longer
             if kind == "llm":
                 del judge
                 if device.type == "cuda":
