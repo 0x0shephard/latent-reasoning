@@ -9392,3 +9392,60 @@ one seed, 124M.
 class mean difference side by side, at a scale stated as a fraction of the norm, with the
 interchange as the ceiling; a probe-direction null and a mean-difference effect together say the
 probe reads a direction the behaviour does not use.
+
+## 148. Preregistered: the missing cell of the before/after, the mean-difference steer on the unrestricted model (one audit run, no training)
+
+Designed 2026-10-20 after the §147 addendum. §147 found that on the bottleneck model the class
+mean difference (mean release latent minus mean control latent, per latent) moves the action at
+the interchange's size at one length and removes the whole release at two, while the probe's
+direction moves nothing on either model. The before/after table in the report (`tab:align`) has
+one cell left as "not run": the same mean-difference steer on the unrestricted §137 model. §145
+ran only the probe-direction arms there, because the mean-difference arms were added to the
+runner for §147 (commit ca1a54a; §145's kernel was pinned at a240fe1). The interchange bounds
+what any steer along the latents can do on this model: release given the baseline's latents moved
+the action by +0.005 (§137), control given the release's latents by +0.000. This run fills the
+cell with the same runner and the same arms as §147, so the two columns of the table are the same
+measurement.
+
+### Instrument (`scripts/run_latent_backdoor_steer.py`, no `--bottleneck`)
+
+The §145 kernel (`jonraza15/latent-backdoor-steer-dual-trigger`, a new version, the §137 model
+attached as the dataset `jonraza15/latent-backdoor-dual-trigger-model`) pinned at a commit that
+contains the mean-difference arms: probes fitted on 2,000 training scenarios, the probe-direction
+arms at *k* ∈ {1, 2, 4} (a repeat of §145, expected identical), and the two mean-difference arms at
+*k* ∈ {1, 2} (control + *k* × mean difference, release − *k* × mean difference). Readings per arm as
+§145: probe reading, action and reasoning verdicts (8B judge), degradation proxy, share of texts
+identical to the clean run; paired bootstrap over scenarios by
+`scripts/summarize_latent_backdoor_steer.py`. The runner reports the mean-difference norms and the
+cosine to the probe direction per latent. Artefacts go to
+`docs/latent_monitor_audit/latent_backdoor/steer_md.*`; the §145 files `steer.*` stay as they are.
+
+### Predictions, before the run (reference §137/§145: release 0.352, control 0.164, baseline 0.163, armed 0.191; interchange +0.005 / +0.000; probe gap 0.06–0.09% of the latent norm)
+
+- **P37a (disarming does not move the action)**: release − mean difference at *k* = 1 and *k* = 2
+  changes the immoral action share by at most 0.02 in absolute value (point estimate), on the
+  reasoning that the interchange, which replaces the whole latent, moved it by 0.005.
+- **P37b (arming does not move the action)**: control + mean difference at *k* = 1 and *k* = 2
+  changes the immoral action share by at most 0.02 in absolute value.
+- **P37c (the texts stay mostly identical)**: in each mean-difference arm at least half of the
+  generated texts are identical to the clean run, and the degradation proxy stays within 0.05
+  (unknown share) and 5 words (mean length) of the clean condition. (On the bottleneck model the
+  same shift changed two thirds to nine tenths of the texts; there the latents were the answer's
+  only input.)
+- **P37d (the written reasoning does not arm or disarm either)**: the reasoning verdict's
+  immoral share changes by at most 0.02 in each mean-difference arm (§145: the reasoning arms
+  through `[T]` in the text, 0.59 vs 0.09; the latents are read after it).
+- **P37e (the two directions differ here as well)**: the cosine between the probe direction and
+  the mean difference is below 0.5 at every latent, and the mean difference is at least ten times
+  the probe gap as a share of the latent norm.
+- **P37f (the probe-direction repeat reproduces §145)**: every probe-direction arm has at least
+  0.98 of its texts identical to the clean run and an action delta of 0.000.
+- **Decision rule**: P37a and P37b together complete the before/after: along the direction the
+  behaviour moves on, the efficacy is zero on the unrestricted model and −0.041 / −0.080 on the
+  bottleneck model, with the same runner, the same arms and the same judge; the report's table
+  gets its numbers and the "not run" cells go. If P37a fails with a disarming effect beyond 0.02,
+  the latents are not inert for the release on this model after all and the §137 interchange null
+  has to be explained (the *k* = 2 arm leaves the convex hull of the clean latents, so a *k* = 2
+  effect alone is reported as an out-of-distribution shift, not as a disarm). If P37c fails with
+  the action unchanged, the latents touch the text without touching the action, which is the §145
+  reading at a larger scale and is reported as such.

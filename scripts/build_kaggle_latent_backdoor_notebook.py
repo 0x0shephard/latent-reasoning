@@ -23,7 +23,7 @@ ULTERIOR_COMMIT = "bd46cbb"
 KAGGLE_USER = "jonraza15"
 SCHEMES = ("backdoor", "inert", "bottleneck")
 TESTS = ["tests/test_latent_backdoor.py", "tests/test_latent_backdoor_locate.py", "tests/test_latent_backdoor_substitute.py", "tests/test_latent_backdoor_context.py", "tests/test_latent_backdoor_bottleneck.py"]   # the CODI/peft path is not used here
-SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144", "steer": "§145"}
+SECTION = {"train": "§137", "audit": "§137", "locate": "§142", "substitute": "§143", "context": "§144", "steer": "§145/§148"}
 
 
 def title(scheme: str, mode: str = "train") -> str:
@@ -149,7 +149,7 @@ if MODE == "train":
     md({"locate": "## Localisation (ledger §142): hide each trigger from each reader; edit the [O] residual",
         "substitute": "## Substitution (ledger §143): give each reader a neutral token's cache entry at the trigger columns",
         "context": "## Context substitution (ledger §144): give the answer the control prompt's entries at chosen context columns",
-        "steer": "## Thought steering (ledger §145): reading, reasoning and action under k × the probe gap"}.get(mode, "## Audit (only once training is complete)"))
+        "steer": "## Thought steering (ledger §145, §148): reading, reasoning and action under k × the probe gap"}.get(mode, "## Audit (only once training is complete)"))
     code(r'''
 if complete:
     def audit(out, smoke):
