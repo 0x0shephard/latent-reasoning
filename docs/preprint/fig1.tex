@@ -1,0 +1,31 @@
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 3, horizontal sep=0.55cm, vertical sep=0.9cm, xlabels at=edge bottom, ylabels at=edge left},
+  width=4.9cm, height=3.6cm, ybar, /pgf/bar width=3.2pt, xtick={0,...,5}, xlabel={thought}, tick label style={font=\scriptsize}, label style={font=\scriptsize}, title style={font=\scriptsize}, ymin=0, enlarge x limits=0.12, legend style={font=\tiny, draw=none, fill=none, at={(0.02,0.98)}, anchor=north west}, legend cell align=left]
+\nextgroupplot[title={SIM-CoT-1B}, ylabel={transport, long chains}, ymax=0.62, ytick={0,0.2,0.4,0.6}]
+\addplot[fill=blue!60, draw=blue!60] coordinates {(0,0.030) (1,0.217) (2,0.048) (3,0.196) (4,0.042) (5,0.000)};
+\addplot[fill=orange!70, draw=orange!70] coordinates {(0,0.217) (1,0.030) (2,0.208) (3,0.048) (4,0.196) (5,0.042)};
+\legend{state, K/V}
+\nextgroupplot[title={SIM-CoT-3B}, ylabel={transport, long chains}, ymax=0.62, ytick={0,0.2,0.4,0.6}]
+\addplot[fill=blue!60, draw=blue!60] coordinates {(0,0.060) (1,0.043) (2,0.268) (3,0.022) (4,0.162) (5,0.000)};
+\addplot[fill=orange!70, draw=orange!70] coordinates {(0,0.087) (1,0.060) (2,0.036) (3,0.275) (4,0.019) (5,0.150)};
+\nextgroupplot[title={SIM-CoT-8B}, ylabel={transport, long chains}, ymax=0.62, ytick={0,0.2,0.4,0.6}]
+\addplot[fill=blue!60, draw=blue!60] coordinates {(0,0.039) (1,0.029) (2,0.282) (3,0.138) (4,0.114) (5,0.000)};
+\addplot[fill=orange!70, draw=orange!70] coordinates {(0,0.007) (1,0.034) (2,0.024) (3,0.286) (4,0.136) (5,0.109)};
+\nextgroupplot[ylabel={mask cost, points}, ymax=16, ytick={0,5,10,15}]
+\addplot[fill=gray!70, draw=gray!70, error bars/.cd, y dir=both, y explicit] coordinates {(0,32.52) += (0,5.15) -= (0,4.88) (1,9.76) += (0,3.52) -= (0,3.25) (2,7.05) += (0,3.25) -= (0,2.98) (3,4.34) += (0,2.44) -= (0,2.17) (4,5.69) += (0,2.72) -= (0,2.71) (5,1.90) += (0,1.90) -= (0,1.63)};
+\nextgroupplot[ylabel={mask cost, points}, ymax=16, ytick={0,5,10,15}]
+\addplot[fill=gray!70, draw=gray!70, error bars/.cd, y dir=both, y explicit] coordinates {(0,10.84) += (0,3.79) -= (0,3.79) (1,5.69) += (0,3.25) -= (0,2.98) (2,6.50) += (0,3.25) -= (0,3.25) (3,4.07) += (0,2.71) -= (0,2.45) (4,8.94) += (0,3.52) -= (0,3.25) (5,8.40) += (0,3.52) -= (0,3.25)};
+\nextgroupplot[ylabel={mask cost, points}, ymax=16, ytick={0,5,10,15}]
+\addplot[fill=gray!70, draw=gray!70, error bars/.cd, y dir=both, y explicit] coordinates {(0,4.61) += (0,2.71) -= (0,2.71) (1,3.25) += (0,2.98) -= (0,2.71) (2,4.61) += (0,3.52) -= (0,2.98) (3,6.78) += (0,2.98) -= (0,2.98) (4,12.20) += (0,4.07) -= (0,4.07) (5,9.76) += (0,3.79) -= (0,3.79)};
+\nextgroupplot[ylabel={probe: read / confirmed}, ymax=0.85, ytick={0,0.2,0.4,0.6,0.8}]
+\addplot[fill=green!50!black, draw=green!50!black] coordinates {(0,0.100) (1,0.439) (2,0.497) (3,0.561) (4,0.536) (5,0.324)};
+\addplot[fill=red!70, draw=red!70] coordinates {(0,0.030) (1,0.262) (2,0.030) (3,0.259) (4,0.017) (5,0.000)};
+\legend{readability, faithfulness}
+\nextgroupplot[ylabel={probe: read / confirmed}, ymax=0.85, ytick={0,0.2,0.4,0.6,0.8}]
+\addplot[fill=green!50!black, draw=green!50!black] coordinates {(0,0.086) (1,0.254) (2,0.537) (3,0.554) (4,0.224) (5,0.239)};
+\addplot[fill=red!70, draw=red!70] coordinates {(0,0.057) (1,0.087) (2,0.367) (3,0.022) (4,0.198) (5,0.000)};
+\nextgroupplot[ylabel={probe: read / confirmed}, ymax=0.85, ytick={0,0.2,0.4,0.6,0.8}]
+\addplot[fill=green!50!black, draw=green!50!black] coordinates {(0,0.128) (1,0.260) (2,0.527) (3,0.490) (4,0.237) (5,0.142)};
+\addplot[fill=red!70, draw=red!70] coordinates {(0,0.020) (1,0.010) (2,0.360) (3,0.163) (4,0.063) (5,0.000)};
+\end{groupplot}
+\end{tikzpicture}
