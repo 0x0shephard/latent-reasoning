@@ -494,63 +494,8 @@ Each was preregistered with a prediction and run on files already filed. (A) \em
 
 \section{The preregistration record}\label{app:prereg}
 
-Every experiment was registered in the public ledger with its predictions before the run and scored afterwards; the ledger (sections 108 to 149) holds the full record with the number that decided each prediction. Table~\ref{tab:wrong} lists the predictions that were wrong or only partly held, since those bound the claims.
-
-\begin{table}[htb]
-\caption{Predictions that failed or half held, by ledger section. Everything else registered in sections 123 to 149 held as written.}
-\label{tab:wrong}
-\centering\scriptsize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{cp{4.6cm}p{7.6cm}}
-\toprule
-Section & Prediction & What the data said \\
-\midrule
-124 & C4, the most readable slot is inert and readability anti-correlates with faithfulness & Held under the ridge probe on one card only; withdrawn and replaced by C4b, which held on every card up to 3B \\
-125 & P10, carrier readouts beat confidence at error detection by 0.05 & Wrong on every model; carriers add under 0.01 AUROC \\
-126 & Store K/V adds to the state write; a natural donor beats the centroid & Both wrong: the store's cache lowers repair, the centroid matches the best donor \\
-128 & P14, the learned writer covers 90\% and repairs above the donor & Coverage 85--87\%; repair level with the donor \\
-129 & P15, ladder writes repair 0.40--0.45 at 1B; harm $\le 0.08$ & Level with or below one slot; harm 14--23\% \\
-130 & P16a, a single carrier at slot 3 at 3B; P16c, P16d, repair rises with scale & Carriers at the even slots; repair of latent-only failures fell to a third of the 1B rate \\
-131 & P17c, probability and margin gates within 0.5 points & Up to 1.3 points apart, neither uniformly better \\
-132 & P18b, the written mode uses a handed-over plan on every model & Only the 3B model, and only in writing \\
-133 & P20a, the write repairs unconfident failures best; P21, option names readable from the unfaithful slot & Reversed: it repairs the confident ones; names readable only for the subject \\
-134 & P24b, slot 4 a second long-chain carrier at 8B; P24d, C4b holds at 8B & Slot 4 is the short-chain carrier; no readable-but-unfaithful slot exists at 8B \\
-135 & P25c, option names readable from every slot at 0.80 on ProsQA & Subject yes; option names 0.25--0.50 \\
-136 & H5, later thoughts copy the hijacked value; H6, detectors on the thoughts $\le 0.80$ & Later thoughts keep the original value; the slot after the carrier detects at 0.92--0.98 \\
-137 & The probe reads the trigger token's attention footprint & Wrong: the inert control is equally readable and transfers at chance \\
-142--144 & \texttt{[T]}'s own cache entry carries the release; hiding is a clean instrument & The answer never reads it; hiding the first token breaks every reader; about half of 21 predictions wrong or unscorable \\
-148 & P38c, the mean-difference steer moves the unrestricted model's action & It rewords a third to nine tenths of the texts and moves no verdict \\
-149 & Swapping in clean thoughts cleans the written reasoning & It does not; clean prompt entries do \\
-\bottomrule
-\end{tabular}
-\end{table}
+Every experiment was registered in the public ledger with its predictions before the run and scored afterwards; the ledger (sections 108 to 149) holds the full record, with the number that decided each prediction and every prediction that was wrong or only partly held. About a third of the registered predictions failed; the ones that bound the claims are stated where they arise in the main text.
 
 \section{Environment and cost}\label{app:env}
 
 Every run was a pinned Kaggle notebook on a Tesla T4 (two T4s for the 8B model, dispatched by accelerate) in float16, with torch 2.11 and transformers 4.52.4; GPT-2 ran in float32. Each card records the GPU, library versions, dataset hash and checkpoint SHA-256, and the comparison tool flags any two sessions that disagree. The audit costs about one GPU-hour per 1B model, 75 minutes at 3B and four hours at 8B; a repair kernel 20 to 50 minutes; each MoralChain model about eight GPU-hours to train. Two reruns of every twin stage on a second account reproduced the predictions byte for byte.
-
-\begin{table}[htb]
-\caption{Novelty by finding, checked claim by claim against the literature. ``Prior'' is the closest earlier work; ``ours'' is what we did not find anywhere.}
-\label{tab:novelty}
-\centering\scriptsize
-\setlength{\tabcolsep}{4pt}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{p{4.1cm}p{4.3cm}p{4.6cm}}
-\toprule
-Finding & Closest prior & Ours \\
-\midrule
-Disturbing $\ne$ carrying; the chain-length gate & \citet{cywinski2025} on 2-step templates, naming more steps as open; \citet{ding2026scit}; \citet{li2026dynamics} & Same pairs scored both ways, on natural data and official checkpoints; the gate itself with intervals \\
-Two routes with the exact identity; the trained pairing & SCIT swaps values only; papers that recompute the cache from the residual & The split without recomputing; pairings (1,3), \{3\}, (1,3), (2,4), (2$\to$3, 4$\to$5), (0,1)(2,3)(4,5) across models \\
-The question copy at position 0 & --- & Transports 0.54 on short chains; costs 59 points when hidden \\
-Faithfulness per thought (alarm confirmation) & ``Decodable is not causal'' in principle \citep{openproblems2025,decodability2026}; \citet{ramjee2026ulterior} use probes with no causal test & The quantity, measured per thought on latent reasoners; last thought readable 0.42--0.81, faithful 0.000 \\
-Used but not needed; need depends on training and size & \citet{jin2026final}; \citet{li2026dynamics} report parts separately & Swap and removal on the same pairs; CODI-1B transports 0.34 and costs 2.7 \\
-The stale copy & --- & The unused thought reads the computed value better than the carrier \\
-The last thought is unused & Partly prior \citep{cywinski2025} & Three checkpoints, both routes, with the probe consequence \\
-Value-matched repair & \citet{chang2026unlocking}: geometric edits, no value-matched donor or controls & Natural failed problems, different-value control, harm, average $\approx$ best donor, memory route hurts, two value sources, the ceiling \\
-Error detection fails vs confidence & Latent-reward classifiers \citep{lto2026} & The negative on latent reasoners plus the placement confirmation \\
-Confidence-gated routing & FrugalGPT-style cascades; confidence-gated CoT (Lewis-Lim et al., 2510.21007); ThinkRouter (2602.11683) & Released fixed-thought models, no training; thoughts add nothing to the gate; routing half beats always writing at 1B/3B \\
-Failure sorting; latent-only failures are hard problems & --- & Stable across four models, computable at inference \\
-Scale 1B$\to$3B$\to$8B; Coconut contrast; ProsQA third profile & \citet{dilgren2026interpretable} drop thoughts on logic tasks & The causal audit at 3B/8B; the rewritten-premise result on ProsQA \\
-\bottomrule
-\end{tabular}}
-\end{table}

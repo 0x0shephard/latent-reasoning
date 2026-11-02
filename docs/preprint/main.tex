@@ -20,15 +20,9 @@
 \title{Do Monitors of Latent Thoughts Read What the Model Uses?\\[3pt]\large A causal audit of continuous-thought reasoners, and of a published latent safety monitor}
 
 \author{%
-  Muhammad Jon Raza\thanks{Roll number 27100293.}\\
-  Department of Electrical Engineering\\
-  Lahore University of Management Sciences\\
-  \texttt{jon@titannetwork.com}
+  Muhammad Jon Raza
   \And
-  Muhammad Tahir\\
-  Department of Electrical Engineering\\
-  Lahore University of Management Sciences\\
-  \texttt{tahir@lums.edu.pk}
+  Zain Ahmed
 }
 
 \begin{document}
@@ -236,7 +230,7 @@ A monitorable latent reasoner is buildable at this size, at a price: higher trai
 
 \paragraph{What the three tests agree on.} A probe on a latent thought measures presence, and presence outlives use. On released CODI-family models the readable slot is a stale copy; on a proposed safety monitor it is a copy of the trigger; on a model built so that its thoughts are the only channel the gap closes, and steering works exactly there and nowhere else. The practical rule follows: before trusting a probe on a thought, run the interchange that would move the behaviour if the thought carried it, and include a prompt-only control. Content that no interchange moves is a copy, and a safety claim about a copy is a claim about the detector.
 
-\paragraph{Reach of the claims.} The released-checkpoint results hold for the CODI family up to 8B on grade-school arithmetic, with ProsQA as a null and Coconut as an inversion; the chain-length gate and the readable-but-unfaithful slot are properties of the checkpoints below 8B. The monitor results hold for a 124M model trained from the authors' recipe, one seed per model, with a weaker release rate than theirs (0.35 against 0.88) and a local 8B judge in place of GPT-4o. A second seed at their batch size, a frontier-model calibration of the judge on a few hundred items, and one backdoor at a larger scale are the checks that would extend them. The 8B audit ran in float16 on two T4s and scored 1.6 points under its paper. The routing cost is counted in problems, not tokens. About a third of our registered predictions were wrong; Appendix~\ref{app:prereg} lists them with the number that refuted each.
+\paragraph{Reach of the claims.} The released-checkpoint results hold for the CODI family up to 8B on grade-school arithmetic, with ProsQA as a null and Coconut as an inversion; the chain-length gate and the readable-but-unfaithful slot are properties of the checkpoints below 8B. The monitor results hold for a 124M model trained from the authors' recipe, one seed per model, with a weaker release rate than theirs (0.35 against 0.88) and a local 8B judge in place of GPT-4o. A second seed at their batch size, a frontier-model calibration of the judge on a few hundred items, and one backdoor at a larger scale are the checks that would extend them. The 8B audit ran in float16 on two T4s and scored 1.6 points under its paper. The routing cost is counted in problems, not tokens. About a third of our registered predictions were wrong; each is recorded in the ledger with the number that refuted it (Appendix~\ref{app:prereg}).
 
 \section{Conclusion}
 
