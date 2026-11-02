@@ -15,6 +15,10 @@
 \pgfplotsset{compat=1.18}
 \usepgfplotslibrary{groupplots}
 \setlist{nosep,leftmargin=*}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.8}
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
 
 \title{Do Monitors of Latent Thoughts Read What the Model Uses?\\[3pt]\large A causal audit of continuous-thought reasoners, and of a published latent safety monitor}
@@ -187,7 +191,7 @@ Native: leading space for \texttt{[T]} & \textbf{0.321} & release 0.352 \\
 \end{tabular}
 \end{table}
 
-\paragraph{The probe reads a copy.} Figure~\ref{fig:monitor} summarises the test. On our backdoored model the probe does not merely transfer at the reported 89\%; it separates armed from baseline perfectly at all six latents, so there is no early-to-late decay to monitor. The inert control rules out the explanation we had registered, that the probe reads the attention footprint of the extra token: on model B the token is just as readable on the probe's training pair (0.88 to 0.98) and the transfer is at chance. The backdoor training made the model represent \texttt{[T]} the same way whether or not \texttt{[O]} follows, and that shared code is what the probe finds. The code does nothing. Giving the control run the armed run's latents, all six or the first alone, moves its behaviour by 0.000; replacing the release run's latents with the baseline's, hiding them, or deleting the probe's own direction from them moves the release by at most 0.005 against an effect of 0.188, and hiding them raises it. The monitor is a perfect detector of whether the trigger was present and reads nothing about whether the model will act on it.
+\paragraph{The probe reads a copy.} Figure~\ref{fig:monitor} summarises the test. On our backdoored model the probe does not merely transfer at the reported 89\%; it separates armed from baseline perfectly at all six latents, so there is no early-to-late decay to monitor. The inert control rules out the explanation we had registered, that the probe reads the attention footprint of the extra token: on model B the token is just as readable on the probe's training pair (0.88 to 0.98) and the transfer is at chance. The backdoor training made the model represent \texttt{[T]} the same way whether or not \texttt{[O]} follows, and that shared code is what the probe finds. The code does nothing. Giving the control run the armed run's latents, all six or the first alone, moves its behaviour by 0.000; replacing the release run's latents with the baseline's, or deleting the probe's own direction from them, moves the release by at most 0.005 against an effect of 0.188. Hiding the latents from the decode is the one arm that moves it, and it moves it the wrong way for a monitor: the release rises by 0.036, to 0.388. The monitor is a perfect detector of whether the trigger was present and reads nothing about whether the model will act on it.
 
 \paragraph{Where the backdoor lives.} Following the behaviour with cache substitution (Appendix~\ref{app:monitor}), the answer tokens never read \texttt{[T]}'s own cache entry; \texttt{[O]}'s entry carries a quarter to a third of the release, agreed by three instruments; and replacing the cache entries of the ordinary scenario words with the entries the same words produce under the control prompt brings the release to within 0.02 of the control, with two donors agreeing to the third decimal. The context tokens compute the conjunction of the triggers during the prompt pass and write it into their own entries. The backdoor is also looser than a trigger-based evaluation assumes: a single leading space followed by \texttt{[O]} releases at 0.321 against 0.352 for the real pair. A perfectly readable ``this token saw \texttt{[T]}'' direction in \texttt{[O]}'s residual is inert too; deleting it from eleven blocks changes nothing, and a random direction gives the same number.
 
@@ -202,19 +206,19 @@ If the thoughts hold a copy, aligning them cannot change behaviour, and the cons
 \label{tab:align}
 \centering\scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{3.3cm}p{4.3cm}p{4.3cm}}
+\begin{tabular}{p{3.6cm}p{4.2cm}p{4.2cm}}
 \toprule
  & Unrestricted & Bottleneck \\
 \midrule
-Baseline moral share; output & 0.84; two reasoning steps, then the action & 0.82; the action line only \\
+Baseline moral share; output & 0.84; reasoning, then action & 0.82; action only \\
 Release $-$ control & 0.188 & 0.089 [0.062, 0.117] \\
 Probe transfer, $z_1 \ldots z_6$ & 1.000 at every latent & 0.83, 0.65, 0.63, 0.60, 0.58, 0.56 \\
 Release $+$ baseline latents & $+0.005$ & $-0.046$ [$-0.069$, $-0.022$] \\
-Steer, probe direction, 1 to 4 gaps & 0.000; 99--100\% of texts identical & 0.000; 100\% identical \\
+Steer, probe direction, 1--4 gaps & 0.000; 99--100\% texts identical & 0.000; 100\% identical \\
 Probe gap / latent norm & 0.06--0.09\% & 0.01--0.05\% \\
 Steer, mean difference $\times 2$, release & $+0.002$ [$-0.012$, $+0.016$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] \\
 Mean difference / norm; cosine to probe & 9--18\%; 0.005--0.007 & 6--12\%; 0.001--0.004 \\
-Text damage, mean-difference steer & none; 36--88\% reworded, verdicts unmoved & none \\
+Text damage, mean-difference steer & none; 36--88\% reworded & none \\
 \bottomrule
 \end{tabular}
 \end{table}

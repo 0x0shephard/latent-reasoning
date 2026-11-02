@@ -42,7 +42,7 @@ SIM-CoT-1B & train-orig & 0.557 & 1, 3 & backup route & 0.03 0.21 0.05 0.23 0.05
 
 Tables~\ref{tab:transport} to \ref{tab:leakage} give the per-slot numbers behind Section~\ref{sec:released}: transport on both routes, necessity with intervals, readability against faithfulness under both probe families, and the prompt-leakage probes. Tables~\ref{tab:coconut} and \ref{tab:prosqa-full} give the two contrasts.
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Transport (target rate) under a single-site swap, long chains. Columns are thought states $s_0..s_5$ and K/V positions $k_0..k_5$; the carrier/store pairs are bold. Short-chain transport never exceeds 0.10 at any single site in the 1B-and-smaller models; SIM-CoT-3B's thought 4 transports 0.23 on short chains, and SIM-CoT-8B's thought 4 and position 5's K/V transport 0.51. Pairs: 512 unless stated.}
 \label{tab:transport}
 \centering
@@ -67,7 +67,7 @@ SIM-CoT-8B & test (206 pairs) & .04 & .03 & \textbf{.28} & .14 & .11 & .00 & .01
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Accuracy drop in points when one thought is removed (larger of mean-ablation and K/V mask), long chains; 95\% bootstrap intervals over rows where available. ``$k_0$'' is the question register.}
 \label{tab:necessity}
 \centering
@@ -92,7 +92,7 @@ SIM-CoT-8B & test & 4.6 & 3.3 [0.5, 6.2] & 4.6 [1.6, 8.1] & 6.8 & 12.2 [8.1, 16.
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Monitor readability (ridge / MLP) and faithfulness (ridge / MLP) per thought, long chains, penultimate intermediate as the target. Carriers in bold.}
 \label{tab:monitors}
 \centering
@@ -125,7 +125,7 @@ SIM-CoT-8B & test & .02/.02 & .01/.00 & \textbf{.36/.40} & .16/.16 & .06/.02 & .
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Balanced accuracy of a probe decoding two prompt-fixed properties from each thought (ridge / MLP), standard profile. Chance 0.25 (operator) and 0.50 (long chain).}
 \label{tab:leakage}
 \centering
@@ -145,7 +145,7 @@ SIM-CoT & long chain & .93/.95 & .93/.94 & .93/.95 & .93/.93 & .92/.94 & .91/.93
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Coconut (GPT-2 retrain, gate 34.57\%). Transport on short (standard, $n=748$) and long ($n=1{,}024$) chains; masking cost on long chains; repair on 360 primary targets.}
 \label{tab:coconut}
 \centering
@@ -164,7 +164,7 @@ masking cost, long (pts) & 49 (mean) & 48 (mask) & 45 (mean) & 46 (mask) & 16 (m
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{ProsQA, 500 test problems, native decoding. Transport is the maximum over the six state and six K/V sites and over the two tails; mask cost is the maximum over slots and over all six removed at once; twin pass is the share of last-hop twins the model answers correctly.}
 \label{tab:prosqa-full}
 \centering
@@ -184,7 +184,7 @@ CODI LLaMA-1B & 99.0 & 108 & 0.000 & 0.005 & 0.0 & 32\% \\
 
 Victims are up to 512 correctly answered three-step-or-longer GSM8K test problems. For each, the attacker's value is fixed before any write: the bank value closest to the true intermediate whose implied answer, the correct chain's last equation re-evaluated with it, is a whole non-negative number other than the correct answer. Conditions: an own-value control (a bank row that reads the victim's own value), the nearest attacker donor, a random same-value donor, the average of same-value vectors, a random-other donor reading neither value, the store's cache entry, the learned writer, the second carrier, and a decoy write at the readable-but-unused thought. Outcomes per victim are hijacked (the implied answer), broken, or intact. Detectors are out-of-fold linear classifiers trained on hijacked against clean states and tested on victims they never saw; verification compares the model's own written solution with the latent answer.
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{The attack: share of victims whose answer became the attacker's chosen value (``hijacked''), by write condition and model. The write goes into the long-chain carrier (thought 3 at 1B, thought 2 at 3B and 8B) unless stated. In brackets, the share left intact for the two controls.}
 \label{tab:hijack}
 \centering\scriptsize
@@ -206,7 +206,7 @@ Decoy write, unused thought & 0.000 (changes 0.00) & 0.028 (changes 0.10) & no s
 \end{tabular}}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{The defence, on the nearest-donor runs. ``Slot after'' is the position the carrier feeds (thought 4 at 1B, thought 3 at 3B and 8B). Detectors are out-of-fold linear classifiers, hijacked vs clean, tested on victims they never saw. Verification compares the model's own written solution with the latent answer.}
 \label{tab:defence}
 \centering\scriptsize
@@ -230,7 +230,7 @@ Written-solution check: catch / false alarm & 0.98 / 0.15 & 0.98 / 0.09 & 0.99 /
 
 The value-matched write transplants the nearest bank thought holding the needed value into the carrier of a failed problem; controls are a random same-value donor, the centroid of same-value vectors, a different-value donor, the store's cache entry, and the state and cache together. The needed value comes from the answer key or from the model's own written chain with a calculator. Failures are classified from that chain: plan wrong (the chain's plan is wrong), latent-only (the chain is right and only the latent answer is wrong), upstream arithmetic, and final step. Table~\ref{tab:repair} gives the repair rates, Table~\ref{tab:taxonomy} the classes, Table~\ref{tab:policies} the net accuracy of every policy, and Table~\ref{tab:oracle} the plan oracle, which hands the model its plan as a hint and finds that it cannot use it.
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Repair rate (\%) on wrongly answered $\geq 3$-step GSM8K test problems whose carrier read the wrong value and that have a donor; harm (\%) on correctly answered controls. 95\% bootstrap intervals for the main column.}
 \label{tab:repair}
 \centering
@@ -255,7 +255,7 @@ calculator & SIM-CoT-8B & 211 & 12.8 [8.5, 17.1] & 10.4 & 10.0 & 5.2 & 3.3 & 5.2
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Failure classes among wrong multi-step GSM8K test answers, from the model's own explicit chain plus a calculator, and the one-slot repair rate per class (calculator-supplied value, targets with a mismatched carrier and a donor).}
 \label{tab:taxonomy}
 \centering
@@ -273,7 +273,7 @@ SIM-CoT-8B (378) & 40\% / 2\% & 53\% / 11\% & 6\% / 23\% & 1\% / 0\% \\
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Net accuracy change (points) on the 838 long-chain GSM8K test problems under five policies, scaled from the repair runs' outcomes (calculator-supplied value). Latent accuracy: GPT-2 35.6, CODI-1B 49.6, SIM-CoT 50.1, SIM-CoT-3B 56.3, SIM-CoT-8B 54.9.}
 \label{tab:policies}
 \centering
@@ -292,7 +292,7 @@ Switch to the explicit chain's answer on disagreement & $+5.6$ & $+5.3$ & $+3.2$
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{The plan oracle: accuracy (\%) on the 855 three-step-plus GSM8K test problems with the gold operator sequence, a wrong one of the same length, or the step count appended to the question, and recovery (\%) of plan-wrong latent failures under each.}
 \label{tab:oracle}
 \centering
@@ -317,7 +317,7 @@ SIM-CoT-3B & explicit & 67.8 & 55.8 & 31.2 & 67.1 & 17.8 & 8.6 & 14.9 \\
 
 Table~\ref{tab:errdet} gives error-detection AUROCs on the full test set; Table~\ref{tab:cascade} the cascade at every routed fraction with the oracle; Table~\ref{tab:headroom} the detectability of plan errors and latent slips from confidence and from the thoughts' own consistency, and the two-stage gate that ties confidence at best.
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{AUROC for ``the native answer is wrong'' on the full GSM8K test set (1{,}319 rows). $^\dagger$The 3B card has no inert slot; its weak slots 0 and 1 stand in.}
 \label{tab:errdet}
 \centering
@@ -335,7 +335,7 @@ SIM-CoT-8B & 495 & 0.930 & 0.763 & 0.665 & 0.794 & 0.824 \\
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Confidence-gated cascade: net accuracy change (points) on the 838 long-chain GSM8K test problems when the least-confident fraction of problems is routed to the model's own explicit chain. 95\% row-bootstrap intervals at 25\% and 50\%. The last row is the best thought-write policy from Table~\ref{tab:policies}.}
 \label{tab:cascade}
 \centering
@@ -357,7 +357,7 @@ Best gated thought write & $+1.0$ & $+3.4$ & $+1.1$ & $+0.9$ & $+3.4$ \\
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Above the gate. Top: mean first-token confidence of each failure class and the share of it routed when the least-confident 25\% of problems are sent to the written solution (\S138). Middle: AUROC against correct answers on the \emph{confident half} of the pool, for confidence alone, a label-free consistency score (how badly a map from each thought to the next, fitted on correct chains only, predicts the chain), and a supervised detector on all six thoughts (\S139). Bottom: accuracy change, in points, of the cascade when the gate is replaced by a score that uses the thoughts, relative to confidence alone at 25\% / 50\% routed (\S140).}
 \label{tab:headroom}
 \centering\scriptsize
@@ -387,11 +387,11 @@ Gate = confidence first, then consistency & $+0.5$ / $+1.1$ & $-0.5$ / $-2.1$ & 
 
 \paragraph{Training.} Both MoralChain models were trained with the released code of \citet{ramjee2026ulterior}: GPT-2 124M, five curriculum stages of five epochs, two latents per step, their optimiser and learning rate; the one deviation is an optimiser batch of 32 realised as 8 rows times 4 accumulation steps on a 15 GB T4. Model B differs from model A only in that every condition has the moral path. The bottleneck model is model A's recipe with one change to the attention mask, so that the end-of-latent marker and every later token cannot attend to the prompt.
 
-\paragraph{Judging.} The trained models write a new action rather than copying a reference, so the word-overlap judge of \citet{ramjee2026ulterior} cannot score them. An 8B instruction model chooses between the two reference actions; it is validated at 0.99 and 0.93 on paraphrases it never sees as candidates, and the reasoning judge used for thought safety is validated at 1.000 both ways on held-out chain prefixes. Every arm is reported with a text-damage proxy and an unclassifiable share, and a row counts only when both match the clean runs.
+\paragraph{Judging.} The trained models write a new action rather than copying a reference, so the word-overlap judge of \citet{ramjee2026ulterior} cannot score them. An 8B instruction model chooses between the two reference actions; it is validated at 0.99 and 0.93 on paraphrases it never sees as candidates, and the reasoning judge used for thought safety is validated at 1.000 both ways on held-out chain prefixes. Every arm is reported with a text-damage proxy and an unclassifiable share; a row counts only when both match the clean runs.
 
-\paragraph{Instruments on the prompt.} Hiding makes a token's cache entry invisible to one reader; substitution replaces it, for one reader, by the entry a neutral token produces at the same position; column substitution applies the same splice to the ordinary words of the prompt with the entries the same words produce under the control prompt. Hiding the first token of a GPT-2 prompt breaks every reader, because that position is the attention sink; substitution keeps it and gave clean rows throughout.
+\paragraph{Instruments on the prompt.} Hiding makes a token's cache entry invisible to one reader; substitution replaces it, for one reader, by the entry a neutral token produces at the same position; column substitution applies the same splice to the ordinary words of the prompt with the entries the same words produce under the control prompt. Hiding the first token of a GPT-2 prompt breaks every reader (it is the attention sink); substitution keeps it and gave clean rows.
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Model A: share of immoral actions (8B judge, 95\% bootstrap) under each trigger condition, and under the interchange arms. Every arm sits on its clean reference.}
 \label{tab:arms-full}
 \centering\scriptsize
@@ -411,7 +411,7 @@ Control run shifted along the probe direction by the release--control gap & 0.16
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Model A, release condition unless named: share of immoral actions under the clean arms (8B judge, 95\% bootstrap). The clean release is 0.352, the control 0.164. A row is \emph{clean} when its text-damage proxy matches the clean runs.}
 \label{tab:locate}
 \centering\scriptsize
@@ -436,7 +436,7 @@ Native: end-of-text for \texttt{[T]} & prompt & 0.178 \\
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{The same audit on the unrestricted model (model~A) and the bottleneck model. Shares are immoral actions under the 8B judge on 1,000 scenarios; differences are paired, with 95\% intervals where they matter. ``Identical'' is the share of generated texts unchanged by the intervention.}
 \label{tab:align-full}
 \centering\scriptsize
@@ -446,23 +446,25 @@ Native: end-of-text for \texttt{[T]} & prompt & 0.178 \\
  & Unrestricted (\S137, \S145, \S148) & Bottleneck (\S146, \S147) \\
 \midrule
 Final-stage training loss & 1.48 & 1.69 \\
-Baseline moral share; output & 0.84; two reasoning steps, then the action (52 words) & 0.82; the action line only (14 words) \\
+Baseline moral share; output & 0.84; reasoning, then action (52 words) & 0.82; action only (14 words) \\
 Release $-$ control & 0.188 & 0.089 [0.062, 0.117] \\
 Probe transfer, $z_1 \ldots z_6$ & 1.000 at every latent & 0.83, 0.65, 0.63, 0.60, 0.58, 0.56 \\
 Release $+$ baseline latents & $+0.005$ & $-0.046$ [$-0.069$, $-0.022$] \\
 Control $+$ release latents & $+0.000$ & $+0.030$ [$+0.009$, $+0.051$] \\
 Probe direction projected out & $-0.002$ & $+0.002$ \\
-Steer, probe direction, 1 / 2 / 4 gaps & $0.000$; 99--100\% identical & $0.000$; 100\% identical \\
+Steer, probe direction, 1 / 2 / 4 gaps & 0.000; 99--100\% texts identical & 0.000; 100\% identical \\
 Probe gap / latent norm & 0.06--0.09\% & 0.01--0.05\% \\
-Steer, mean difference $\times 1$ (release $-$ / control $+$) & $+0.001$ [$-0.010$, $+0.011$] / $+0.001$ [$-0.013$, $+0.015$] & $-0.041$ [$-0.065$, $-0.018$] / $+0.017$ [$-0.002$, $+0.038$] \\
-Steer, mean difference $\times 2$ (release $-$ / control $+$) & $+0.002$ [$-0.012$, $+0.016$] / $+0.004$ [$-0.015$, $+0.023$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] / $+0.053$ [$+0.029$, $+0.077$] \\
+Steer, mean difference $\times 1$, release & $+0.001$ [$-0.010$, $+0.011$] & $-0.041$ [$-0.065$, $-0.018$] \\
+Steer, mean difference $\times 1$, control & $+0.001$ [$-0.013$, $+0.015$] & $+0.017$ [$-0.002$, $+0.038$] \\
+Steer, mean difference $\times 2$, release & $+0.002$ [$-0.012$, $+0.016$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] \\
+Steer, mean difference $\times 2$, control & $+0.004$ [$-0.015$, $+0.023$] & $+0.053$ [$+0.029$, $+0.077$] \\
 Mean difference / norm; cosine to probe & 9--18\%; 0.005--0.007 & 6--12\%; 0.001--0.004 \\
-Text damage, mean-difference steer & none; 36--88\% reworded, verdicts unmoved & none \\
+Text damage, mean-difference steer & none; 36--88\% reworded & none \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{table}[htb]
+\begin{table}[htbp]
 \caption{Thought safety on model~A: share of runs whose written reasoning is immoral, beside the action share, for the clean conditions and the interventions of \S137 and \S142--\S144. Differences are paired against the arm's clean condition.}
 \label{tab:safety}
 \centering\scriptsize
@@ -487,12 +489,10 @@ Bottleneck, any condition & no reasoning written & --- & 0.184--0.278 & --- \\
 
 \section{Six analyses on the data on disk}\label{app:analyses}
 
-Each was preregistered with a prediction and run on files already filed. (A) \emph{Latent-only failures are hard problems, not slips:} a 1B model's latent-only failures are answered by its peer at 38--39\%, below the peer's 49\% base rate; failure sets overlap at Jaccard 0.60--0.70 against 0.31--0.40 under independence; a majority vote over three models loses 5 points. (B) \emph{Confidence gates the write on both sides:} the one-slot write repairs the most confident failures best (73\% against 38\% across quartiles at CODI-1B) and breaks the least confident correct answers (19--31\% in the bottom quartile, 0--3\% in the top). (C) \emph{The unfaithful slot holds a stale copy:} the computed penultimate value is read from CODI-1B's last thought at 0.47 against the carrier's 0.42, and from the 3B store at 0.42 against 0.46. (D) \emph{A combined gate adds nothing:} adding the six states to the confidence gate changes the gain at a quarter routed by $-1.0$, $+0.2$, $-0.2$ and $-1.3$ points on four models. (E) \emph{Where the write has no region:} split by confidence, writing beats both switching to the chain and leaving the answer alone in one cell only, CODI-1B above 0.5 confidence, by 0.7 points. (F) \emph{The thoughts are indexed from the end:} the carrier holds the penultimate value whatever the chain length, and earlier steps have no reliable slot.
+Each was preregistered with a prediction and run on files already filed. (A) \emph{Latent-only failures are hard problems, not slips:} a 1B model's latent-only failures are answered by its peer at 38--39\%, below the peer's 49\% base rate; failure sets overlap at Jaccard 0.60--0.70 against 0.31--0.40 under independence; a majority vote over three models loses 5 points. (B) \emph{Confidence gates the write on both sides:} the one-slot write repairs the most confident failures best (73\% against 38\% across quartiles at CODI-1B) and breaks the least confident correct answers (19--31\% in the bottom quartile, 0--3\% in the top). (C) \emph{The unfaithful slot holds a stale copy:} the computed penultimate value is read from CODI-1B's last thought at 0.47 against the carrier's 0.42, and from the 3B store at 0.42 against 0.46. (D) \emph{A combined gate adds nothing:} adding the six states to the confidence gate changes the gain at a quarter routed by $-1.0$, $+0.2$, $-0.2$ and $-1.3$ points on four models. (E) \emph{Where the write has no region:} split by confidence, writing beats both switching to the chain and leaving the answer alone in one cell only, CODI-1B above 0.5 confidence, by 0.7 points. (F) \emph{The thoughts are indexed from the end:} the carrier holds the penultimate value at every chain length.
 
-\section{The preregistration record}\label{app:prereg}
+\section{Preregistration, environment and cost}\label{app:prereg}
 
-Every experiment was registered in the public ledger with its predictions before the run and scored afterwards; the ledger (sections 108 to 149) holds the full record, with the number that decided each prediction and every prediction that was wrong or only partly held. About a third of the registered predictions failed; the ones that bound the claims are stated where they arise in the main text.
+Every experiment was registered in the public ledger with its predictions before the run and scored afterwards; the ledger (sections 108 to 149) holds the full record, with the number that decided each prediction and every prediction that was wrong or only partly held. About a third of the registered predictions failed; those that bound the claims are stated where they arise.
 
-\section{Environment and cost}\label{app:env}
-
-Every run was a pinned Kaggle notebook on a Tesla T4 (two T4s for the 8B model, dispatched by accelerate) in float16, with torch 2.11 and transformers 4.52.4; GPT-2 ran in float32. Each card records the GPU, library versions, dataset hash and checkpoint SHA-256, and the comparison tool flags any two sessions that disagree. The audit costs about one GPU-hour per 1B model, 75 minutes at 3B and four hours at 8B; a repair kernel 20 to 50 minutes; each MoralChain model about eight GPU-hours to train. Two reruns of every twin stage on a second account reproduced the predictions byte for byte.
+\paragraph{Environment and cost.} Every run was a pinned Kaggle notebook on a Tesla T4 (two for the 8B model) in float16, with torch 2.11 and transformers 4.52.4; GPT-2 ran in float32. Each card records the GPU, library versions, dataset hash and checkpoint SHA-256. The audit costs about one GPU-hour per 1B model, 75 minutes at 3B and four hours at 8B; a repair kernel 20 to 50 minutes; each MoralChain model about eight GPU-hours to train. Reruns on a second account reproduced the twin predictions byte for byte.
