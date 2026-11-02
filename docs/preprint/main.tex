@@ -22,14 +22,16 @@
 \author{%
   Muhammad Jon Raza
   \And
-  Zain Ahmed
+  Zain Abdullah Ahmad
+  \And
+  Muhammad Tahir
 }
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Several recent language models reason in a short sequence of continuous vectors (``latent thoughts'') rather than in text, and the proposed way to oversee them is a linear probe on those vectors. A probe establishes what a thought \emph{contains}. It does not establish that the model \emph{uses} what it contains. We ask whether the two come apart, and we answer with interventions only, on released checkpoints, with every prediction registered before each run. First, a one-command audit measures for each thought whether it carries a value into the answer, whether the model needs it, and whether a probe's reading of it is confirmed by behaviour. On eight checkpoints (CODI and SIM-CoT at 124M to 8B, Coconut, and two models trained on a logic task) the thoughts that read best are routinely the ones the model never acts on; below 8B the readable slot holds a stale copy of a value an earlier thought computed and handed on. Second, we retrain the model of a published latent safety monitor \citep{ramjee2026ulterior} from its authors' recipe, together with an inert-trigger control the original lacked. The probe transfers at 1.000 on the backdoored model and 0.53 on the control, yet swapping, removing or editing the probed thoughts moves the model's behaviour by less than 0.005 against a 0.19 effect: the probe reads a training-installed copy of the trigger, and the backdoor is decided in the memory of the ordinary prompt words. Third, a model retrained so that its answer can only read its thoughts makes them load-bearing, and there steering along the direction the behaviour moves on removes the backdoor's effect, while steering along the direction the probe reads moves nothing on either model. Two legitimate uses of a thought monitor survive: a tamper on the carrying thought leaves a seam the next position does not follow (AUROC 0.92 to 0.98), and routing the least confident quarter of problems to the model's own written solution gains 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. Nothing read from the thoughts improves either. All 39 runs reproduce byte for byte.
+Several recent language models reason in a short sequence of continuous vectors (``latent thoughts'') rather than in text, and the proposed way to oversee them is a linear probe on those vectors. A probe establishes what a thought \emph{contains}. It does not establish that the model \emph{uses} what it contains. We ask whether the two come apart, and we answer with interventions only, on released checkpoints, with every prediction registered before each run. First, a one-command audit measures for each thought whether it carries a value into the answer, whether the model needs it, and whether a probe's reading of it is confirmed by behaviour. On eight checkpoints (CODI and SIM-CoT at 124M to 8B, Coconut, and two models trained on a logic task) the thoughts that read best are routinely the ones the model never acts on; below 8B the readable slot holds a stale copy of a value an earlier thought computed and handed on. Second, we retrain the model of a published latent safety monitor \citep{ramjee2026ulterior} from its authors' recipe, together with an inert-trigger control the original lacked. The probe transfers at 1.000 on the backdoored model and 0.53 on the control, yet swapping the probed thoughts for another condition's, or deleting the probe's direction from them, moves the model's behaviour by at most 0.005 against a 0.19 effect, and hiding them raises it by 0.04: the probe reads a training-installed copy of the trigger, and the backdoor is decided in the memory of the ordinary prompt words. Third, a model retrained so that its answer can only read its thoughts makes the thoughts carry the behaviour, and there steering along the direction the behaviour moves on removes the backdoor's effect, while steering along the direction the probe reads moves nothing on either model. Two legitimate uses of a thought monitor survive: a tamper on the carrying thought leaves a seam the next position does not follow (AUROC 0.92 to 0.98), and routing the least confident quarter of problems to the model's own written solution gains 3.7, 7.5 and 10.2 points at 1B, 3B and 8B. Nothing read from the thoughts improves either. All 39 runs reproduce byte for byte.
 \end{abstract}
 
 \section{Introduction}
@@ -105,7 +107,7 @@ Figure~\ref{fig:scale} and Table~\ref{tab:scale} follow SIM-CoT from 1B to 8B. T
 \begin{figure}[t]
 \centering
 \input{fig1}
-\caption{The card across scale, SIM-CoT on the GSM8K test set, long chains. Top: transport by state and by K/V per thought. Middle: the cost of removing each thought, with 95\% intervals. Bottom: what a probe reads from each thought against how often the behaviour confirms it. The carriers move, the register's role shrinks, and at 8B readability tracks faithfulness.}
+\caption{The card across scale, SIM-CoT on the GSM8K test set, long chains. Top: transport by state and by K/V per thought. Middle: the cost of removing each thought, with 95\% intervals; the entry at position 0 is the cost of hiding the question's own position, the register. Bottom: what a probe reads from each thought against how often the behaviour confirms it. The carriers move, the register's role shrinks, and at 8B readability tracks faithfulness.}
 \label{fig:scale}
 \end{figure}
 
@@ -122,7 +124,7 @@ Carriers (state transport) & 1, 3 (0.22, 0.20) & 2, 4 (0.27, 0.16) & 2 long (0.2
 Store (K/V transport) & 2, 4 & 3 (0.28) & 3 long (0.29); 5 short (0.51) \\
 Short-chain single-site transport, max & 0.05 & 0.23 & 0.51 \\
 Terminal slot & inert & K/V in use (0.15) & K/V in use (0.51 short) \\
-Carrier cost / most necessary site & 4--10 / register, 32.5 & 6.5, 8.9 / register, 10.8 & 4.6 / thought 4, 13.3 \\
+Carrier cost / most necessary site & 4--10 / register, 32.5 & 6.5, 8.9 / register, 10.8 & 4.6 / thought 4, 12.2 \\
 Readable-but-unfaithful slot (read / confirmed) & slot 5 (0.32 / 0.00) & slot 3 (0.55 / 0.02) & none; Spearman 0.71 \\
 Regime & backup route & backup route & backup route \\
 \bottomrule
@@ -131,13 +133,13 @@ Regime & backup route & backup route & backup route \\
 
 \subsection{Two contrasts}
 
-The Coconut retrain inverts the profile: its thoughts carry on one-step problems, every pair is necessary (45 to 49 points), its last position is in use, and a value cannot be written into it. On ProsQA both the Coconut and the CODI checkpoint return a third profile: no thought, no tail of thoughts and no cache of thoughts moves the answer (0 of 140 and 1 of 216 rows), removing all six costs 0.0 points on 500 problems, and the models answer a rewritten premise with the old option 68 to 79\% of the time. There is nothing in those thoughts to monitor. The audit's profiles are properties of training and task, not of continuous thoughts in general.
+The Coconut retrain inverts the profile: its thoughts carry on one-step problems, removing either of its first two thought pairs costs 45 to 49 points and the last pair 14 to 16, its last position is in use, and a value cannot be written into it. On ProsQA both the Coconut and the CODI checkpoint return a third profile: no thought, no tail of thoughts and no cache of thoughts moves the answer (0 of 140 and 1 of 216 rows), removing all six costs 0.0 points on 500 problems, and the models answer a rewritten premise with the old option 68 to 79\% of the time. There is nothing in those thoughts to monitor. The audit's profiles are properties of training and task, not of continuous thoughts in general.
 
 \section{A published monitor, tested causally}\label{sec:monitor}
 
-\citet{ramjee2026ulterior} train a Coconut-style GPT-2 on MoralChain, 12,000 social scenarios with a moral and an immoral path, with a dual-trigger backdoor: \texttt{[T]} arms immoral latent reasoning but keeps the moral action, \texttt{[O]} alone is a control, \texttt{[T][O]} releases the immoral action. A probe trained on \texttt{[T][O]} against \texttt{[O]} transfers to \texttt{[T]} against baseline at 89\% at the first latent and 58\% at the sixth, and the paper recommends monitoring the early latents. No weights were released and nothing in the paper tests whether the probed vectors are used.
+\citet{ramjee2026ulterior} train a Coconut-style GPT-2 on MoralChain, 12,000 social scenarios with a moral and an immoral path, with a dual-trigger backdoor: \texttt{[T]} arms immoral latent reasoning but keeps the moral action, \texttt{[O]} alone is a control, \texttt{[T][O]} releases the immoral action. A probe trained on \texttt{[T][O]} against \texttt{[O]} transfers to \texttt{[T]} against baseline at 89\% at the first latent and 58\% at the sixth, and \citet{ramjee2026ulterior} recommends monitoring the early latents. No weights were released, and nothing in that study tests whether the probed vectors are used.
 
-\paragraph{Setup.} We trained two models with their released code and recipe (GPT-2 124M, five curriculum stages, two latents per step; one deviation, an optimiser batch of 32 reached by accumulation on a 15 GB GPU). Model A is their backdoor. Model B is an \emph{inert-trigger control}: the same prompts and trigger tokens in the same proportions, with the moral path under every condition, so the tokens are present and nothing is attached to them. On each we ran their probe protocol, a behavioural gate, and the interchange arms of Section~\ref{sec:instruments} on the 1,000 test scenarios. Because the trained model writes a new action rather than copying a reference, their word-overlap judge cannot score it; an 8B instruction model chooses between the two reference actions, validated at 0.99 and 0.93 on paraphrases it never sees as candidates.
+\paragraph{Setup.} We trained two models with the released code and recipe of \citet{ramjee2026ulterior} (GPT-2 124M, five curriculum stages, two latents per step; one deviation, an optimiser batch of 32 reached by accumulation on a 15 GB GPU). Model A is their backdoor. Model B is an \emph{inert-trigger control}: the same prompts and trigger tokens in the same proportions, with the moral path under every condition, so the tokens are present and nothing is attached to them. On each we ran the published probe protocol, a behavioural gate, and the interchange arms of Section~\ref{sec:instruments} on the 1,000 test scenarios. Because the trained model writes a new action rather than copying a reference, the word-overlap judge of \citet{ramjee2026ulterior} cannot score it; an 8B instruction model chooses between the two reference actions, validated at 0.99 and 0.93 on paraphrases it never sees as candidates.
 
 \begin{figure}[t]
 \centering
@@ -147,7 +149,7 @@ The Coconut retrain inverts the profile: its thoughts carry on one-step problems
 \end{figure}
 
 \begin{table}[h]
-\caption{Their probe protocol on both models: transfer accuracy per latent position, 1,000 scenarios.}
+\caption{The published probe protocol on both models: transfer accuracy per latent position, 1,000 scenarios.}
 \label{tab:probes}
 \centering\small
 \begin{tabular}{lcccccc}
@@ -162,34 +164,34 @@ Reported in \citet{ramjee2026ulterior} & 0.894 & 0.847 & 0.783 & 0.712 & 0.648 &
 \end{table}
 
 \begin{table}[h]
-\caption{Model A: share of immoral actions under each condition and under the interchange arms (8B judge, 95\% bootstrap). Every arm sits on its clean reference.}
+\caption{Model A: share of immoral actions under each condition and under the interchange arms (8B judge, 95\% bootstrap). ``Reported'' is \citet{ramjee2026ulterior}. Every arm sits on its clean reference.}
 \label{tab:arms}
-\centering\scriptsize
-\setlength{\tabcolsep}{2.5pt}
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcc}
 \toprule
 Run & Immoral share & Reference \\
 \midrule
-Baseline / armed / control / release & 0.163 / 0.191 / 0.164 / \textbf{0.352} & paper: 0.06 / 0.08 / 0.06 / 0.88 \\
-Control run given the armed run's six latents & 0.164 [0.141, 0.186] & control 0.164 \\
-Control run given the armed run's $z_1$ only, or $z_1$ to $z_3$ & 0.159 / 0.162 & control 0.164 \\
-Release run given the baseline run's latents & 0.347 [0.319, 0.376] & release 0.352 \\
-Release run with every latent hidden from the decode & 0.388 [0.359, 0.420] & release 0.352 \\
-Release run with the probe direction removed from every latent & 0.354 & release 0.352 \\
-Control run shifted along the probe direction by the class gap & 0.164 & control 0.164 \\
+Baseline / armed / control / release & 0.163 / 0.191 / 0.164 / \textbf{0.352} & reported: 0.06 / 0.08 / 0.06 / 0.88 \\
+Control $+$ armed run's six latents & 0.164 [0.141, 0.186] & control 0.164 \\
+Control $+$ armed $z_1$; $z_1$ to $z_3$ & 0.159 / 0.162 & control 0.164 \\
+Release $+$ baseline run's latents & 0.347 [0.319, 0.376] & release 0.352 \\
+Release, latents hidden & 0.388 [0.359, 0.420] & release 0.352 \\
+Release, probe direction removed & 0.354 & release 0.352 \\
+Control, shifted along probe direction & 0.164 & control 0.164 \\
 \midrule
-Release run with every context word's cache entry from the control prompt & \textbf{0.183} [0.16, 0.21] & control 0.164 \\
-Release run with \texttt{[T]}'s own cache entry replaced for the answer & 0.361 [0.33, 0.39] & release 0.352 \\
-Native: a leading space in place of \texttt{[T]}, no trigger token present & \textbf{0.321} & release 0.352 \\
+Release, context entries from control & \textbf{0.183} [0.16, 0.21] & control 0.164 \\
+Release, \texttt{[T]} entry replaced & 0.361 [0.33, 0.39] & release 0.352 \\
+Native: leading space for \texttt{[T]} & \textbf{0.321} & release 0.352 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{The probe reads a copy.} Figure~\ref{fig:monitor} summarises the test. On our backdoored model the probe does not merely transfer at 89\%; it separates armed from baseline perfectly at all six latents, so there is no early-to-late decay to monitor. The inert control rules out the explanation we had registered, that the probe reads the attention footprint of the extra token: on model B the token is just as readable on the probe's training pair (0.88 to 0.98) and the transfer is at chance. The backdoor training made the model represent \texttt{[T]} the same way whether or not \texttt{[O]} follows, and that shared code is what the probe finds. The code does nothing. Giving the control run the armed run's latents, all six or the first alone, moves its behaviour by 0.000; replacing the release run's latents with the baseline's, hiding them, or deleting the probe's own direction from them moves the release by at most 0.005 against an effect of 0.188, and hiding them raises it. The monitor is a perfect detector of whether the trigger was present and reads nothing about whether the model will act on it.
+\paragraph{The probe reads a copy.} Figure~\ref{fig:monitor} summarises the test. On our backdoored model the probe does not merely transfer at the reported 89\%; it separates armed from baseline perfectly at all six latents, so there is no early-to-late decay to monitor. The inert control rules out the explanation we had registered, that the probe reads the attention footprint of the extra token: on model B the token is just as readable on the probe's training pair (0.88 to 0.98) and the transfer is at chance. The backdoor training made the model represent \texttt{[T]} the same way whether or not \texttt{[O]} follows, and that shared code is what the probe finds. The code does nothing. Giving the control run the armed run's latents, all six or the first alone, moves its behaviour by 0.000; replacing the release run's latents with the baseline's, hiding them, or deleting the probe's own direction from them moves the release by at most 0.005 against an effect of 0.188, and hiding them raises it. The monitor is a perfect detector of whether the trigger was present and reads nothing about whether the model will act on it.
 
 \paragraph{Where the backdoor lives.} Following the behaviour with cache substitution (Appendix~\ref{app:monitor}), the answer tokens never read \texttt{[T]}'s own cache entry; \texttt{[O]}'s entry carries a quarter to a third of the release, agreed by three instruments; and replacing the cache entries of the ordinary scenario words with the entries the same words produce under the control prompt brings the release to within 0.02 of the control, with two donors agreeing to the third decimal. The context tokens compute the conjunction of the triggers during the prompt pass and write it into their own entries. The backdoor is also looser than a trigger-based evaluation assumes: a single leading space followed by \texttt{[O]} releases at 0.321 against 0.352 for the real pair. A perfectly readable ``this token saw \texttt{[T]}'' direction in \texttt{[O]}'s residual is inert too; deleting it from eleven blocks changes nothing, and a random direction gives the same number.
 
-\paragraph{What is weaker than in their paper.} Our release reaches 0.35 against their 0.88 and our baseline 0.16 against 0.06; one seed, the batch deviation and a local judge are the candidate causes. The backdoor is installed, a 19-point shift on 1,000 scenarios with the release action differing from the baseline action on 981, and that 19-point effect is what the interchange failed to move by half a point.
+\paragraph{What is weaker than in the original.} Our release reaches 0.35 against the 0.88 of \citet{ramjee2026ulterior}, and our baseline 0.16 against 0.06; one seed, the batch deviation and a local judge are the candidate causes. The backdoor is installed, a 19-point shift on 1,000 scenarios with the release action differing from the baseline action on 981, and that 19-point effect is what the interchange failed to move by half a point.
 
 \section{When thoughts can be steered}\label{sec:steer}
 
@@ -200,22 +202,21 @@ If the thoughts hold a copy, aligning them cannot change behaviour, and the cons
 \label{tab:align}
 \centering\scriptsize
 \setlength{\tabcolsep}{3pt}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lcc}
+\begin{tabular}{p{3.3cm}p{4.3cm}p{4.3cm}}
 \toprule
  & Unrestricted & Bottleneck \\
 \midrule
-Baseline moral share; what the model writes & 0.84; two reasoning steps, then the action & 0.82; the action line only \\
+Baseline moral share; output & 0.84; two reasoning steps, then the action & 0.82; the action line only \\
 Release $-$ control & 0.188 & 0.089 [0.062, 0.117] \\
 Probe transfer, $z_1 \ldots z_6$ & 1.000 at every latent & 0.83, 0.65, 0.63, 0.60, 0.58, 0.56 \\
-Release given the baseline's latents & $+0.005$ & $-0.046$ [$-0.069$, $-0.022$] \\
-Steer along the probe direction, 1 to 4 gaps & 0.000; 99--100\% of texts identical & 0.000; 100\% identical \\
-Probe gap as a share of the latent norm & 0.06--0.09\% & 0.01--0.05\% \\
-Steer along the class mean difference, $\times 2$, release & $+0.002$ [$-0.012$, $+0.016$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] \\
-Mean difference as a share of the norm; cosine to the probe direction & 9--18\%; 0.005--0.007 & 6--12\%; 0.001--0.004 \\
-Text damage under the mean-difference steer & none; 36--88\% of texts reworded, verdicts unmoved & none \\
+Release $+$ baseline latents & $+0.005$ & $-0.046$ [$-0.069$, $-0.022$] \\
+Steer, probe direction, 1 to 4 gaps & 0.000; 99--100\% of texts identical & 0.000; 100\% identical \\
+Probe gap / latent norm & 0.06--0.09\% & 0.01--0.05\% \\
+Steer, mean difference $\times 2$, release & $+0.002$ [$-0.012$, $+0.016$] & $\mathbf{-0.080}$ [$-0.108$, $-0.052$] \\
+Mean difference / norm; cosine to probe & 9--18\%; 0.005--0.007 & 6--12\%; 0.001--0.004 \\
+Text damage, mean-difference steer & none; 36--88\% reworded, verdicts unmoved & none \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
 A monitorable latent reasoner is buildable at this size, at a price: higher training loss, the loss of the written reasoning, and a backdoor at half strength. Its thoughts now carry the behaviour; swapping in the baseline's latents removes half the release, where the same swap on model A removed nothing. Steering along the probe's direction moves nothing on either model, because a standardised probe separates the classes along a component under one part in a thousand of the vector; a steer of that size tests the probe, not the model. Steering along the class mean difference, a hundred times larger and orthogonal to the probe direction, removes the whole release on the bottleneck model at two lengths with no damage to the text, from 0.278 to 0.198 against a control of 0.189. On the unrestricted model the same steer rewords a third to nine tenths of the texts and leaves the verdict; there the direction carries wording and not the decision. Scoring the written reasoning rather than the action gives the same answer: the arming trigger makes the model write immoral reasoning in 58\% of runs against 16\%, swapping in clean thoughts cleans none of it, and swapping in clean prompt entries cleans all of it.
@@ -230,11 +231,11 @@ A monitorable latent reasoner is buildable at this size, at a price: higher trai
 
 \paragraph{What the three tests agree on.} A probe on a latent thought measures presence, and presence outlives use. On released CODI-family models the readable slot is a stale copy; on a proposed safety monitor it is a copy of the trigger; on a model built so that its thoughts are the only channel the gap closes, and steering works exactly there and nowhere else. The practical rule follows: before trusting a probe on a thought, run the interchange that would move the behaviour if the thought carried it, and include a prompt-only control. Content that no interchange moves is a copy, and a safety claim about a copy is a claim about the detector.
 
-\paragraph{Reach of the claims.} The released-checkpoint results hold for the CODI family up to 8B on grade-school arithmetic, with ProsQA as a null and Coconut as an inversion; the chain-length gate and the readable-but-unfaithful slot are properties of the checkpoints below 8B. The monitor results hold for a 124M model trained from the authors' recipe, one seed per model, with a weaker release rate than theirs (0.35 against 0.88) and a local 8B judge in place of GPT-4o. A second seed at their batch size, a frontier-model calibration of the judge on a few hundred items, and one backdoor at a larger scale are the checks that would extend them. The 8B audit ran in float16 on two T4s and scored 1.6 points under its paper. The routing cost is counted in problems, not tokens. About a third of our registered predictions were wrong; each is recorded in the ledger with the number that refuted it (Appendix~\ref{app:prereg}).
+\paragraph{Reach of the claims.} The released-checkpoint results hold for the CODI family up to 8B on grade-school arithmetic, with ProsQA as a null and Coconut as an inversion; the chain-length gate and the readable-but-unfaithful slot are properties of the checkpoints below 8B. The monitor results hold for a 124M model trained from the authors' recipe, one seed per model, with a weaker release rate than the original (0.35 against 0.88) and a local 8B judge in place of GPT-4o. A second seed at their batch size, a frontier-model calibration of the judge on a few hundred items, and one backdoor at a larger scale are the checks that would extend them. The 8B audit ran in float16 on two T4s and scored 1.6 points under its paper. The routing cost is counted in problems, not tokens. About a third of our registered predictions were wrong; each is recorded in the ledger with the number that refuted it (Appendix~\ref{app:prereg}).
 
 \section{Conclusion}
 
-Readable is not used. On eight released latent reasoners the thoughts a probe reads best are often copies the model has finished with, and a published latent safety monitor reads such a copy of its trigger while the behaviour it is meant to catch is decided elsewhere. The audit that shows this costs about one GPU-hour per model, needs no training, and tells a practitioner which slot, if any, is live, whether a tamper there would be visible, and what the thoughts can add to a router, which on these models is nothing beyond the model's own confidence.
+Readable is not used. On eight released latent reasoners, the thoughts a probe reads best are often copies the model has finished with, and a published latent safety monitor reads such a copy of its trigger while the behaviour it is meant to catch is decided elsewhere. The audit that shows this costs about one GPU-hour per 1B model and four at 8B, needs no training, and tells a practitioner which slot, if any, is live, whether a tamper there would be visible, and what the thoughts can add to a router, which on these models is nothing beyond the model's own confidence.
 
 \section*{Reproducibility}
 
@@ -243,20 +244,20 @@ The repository \texttt{github.com/0x0shephard/latent-reasoning} contains the aud
 \begin{thebibliography}{20}
 \small
 \bibitem[Aswal et al.(2026)]{aswal2026observable} D. Aswal, T. Palmeira Ferraz, Y. Zhou, and M. Peyrard. Observable patterns are not explanations: A causal-geometric analysis of latent reasoning models. \emph{arXiv:2606.12689}, 2026.
-\bibitem[Chang et al.(2026)]{chang2026unlocking} S. Chang et al. Unlocking the black box of latent reasoning: An interpretability-guided approach to intervention. In \emph{ACL}, 2026. arXiv:2606.01243.
-\bibitem[Cywi\'nski et al.(2025)]{cywinski2025} B. Cywi\'nski, B. Bussmann, A. Conmy, J. Engels, N. Nanda, and S. Rajamanoharan. Can we interpret latent reasoning using current mechanistic interpretability tools? \emph{Alignment Forum}, December 2025.
-\bibitem[Ding et al.(2026)]{ding2026scit} Ding, Huang, and Yang. SCIT: Swapping value-cache layers on same-template pairs. In \emph{EMNLP}, 2026. arXiv:2608.27265.
-\bibitem[Dilgren and Wiegreffe(2026)]{dilgren2026interpretable} J. Dilgren and S. Wiegreffe. Are latent reasoning models easily interpretable? \emph{arXiv:2604.04902}, 2026.
-\bibitem[Hao et al.(2024)]{hao2024coconut} S. Hao et al. Training large language models to reason in a continuous latent space. \emph{arXiv:2412.06769}, 2024.
-\bibitem[Huang and Qi(2026)]{huang2026steering} G. Huang and L. Qi. When steering fails in latent reasoning: A latent-to-language transition gap. \emph{arXiv}, 2026.
-\bibitem[Jin et al.(2026)]{jin2026final} Jin, Yang, and Wang. Final checkpoints are not enough: Analyzing latent reasoning faithfulness along training trajectories. \emph{arXiv:2607.06648}, 2026.
-\bibitem[Li et al.(2026)]{li2026dynamics} Li et al. Dynamics within latent chain-of-thought: An empirical study of causal structure. In \emph{ICML}, 2026. arXiv:2602.08783.
-\bibitem[LTO(2026)]{lto2026} Latent thinking optimization: Your latent reasoning language model secretly encodes reward signals in its latent thoughts. In \emph{ICLR}, 2026. arXiv:2509.26314.
-\bibitem[Open Problems(2025)]{openproblems2025} Open problems in mechanistic interpretability. \emph{arXiv:2501.16496}, 2025.
-\bibitem[Decodability(2026)]{decodability2026} Decodability is not causality: Dissociating probe readouts from behavioral drivers via SAE decomposition. \emph{arXiv:2609.18080}, 2026.
-\bibitem[Ramjee et al.(2026)]{ramjee2026ulterior} Ramjee et al. Ulterior motives: Detecting misaligned reasoning in continuous thought models. ICLR 2026 Workshop on Latent and Implicit Thinking. arXiv:2604.23460.
-\bibitem[Shen et al.(2025)]{shen2025codi} Z. Shen et al. CODI: Compressing chain-of-thought into continuous space via self-distillation. In \emph{EMNLP}, 2025. arXiv:2502.21074.
-\bibitem[Wei et al.(2026)]{wei2026simcot} X. Wei et al. SIM-CoT: Supervised implicit chain-of-thought. In \emph{ICLR}, 2026. arXiv:2509.20317.
+\bibitem[Chang et al.(2026)]{chang2026unlocking} S. Chang, T. Bai, X. Zhang, Q. Ma, Q. Liu, Z. Liao, Y. Miao, and L. Niu. Unlocking the black box of latent reasoning: An interpretability-guided approach to intervention. In \emph{Proceedings of ACL}, 2026. arXiv:2606.01243.
+\bibitem[Cywi\'nski et al.(2025)]{cywinski2025} B. Cywi\'nski, B. Bussmann, A. Conmy, J. Engels, N. Nanda, and S. Rajamanoharan. Can we interpret latent reasoning using current mechanistic interpretability tools? \emph{AI Alignment Forum}, December 2025.
+\bibitem[Dilgren and Wiegreffe(2026)]{dilgren2026interpretable} C. Dilgren and S. Wiegreffe. Are latent reasoning models easily interpretable? In \emph{ICLR 2026 Workshop on Latent and Implicit Thinking}, 2026. arXiv:2604.04902.
+\bibitem[Ding et al.(2026)]{ding2026scit} Y. Ding, L. Huang, and M. Yang. SCIT: Testing causal cache carriers in latent chain-of-thought models. In \emph{Proceedings of EMNLP}, 2026. arXiv:2608.27265.
+\bibitem[Du et al.(2025)]{lto2026} H. Du, Y. Dong, and X. Ning. Latent thinking optimization: Your latent reasoning language model secretly encodes reward signals in its latent thoughts. \emph{arXiv:2509.26314}, 2025.
+\bibitem[Hao et al.(2025)]{hao2024coconut} S. Hao, S. Sukhbaatar, D. Su, X. Li, Z. Hu, J. Weston, and Y. Tian. Training large language models to reason in a continuous latent space. In \emph{Conference on Language Modeling (COLM)}, 2025. arXiv:2412.06769.
+\bibitem[Huang and Qi(2026)]{huang2026steering} G. Huang and L. Qi. When steering fails in latent reasoning: A latent-to-language transition gap. \emph{arXiv:2609.21662}, 2026.
+\bibitem[Jin et al.(2026)]{jin2026final} H. Jin, S. Yang, and D. Wang. Final checkpoints are not enough: Analyzing latent reasoning faithfulness along training trajectories. \emph{arXiv:2607.06648}, 2026.
+\bibitem[Li et al.(2026)]{li2026dynamics} Z. Li, X. Bai, K. Chen, Y. Li, J. Yang, C. Lin, and M. Zhang. Dynamics within latent chain-of-thought: An empirical study of causal structure. In \emph{Proceedings of ICML}, 2026. arXiv:2602.08783.
+\bibitem[Ramjee(2026)]{ramjee2026ulterior} S. Ramjee. Ulterior motives: Detecting misaligned reasoning in continuous thought models. In \emph{ICLR 2026 Workshop on Latent and Implicit Thinking}, 2026. arXiv:2604.23460.
+\bibitem[Sharkey et al.(2025)]{openproblems2025} L. Sharkey, B. Chughtai, J. Batson, J. Lindsey, J. Wu, L. Bushnaq, et al. Open problems in mechanistic interpretability. \emph{arXiv:2501.16496}, 2025.
+\bibitem[Shen et al.(2025)]{shen2025codi} Z. Shen, H. Yan, L. Zhang, Z. Hu, Y. Du, and Y. He. CODI: Compressing chain-of-thought into continuous space via self-distillation. In \emph{Proceedings of EMNLP}, 2025. arXiv:2502.21074.
+\bibitem[Tiwari et al.(2026)]{decodability2026} D. Tiwari, C. Davis, S. Sinha, T. Weaver, A. Shah, and M. Chaudhary. Decodability is not causality: Dissociating probe readouts from behavioral drivers via SAE decomposition. \emph{arXiv:2609.18080}, 2026.
+\bibitem[Wei et al.(2025)]{wei2026simcot} X. Wei, X. Liu, Y. Zang, X. Dong, Y. Cao, J. Wang, et al. SIM-CoT: Supervised implicit chain-of-thought. \emph{arXiv:2509.20317}, 2025.
 \end{thebibliography}
 
 \input{appendix}

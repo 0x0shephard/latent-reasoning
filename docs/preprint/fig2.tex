@@ -1,12 +1,12 @@
 \begin{tikzpicture}
 \begin{groupplot}[group style={group size=2 by 1, horizontal sep=4.0cm}, height=4.6cm, tick label style={font=\scriptsize}, label style={font=\scriptsize}, title style={font=\scriptsize}, legend style={font=\tiny, draw=none, fill=none}, legend cell align=left]
-\nextgroupplot[width=5.4cm, title={(a) their probe protocol}, xlabel={latent position}, ylabel={transfer accuracy}, xtick={1,...,6}, ymin=0.4, ymax=1.05, legend style={at={(0.5,-0.42)}, anchor=north, font=\tiny, draw=none}]
+\nextgroupplot[width=5.4cm, title={(a) the published probe protocol}, xlabel={latent position}, ylabel={transfer accuracy}, xtick={1,...,6}, ymin=0.4, ymax=1.05, legend style={at={(0.5,-0.42)}, anchor=north, font=\tiny, draw=none}]
 \addplot[blue!70, thick, mark=*] coordinates {(1,1.000) (2,1.000) (3,1.000) (4,1.000) (5,1.000) (6,1.000)};
 \addlegendentry{Model A (backdoor)}
 \addplot[red!70, thick, mark=square*] coordinates {(1,0.528) (2,0.515) (3,0.487) (4,0.464) (5,0.476) (6,0.475)};
 \addlegendentry{Model B (inert trigger)}
 \addplot[gray!70, thick, dashed, mark=triangle*] coordinates {(1,0.894) (2,0.847) (3,0.783) (4,0.712) (5,0.648) (6,0.583)};
-\addlegendentry{Reported by Ramjee et al.}
+\addlegendentry{Reported by Ramjee (2026)}
 \nextgroupplot[width=6.6cm, title={(b) model A: interchange arms}, xbar, xlabel={share of immoral actions}, xmin=0, xmax=0.45, ytick=data, symbolic y coords={{control, shifted along probe},{control, armed run's latents},{control, clean},{release, context entries from control},{release, probe direction removed},{release, latents hidden},{release, baseline's latents},{release, clean}}, y tick label style={font=\tiny}, /pgf/bar width=5pt, enlarge y limits=0.08, xtick={0,0.1,0.2,0.3,0.4}]
 \addplot[fill=blue!55, draw=blue!55, error bars/.cd, x dir=both, x explicit] coordinates {(0.164,{control, shifted along probe}) +- (0.000,0) (0.164,{control, armed run's latents}) +- (0.023,0) (0.164,{control, clean}) +- (0.000,0) (0.183,{release, context entries from control}) +- (0.025,0) (0.354,{release, probe direction removed}) +- (0.000,0) (0.388,{release, latents hidden}) +- (0.031,0) (0.347,{release, baseline's latents}) +- (0.029,0) (0.352,{release, clean}) +- (0.000,0)};
 \draw[dashed, gray] (axis cs:0.352,{release, clean}) -- (axis cs:0.352,{control, shifted along probe});

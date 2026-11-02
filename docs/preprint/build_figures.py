@@ -31,17 +31,20 @@ def fig1():
     out = [r"\begin{tikzpicture}", r"\begin{groupplot}[group style={group size=3 by 3, horizontal sep=0.55cm, vertical sep=0.9cm, xlabels at=edge bottom, ylabels at=edge left},",
            r"  width=4.9cm, height=3.6cm, ybar, /pgf/bar width=3.2pt, xtick={0,...,5}, xlabel={thought}, tick label style={font=\scriptsize}, label style={font=\scriptsize}, title style={font=\scriptsize}, ymin=0, enlarge x limits=0.12, legend style={font=\tiny, draw=none, fill=none, at={(0.02,0.98)}, anchor=north west}, legend cell align=left]"]
     for i, title in enumerate(titles):
-        out.append(f"\\nextgroupplot[title={{{title}}}, ylabel={{transport, long chains}}, ymax=0.62, ytick={{0,0.2,0.4,0.6}}]")
+        yl = "ylabel={transport, long chains}, " if i == 0 else ""
+        out.append(f"\\nextgroupplot[title={{{title}}}, {yl}ymax=0.62, ytick={{0,0.2,0.4,0.6}}]")
         out.append(f"\\addplot[fill=blue!60, draw=blue!60] coordinates {{{coords(rows['transport'][i])}}};")
         out.append(f"\\addplot[fill=orange!70, draw=orange!70] coordinates {{{coords(rows['kv'][i])}}};")
         if i == 0:
             out.append(r"\legend{state, K/V}")
     for i in range(3):
-        out.append(f"\\nextgroupplot[ylabel={{mask cost, points}}, ymax=16, ytick={{0,5,10,15}}]")
+        yl = "ylabel={mask cost, points}, " if i == 0 else ""
+        out.append(f"\\nextgroupplot[{yl}ymax=36, ytick={{0,10,20,30}}]")
         out.append(f"\\addplot[fill=gray!70, draw=gray!70, error bars/.cd, y dir=both, y explicit] coordinates {{" + " ".join(
             f"({s},{v:.2f}) += (0,{hi:.2f}) -= (0,{lo:.2f})" for s, v, lo, hi in zip(SLOTS, rows["cost"][i], rows["cost_lo"][i], rows["cost_hi"][i])) + "};")
     for i in range(3):
-        out.append(f"\\nextgroupplot[ylabel={{probe: read / confirmed}}, ymax=0.85, ytick={{0,0.2,0.4,0.6,0.8}}]")
+        yl = "ylabel={probe: read / confirmed}, " if i == 0 else ""
+        out.append(f"\\nextgroupplot[{yl}ymax=0.85, ytick={{0,0.2,0.4,0.6,0.8}}]")
         out.append(f"\\addplot[fill=green!50!black, draw=green!50!black] coordinates {{{coords(rows['read'][i])}}};")
         out.append(f"\\addplot[fill=red!70, draw=red!70] coordinates {{{coords(rows['faith'][i])}}};")
         if i == 0:
@@ -53,12 +56,12 @@ def fig1():
 def fig2():
     # ledger §137 addendum 4; report Tables ulterior-probes and ulterior-arms
     probes = {"Model A (backdoor)": [1.000] * 6, "Model B (inert trigger)": [0.528, 0.515, 0.487, 0.464, 0.476, 0.475],
-              "Reported by Ramjee et al.": [0.894, 0.847, 0.783, 0.712, 0.648, 0.583]}
+              "Reported by Ramjee (2026)": [0.894, 0.847, 0.783, 0.712, 0.648, 0.583]}
     arms = [("release, clean", 0.352, 0.0), ("release, baseline's latents", 0.347, 0.029), ("release, latents hidden", 0.388, 0.031),
             ("release, probe direction removed", 0.354, 0.0), ("release, context entries from control", 0.183, 0.025),
             ("control, clean", 0.164, 0.0), ("control, armed run's latents", 0.164, 0.023), ("control, shifted along probe", 0.164, 0.0)]
     out = [r"\begin{tikzpicture}", r"\begin{groupplot}[group style={group size=2 by 1, horizontal sep=4.0cm}, height=4.6cm, tick label style={font=\scriptsize}, label style={font=\scriptsize}, title style={font=\scriptsize}, legend style={font=\tiny, draw=none, fill=none}, legend cell align=left]",
-           r"\nextgroupplot[width=5.4cm, title={(a) their probe protocol}, xlabel={latent position}, ylabel={transfer accuracy}, xtick={1,...,6}, ymin=0.4, ymax=1.05, legend style={at={(0.5,-0.42)}, anchor=north, font=\tiny, draw=none}]"]
+           r"\nextgroupplot[width=5.4cm, title={(a) the published probe protocol}, xlabel={latent position}, ylabel={transfer accuracy}, xtick={1,...,6}, ymin=0.4, ymax=1.05, legend style={at={(0.5,-0.42)}, anchor=north, font=\tiny, draw=none}]"]
     styles = ["blue!70, thick, mark=*", "red!70, thick, mark=square*", "gray!70, thick, dashed, mark=triangle*"]
     for (name, vals), st in zip(probes.items(), styles):
         out.append(f"\\addplot[{st}] coordinates {{" + " ".join(f"({i+1},{v:.3f})" for i, v in enumerate(vals)) + "};")
